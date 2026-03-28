@@ -13,31 +13,86 @@ export default function WinOverlay({ moveCount, onRestart, onNextLevel }: WinOve
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="absolute inset-0 flex items-center justify-center bg-black/50 z-20 rounded"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(2, 5, 14, 0.75)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 20,
+          borderRadius: 4,
+        }}
       >
         <motion.div
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.7, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-          className="bg-white rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4"
+          style={{
+            background: 'rgba(3, 7, 18, 0.97)',
+            border: '1px solid rgba(0, 255, 136, 0.4)',
+            boxShadow: '0 0 40px rgba(0, 255, 136, 0.15), 0 0 80px rgba(0, 255, 136, 0.05)',
+            borderRadius: 16,
+            padding: '36px 48px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 16,
+          }}
         >
-          <div className="text-4xl">🎉</div>
-          <h2 className="text-2xl font-bold text-slate-800">Level Complete!</h2>
-          <p className="text-slate-500 text-sm">Solved in {moveCount} moves</p>
-          <div className="flex gap-3 mt-2">
+          <div style={{ fontSize: 40 }}>✦</div>
+          <h2
+            style={{
+              fontSize: 24,
+              fontWeight: 800,
+              color: '#00ff88',
+              textShadow: '0 0 16px rgba(0,255,136,0.6)',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              margin: 0,
+            }}
+          >
+            Level Complete
+          </h2>
+          <p style={{ color: '#475569', fontSize: 13, margin: 0 }}>
+            Solved in{' '}
+            <span style={{ color: '#94a3b8', fontWeight: 600 }}>{moveCount}</span> moves
+          </p>
+          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
             <button
               onClick={onRestart}
-              className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg transition-colors text-sm"
+              style={{
+                fontSize: 12,
+                padding: '8px 20px',
+                background: 'rgba(148, 163, 184, 0.06)',
+                border: '1px solid rgba(148, 163, 184, 0.25)',
+                color: '#94a3b8',
+                borderRadius: 8,
+                cursor: 'pointer',
+                letterSpacing: '0.04em',
+              }}
             >
-              Restart
+              RESTART
             </button>
             {onNextLevel && (
               <button
                 onClick={onNextLevel}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm"
+                style={{
+                  fontSize: 12,
+                  padding: '8px 20px',
+                  background: 'rgba(0, 255, 136, 0.08)',
+                  border: '1px solid rgba(0, 255, 136, 0.45)',
+                  color: '#00ff88',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                  boxShadow: '0 0 12px rgba(0,255,136,0.15)',
+                }}
               >
-                Next Level →
+                NEXT LEVEL →
               </button>
             )}
           </div>

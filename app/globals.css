@@ -1,8 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #030712;
+  --foreground: #e2e8f0;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 @theme inline {
@@ -12,15 +14,30 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Neon glow utilities */
+.neon-text-green {
+  color: #00ff88;
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.6), 0 0 16px rgba(0, 255, 136, 0.3);
+}
+.neon-text-blue {
+  color: #00c4ff;
+  text-shadow: 0 0 8px rgba(0, 196, 255, 0.6), 0 0 16px rgba(0, 196, 255, 0.3);
+}
+.neon-text-red {
+  color: #ff2d55;
+  text-shadow: 0 0 8px rgba(255, 45, 85, 0.6), 0 0 16px rgba(255, 45, 85, 0.3);
+}
+.neon-text-yellow {
+  color: #ffd700;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.6), 0 0 16px rgba(255, 215, 0, 0.3);
+}
+.neon-text-purple {
+  color: #bf5fff;
+  text-shadow: 0 0 8px rgba(191, 95, 255, 0.6), 0 0 16px rgba(191, 95, 255, 0.3);
 }

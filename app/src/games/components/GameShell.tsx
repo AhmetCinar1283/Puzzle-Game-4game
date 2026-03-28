@@ -24,15 +24,15 @@ export default function GameShell({ level }: GameShellProps) {
   }, [nextLevel, loadLevel]);
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative">
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ position: 'relative' }}>
         <HUD
           levelName={state.level.name}
           moveCount={state.moveCount}
           objects={state.objects}
           onRestart={restart}
         />
-        <div className="relative">
+        <div style={{ position: 'relative' }}>
           <GameBoard level={state.level} objects={state.objects} trail={state.trail} />
           {state.phase === 'won' && (
             <WinOverlay
@@ -41,10 +41,22 @@ export default function GameShell({ level }: GameShellProps) {
               onNextLevel={nextLevel ? handleNextLevel : undefined}
             />
           )}
-          {state.phase === 'lost' && <LostOverlay onRestart={restart} />}
+          {state.phase === 'lost' && (
+            <LostOverlay onRestart={restart} reason={state.lostReason} />
+          )}
         </div>
       </div>
-      <p className="mt-4 text-slate-500 text-xs">Use arrow keys to move</p>
+      <p
+        style={{
+          marginTop: 12,
+          fontSize: 11,
+          color: '#334155',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+        }}
+      >
+        Arrow keys to move
+      </p>
     </div>
   );
 }

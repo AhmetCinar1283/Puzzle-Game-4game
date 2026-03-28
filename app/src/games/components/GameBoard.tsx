@@ -4,10 +4,10 @@ import GameObject from './GameObject';
 
 const CELL_SIZE = 72;
 
-// Semi-transparent trail colors per object id
+// Neon trail colors per object id
 const TRAIL_COLORS: Record<number, string> = {
-  1: 'rgba(16,185,129,0.22)',  // emerald
-  2: 'rgba(14,165,233,0.22)',  // sky
+  1: 'rgba(0, 255, 136, 0.15)',
+  2: 'rgba(0, 196, 255, 0.15)',
 };
 
 interface GameBoardProps {
@@ -16,18 +16,32 @@ interface GameBoardProps {
   trail: Record<number, Position[]>;
 }
 
-function edgeBorderColor(behavior: EdgeBehavior): string {
-  return behavior === 'portal' ? '#a855f7' : '#64748b';
+function edgeBorderStyle(behavior: EdgeBehavior): { color: string; glow: string } {
+  switch (behavior) {
+    case 'portal':
+      return { color: '#9333ea', glow: '0 0 8px rgba(147, 51, 234, 0.6)' };
+    case 'lava':
+      return { color: '#ef4444', glow: '0 0 8px rgba(239, 68, 68, 0.6)' };
+    default:
+      return { color: 'rgba(30, 58, 138, 0.5)', glow: 'none' };
+  }
 }
 
 function EdgeLabel({ behavior, axis }: { behavior: EdgeBehavior; axis: 'h' | 'v' }) {
   if (behavior === 'wall') return null;
+  const isLava = behavior === 'lava';
   return (
     <div
-      className="flex items-center justify-center text-purple-400 font-bold select-none"
-      style={{ fontSize: 14 }}
+      className="flex items-center justify-center font-bold select-none"
+      style={{
+        fontSize: 13,
+        color: isLava ? '#ef4444' : '#9333ea',
+        textShadow: isLava
+          ? '0 0 8px rgba(239,68,68,0.7)'
+          : '0 0 8px rgba(147,51,234,0.7)',
+      }}
     >
-      {axis === 'h' ? '↕' : '↔'}
+      {isLava ? '☠' : axis === 'h' ? '↕' : '↔'}
     </div>
   );
 }
@@ -35,39 +49,54 @@ function EdgeLabel({ behavior, axis }: { behavior: EdgeBehavior; axis: 'h' | 'v'
 export default function GameBoard({ level, objects, trail }: GameBoardProps) {
   const boardWidth = level.width * CELL_SIZE;
   const boardHeight = level.height * CELL_SIZE;
+  const showTrails = !!level.trailCollision;
 
-  // Build a quick lookup: "row-col" → objectId[] for trail rendering
+  // Build trail lookup only when needed
   const trailLookup: Record<string, number[]> = {};
-  for (const [idStr, positions] of Object.entries(trail)) {
-    const objectId = Number(idStr);
-    for (const pos of positions) {
-      const key = `${pos.row}-${pos.col}`;
-      if (!trailLookup[key]) trailLookup[key] = [];
-      trailLookup[key].push(objectId);
+  if (showTrails) {
+    for (const [idStr, positions] of Object.entries(trail)) {
+      const objectId = Number(idStr);
+      for (const pos of positions) {
+        const key = `${pos.row}-${pos.col}`;
+        if (!trailLookup[key]) trailLookup[key] = [];
+        trailLookup[key].push(objectId);
+      }
     }
   }
 
-  const borderStyle = {
-    borderTopColor: edgeBorderColor(level.edges.top),
-    borderBottomColor: edgeBorderColor(level.edges.bottom),
-    borderLeftColor: edgeBorderColor(level.edges.left),
-    borderRightColor: edgeBorderColor(level.edges.right),
+  const topEdge = edgeBorderStyle(level.edges.top);
+  const bottomEdge = edgeBorderStyle(level.edges.bottom);
+  const leftEdge = edgeBorderStyle(level.edges.left);
+  const rightEdge = edgeBorderStyle(level.edges.right);
+
+  const borderStyle: React.CSSProperties = {
+    borderTopColor: topEdge.color,
+    borderBottomColor: bottomEdge.color,
+    borderLeftColor: leftEdge.color,
+    borderRightColor: rightEdge.color,
     borderWidth: 3,
-    borderStyle: 'solid' as const,
-    borderRadius: 4,
+    borderStyle: 'solid',
+    borderRadius: 6,
+    boxShadow: [
+      level.edges.top !== 'wall' ? `0 -3px 12px ${topEdge.color}` : '',
+      level.edges.bottom !== 'wall' ? `0 3px 12px ${bottomEdge.color}` : '',
+      level.edges.left !== 'wall' ? `-3px 0 12px ${leftEdge.color}` : '',
+      level.edges.right !== 'wall' ? `3px 0 12px ${rightEdge.color}` : '',
+      '0 0 40px rgba(0, 0, 0, 0.8)',
+    ]
+      .filter(Boolean)
+      .join(', '),
+    background: '#060d1a',
   };
 
   return (
     <div className="flex flex-col items-center gap-1">
-      {/* Top label */}
       <EdgeLabel behavior={level.edges.top} axis="h" />
 
       <div className="flex items-center gap-1">
-        {/* Left label */}
         <EdgeLabel behavior={level.edges.left} axis="v" />
 
-        {/* Board */}
-        <div className="relative shadow-xl overflow-hidden" style={{ width: boardWidth, height: boardHeight, ...borderStyle }}>
+        <div className="relative overflow-hidden" style={{ width: boardWidth, height: boardHeight, ...borderStyle }}>
           {/* Grid cells */}
           <div
             style={{
@@ -83,30 +112,33 @@ export default function GameBoard({ level, objects, trail }: GameBoardProps) {
             )}
           </div>
 
-          {/* Trail overlays */}
-          {Object.entries(trailLookup).map(([key, objectIds]) => {
-            const [rowStr, colStr] = key.split('-');
-            const row = Number(rowStr);
-            const col = Number(colStr);
-            // If multiple objects visited same cell, blend colors — just show first for simplicity
-            const objectId = objectIds[0];
-            const color = TRAIL_COLORS[objectId] ?? 'rgba(139,92,246,0.2)';
-            return (
-              <div
-                key={`trail-${key}`}
-                style={{
-                  position: 'absolute',
-                  top: row * CELL_SIZE,
-                  left: col * CELL_SIZE,
-                  width: CELL_SIZE,
-                  height: CELL_SIZE,
-                  backgroundColor: color,
-                  pointerEvents: 'none',
-                  zIndex: 5,
-                }}
-              />
-            );
-          })}
+          {/* Trail overlays (only rendered when trailCollision is enabled) */}
+          {showTrails &&
+            Object.entries(trailLookup).map(([key, objectIds]) => {
+              const [rowStr, colStr] = key.split('-');
+              const row = Number(rowStr);
+              const col = Number(colStr);
+              const objectId = objectIds[0];
+              const color = TRAIL_COLORS[objectId] ?? 'rgba(139,92,246,0.15)';
+              return (
+                <div
+                  key={`trail-${key}`}
+                  style={{
+                    position: 'absolute',
+                    top: row * CELL_SIZE,
+                    left: col * CELL_SIZE,
+                    width: CELL_SIZE,
+                    height: CELL_SIZE,
+                    backgroundColor: color,
+                    boxShadow: objectId === 1
+                      ? 'inset 0 0 8px rgba(0,255,136,0.2)'
+                      : 'inset 0 0 8px rgba(0,196,255,0.2)',
+                    pointerEvents: 'none',
+                    zIndex: 5,
+                  }}
+                />
+              );
+            })}
 
           {/* Objects */}
           {objects.map((obj) => (
@@ -114,11 +146,9 @@ export default function GameBoard({ level, objects, trail }: GameBoardProps) {
           ))}
         </div>
 
-        {/* Right label */}
         <EdgeLabel behavior={level.edges.right} axis="v" />
       </div>
 
-      {/* Bottom label */}
       <EdgeLabel behavior={level.edges.bottom} axis="h" />
     </div>
   );

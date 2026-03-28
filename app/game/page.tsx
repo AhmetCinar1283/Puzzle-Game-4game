@@ -10,7 +10,15 @@ export const metadata: Metadata = {
 export default function GamePage() {
   const level = LEVELS[0];
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-900">
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#030712',
+      }}
+    >
       <GameShell level={level} />
     </main>
   );

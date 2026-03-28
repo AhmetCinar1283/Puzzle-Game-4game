@@ -7,39 +7,93 @@ interface HUDProps {
   onRestart: () => void;
 }
 
-const OBJECT_LABELS: Record<number, { label: string; color: string }> = {
-  1: { label: 'Green', color: '#10b981' },
-  2: { label: 'Blue', color: '#0ea5e9' },
+const OBJECT_NEON: Record<number, { color: string; label: string; glow: string }> = {
+  1: { color: '#00ff88', label: 'P1', glow: '0 0 6px rgba(0,255,136,0.7)' },
+  2: { color: '#00c4ff', label: 'P2', glow: '0 0 6px rgba(0,196,255,0.7)' },
 };
 
 export default function HUD({ levelName, moveCount, objects, onRestart }: HUDProps) {
   return (
-    <div className="flex items-center justify-between w-full px-4 py-3 bg-slate-800 rounded-t-lg">
-      <div className="text-white font-semibold text-sm">{levelName}</div>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '10px 16px',
+        background: 'rgba(3, 7, 18, 0.97)',
+        borderBottom: '1px solid rgba(0, 255, 136, 0.15)',
+        borderTopLeftRadius: 8,
+        borderTopRightRadius: 8,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#00ff88',
+          textShadow: '0 0 8px rgba(0,255,136,0.5)',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+        }}
+      >
+        {levelName}
+      </div>
 
-      <div className="flex gap-4 items-center">
+      <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         {objects.map((obj) => {
-          const info = OBJECT_LABELS[obj.id] ?? { label: `Obj ${obj.id}`, color: '#8b5cf6' };
+          const info = OBJECT_NEON[obj.id] ?? { color: '#bf5fff', label: `P${obj.id}`, glow: '' };
           return (
-            <div key={obj.id} className="flex items-center gap-1 text-xs">
+            <div key={obj.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span
-                className="inline-block w-3 h-3 rounded-full"
-                style={{ backgroundColor: info.color }}
+                style={{
+                  display: 'inline-block',
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  backgroundColor: info.color,
+                  boxShadow: info.glow,
+                }}
               />
-              <span className="text-slate-300">
-                {info.label}: {obj.isLocked ? '✓' : obj.mode === 'reversed' ? '↺' : '↻'}
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                {info.label}:{' '}
+                <span style={{ color: info.color }}>
+                  {obj.isLocked ? '✓' : obj.mode === 'reversed' ? '↺' : '↻'}
+                </span>
               </span>
             </div>
           );
         })}
-        <span className="text-slate-400 text-xs">Moves: {moveCount}</span>
+        <span style={{ fontSize: 12, color: '#475569' }}>
+          Moves:{' '}
+          <span style={{ color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
+            {moveCount}
+          </span>
+        </span>
       </div>
 
       <button
         onClick={onRestart}
-        className="text-xs bg-slate-600 hover:bg-slate-500 text-white px-3 py-1 rounded transition-colors"
+        style={{
+          fontSize: 11,
+          padding: '4px 12px',
+          background: 'rgba(0,255,136,0.05)',
+          border: '1px solid rgba(0,255,136,0.3)',
+          color: '#00ff88',
+          borderRadius: 6,
+          cursor: 'pointer',
+          letterSpacing: '0.04em',
+          transition: 'all 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          (e.target as HTMLButtonElement).style.background = 'rgba(0,255,136,0.12)';
+          (e.target as HTMLButtonElement).style.boxShadow = '0 0 8px rgba(0,255,136,0.3)';
+        }}
+        onMouseLeave={(e) => {
+          (e.target as HTMLButtonElement).style.background = 'rgba(0,255,136,0.05)';
+          (e.target as HTMLButtonElement).style.boxShadow = 'none';
+        }}
       >
-        Restart
+        RESTART
       </button>
     </div>
   );

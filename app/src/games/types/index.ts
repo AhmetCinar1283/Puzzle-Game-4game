@@ -6,13 +6,15 @@ export type CellType =
   | 'target_2'
   | 'direction_toggle';
 
-export type EdgeBehavior = 'wall' | 'portal';
+export type EdgeBehavior = 'wall' | 'portal' | 'lava';
 
 export type MovementMode = 'normal' | 'reversed';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
 export type GamePhase = 'playing' | 'won' | 'lost';
+
+export type LostReason = 'forbidden' | 'lava_edge' | 'trail';
 
 export interface Position {
   row: number;
@@ -47,6 +49,8 @@ export interface LevelData {
   grid: CellType[][];
   initialObjects: LevelObjectDef[];
   targets: LevelTargetDef[];
+  /** If true: landing on the opponent's trail causes a loss. Trails are only rendered when this is enabled. */
+  trailCollision?: boolean;
 }
 
 export interface GameObjectState {
@@ -63,6 +67,7 @@ export interface GameState {
   phase: GamePhase;
   moveCount: number;
   trail: Record<number, Position[]>;
+  lostReason?: LostReason;
 }
 
 export type GameAction =

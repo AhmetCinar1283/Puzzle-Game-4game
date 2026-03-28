@@ -7,6 +7,7 @@ import type {
   GameObjectState,
   GameState,
   LevelTargetDef,
+  LostReason,
 } from '../types';
 
 const OPPOSITE: Record<Direction, Direction> = {
@@ -27,22 +28,29 @@ export function resolveDirection(pressed: Direction, mode: MovementMode): Direct
   return mode === 'reversed' ? OPPOSITE[pressed] : pressed;
 }
 
-function resolveEdgePosition(candidate: Position, level: LevelData): Position | null {
+// Returns null = blocked by wall, 'lava' = death by lava edge, Position = valid destination
+type EdgeResult = Position | null | 'lava';
+
+function resolveEdgePosition(candidate: Position, level: LevelData): EdgeResult {
   let { row, col } = candidate;
 
   if (row < 0) {
     if (level.edges.top === 'portal') row = level.height - 1;
+    else if (level.edges.top === 'lava') return 'lava';
     else return null;
   } else if (row >= level.height) {
     if (level.edges.bottom === 'portal') row = 0;
+    else if (level.edges.bottom === 'lava') return 'lava';
     else return null;
   }
 
   if (col < 0) {
     if (level.edges.left === 'portal') col = level.width - 1;
+    else if (level.edges.left === 'lava') return 'lava';
     else return null;
   } else if (col >= level.width) {
     if (level.edges.right === 'portal') col = 0;
+    else if (level.edges.right === 'lava') return 'lava';
     else return null;
   }
 
@@ -54,12 +62,14 @@ function isCellBlocking(cell: CellType): boolean {
   return cell === 'obstacle';
 }
 
+type MoveResult = Position | 'lava';
+
 export function computeNewPosition(
   obj: GameObjectState,
   direction: Direction,
   level: LevelData,
   allObjects: GameObjectState[],
-): Position {
+): MoveResult {
   if (obj.isLocked) return obj.position;
 
   const actualDir = resolveDirection(direction, obj.mode);
@@ -71,6 +81,7 @@ export function computeNewPosition(
   };
 
   const resolved = resolveEdgePosition(candidate, level);
+  if (resolved === 'lava') return 'lava';
   if (!resolved) return obj.position;
 
   if (isCellBlocking(level.grid[resolved.row][resolved.col])) return obj.position;
@@ -139,26 +150,41 @@ export function processMoveStep(state: GameState, direction: Direction): GameSta
   if (state.phase === 'won' || state.phase === 'lost') return state;
 
   // Compute all new positions first (order-independent)
-  const newPositions = state.objects.map((obj) =>
+  const moveResults: MoveResult[] = state.objects.map((obj) =>
     computeNewPosition(obj, direction, state.level, state.objects),
   );
 
-  // Update trail: record the old position for each object that actually moved
+  // Check if any object hit a lava edge → instant death (object stays at current pos visually)
+  const hitLava = moveResults.some((r) => r === 'lava');
+  if (hitLava) {
+    return {
+      ...state,
+      phase: 'lost',
+      lostReason: 'lava_edge' as LostReason,
+      moveCount: state.moveCount + 1,
+    };
+  }
+
+  const newPositions = moveResults as Position[];
+
+  // Update trail only when trailCollision is enabled (no need to track otherwise)
   let newTrail = state.trail;
-  state.objects.forEach((obj, i) => {
-    const moved =
-      newPositions[i].row !== obj.position.row || newPositions[i].col !== obj.position.col;
-    if (moved) {
-      newTrail = addToTrail(newTrail, obj.id, obj.position);
-    }
-  });
+  if (state.level.trailCollision) {
+    state.objects.forEach((obj, i) => {
+      const moved =
+        newPositions[i].row !== obj.position.row || newPositions[i].col !== obj.position.col;
+      if (moved) {
+        newTrail = addToTrail(newTrail, obj.id, obj.position);
+      }
+    });
+  }
 
   // Apply moves with side-effects
   const newObjects = state.objects.map((obj, i) =>
     applyMoveToObject(obj, newPositions[i], state.level, state.level.targets),
   );
 
-  // Check if any object landed on a forbidden cell → game over
+  // Check forbidden cell
   const hitForbidden = newObjects.some(
     (obj) => state.level.grid[obj.position.row][obj.position.col] === 'forbidden',
   );
@@ -168,8 +194,33 @@ export function processMoveStep(state: GameState, direction: Direction): GameSta
       objects: newObjects,
       trail: newTrail,
       phase: 'lost',
+      lostReason: 'forbidden' as LostReason,
       moveCount: state.moveCount + 1,
     };
+  }
+
+  // Check trail collision: landing on the opponent's trail causes a loss
+  if (state.level.trailCollision) {
+    const hitOpponentTrail = newObjects.some((obj) => {
+      return state.objects.some((otherObj) => {
+        if (otherObj.id === obj.id) return false;
+        const otherTrail = newTrail[otherObj.id] ?? [];
+        return otherTrail.some(
+          (p) => p.row === obj.position.row && p.col === obj.position.col,
+        );
+      });
+    });
+
+    if (hitOpponentTrail) {
+      return {
+        ...state,
+        objects: newObjects,
+        trail: newTrail,
+        phase: 'lost',
+        lostReason: 'trail' as LostReason,
+        moveCount: state.moveCount + 1,
+      };
+    }
   }
 
   const won = checkWinCondition(newObjects, state.level.targets);
@@ -179,6 +230,7 @@ export function processMoveStep(state: GameState, direction: Direction): GameSta
     objects: newObjects,
     trail: newTrail,
     phase: won ? 'won' : 'playing',
+    lostReason: undefined,
     moveCount: state.moveCount + 1,
   };
 }
