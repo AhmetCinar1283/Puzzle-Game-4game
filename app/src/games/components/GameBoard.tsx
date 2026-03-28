@@ -1,6 +1,8 @@
-import type { LevelData, GameObjectState, Position, EdgeBehavior } from '../types';
+import type { LevelData, GameObjectState, Position, EdgeBehavior, BoxState } from '../types';
+import { posKey } from '../logic/positionUtils';
 import GameCell from './GameCell';
 import GameObject from './GameObject';
+import GameBoxObject from './GameBoxObject';
 
 const CELL_SIZE = 72;
 
@@ -10,10 +12,16 @@ const TRAIL_COLORS: Record<number, string> = {
   2: 'rgba(0, 196, 255, 0.15)',
 };
 
+// Electric trail overlay for powered players
+const ELECTRIC_TRAIL_COLOR = 'rgba(251, 191, 36, 0.08)';
+
 interface GameBoardProps {
   level: LevelData;
   objects: GameObjectState[];
+  boxes: BoxState[];
   trail: Record<number, Position[]>;
+  poweredPlayers: number[];
+  poweredCells: Set<string>;
 }
 
 function edgeBorderStyle(behavior: EdgeBehavior): { color: string; glow: string } {
@@ -46,16 +54,27 @@ function EdgeLabel({ behavior, axis }: { behavior: EdgeBehavior; axis: 'h' | 'v'
   );
 }
 
-export default function GameBoard({ level, objects, trail }: GameBoardProps) {
+export default function GameBoard({
+  level,
+  objects,
+  boxes,
+  trail,
+  poweredPlayers,
+  poweredCells,
+}: GameBoardProps) {
   const boardWidth = level.width * CELL_SIZE;
   const boardHeight = level.height * CELL_SIZE;
   const showTrails = !!level.trailCollision;
 
   // Build trail lookup only when needed
   const trailLookup: Record<string, number[]> = {};
-  if (showTrails) {
+  // Always build trail lookup for powered players (electric cable visual)
+  const hasPowered = poweredPlayers.length > 0;
+  if (showTrails || hasPowered) {
     for (const [idStr, positions] of Object.entries(trail)) {
       const objectId = Number(idStr);
+      const isPoweredPlayer = poweredPlayers.includes(objectId);
+      if (!showTrails && !isPoweredPlayer) continue;
       for (const pos of positions) {
         const key = `${pos.row}-${pos.col}`;
         if (!trailLookup[key]) trailLookup[key] = [];
@@ -96,7 +115,10 @@ export default function GameBoard({ level, objects, trail }: GameBoardProps) {
       <div className="flex items-center gap-1">
         <EdgeLabel behavior={level.edges.left} axis="v" />
 
-        <div className="relative overflow-hidden" style={{ width: boardWidth, height: boardHeight, ...borderStyle }}>
+        <div
+          className="relative overflow-hidden"
+          style={{ width: boardWidth, height: boardHeight, ...borderStyle }}
+        >
           {/* Grid cells */}
           <div
             style={{
@@ -106,41 +128,71 @@ export default function GameBoard({ level, objects, trail }: GameBoardProps) {
             }}
           >
             {level.grid.map((row, rowIdx) =>
-              row.map((cellType, colIdx) => (
-                <GameCell key={`${rowIdx}-${colIdx}`} cellType={cellType} cellSize={CELL_SIZE} />
-              )),
+              row.map((cellType, colIdx) => {
+                const pos = { row: rowIdx, col: colIdx };
+                const isPoweredCell = poweredCells.has(posKey(pos));
+                return (
+                  <GameCell
+                    key={`${rowIdx}-${colIdx}`}
+                    cellType={cellType}
+                    cellSize={CELL_SIZE}
+                    isPowered={isPoweredCell}
+                  />
+                );
+              }),
             )}
           </div>
 
-          {/* Trail overlays (only rendered when trailCollision is enabled) */}
-          {showTrails &&
-            Object.entries(trailLookup).map(([key, objectIds]) => {
-              const [rowStr, colStr] = key.split('-');
-              const row = Number(rowStr);
-              const col = Number(colStr);
-              const objectId = objectIds[0];
-              const color = TRAIL_COLORS[objectId] ?? 'rgba(139,92,246,0.15)';
-              return (
-                <div
-                  key={`trail-${key}`}
-                  style={{
-                    position: 'absolute',
-                    top: row * CELL_SIZE,
-                    left: col * CELL_SIZE,
-                    width: CELL_SIZE,
-                    height: CELL_SIZE,
-                    backgroundColor: color,
-                    boxShadow: objectId === 1
-                      ? 'inset 0 0 8px rgba(0,255,136,0.2)'
-                      : 'inset 0 0 8px rgba(0,196,255,0.2)',
-                    pointerEvents: 'none',
-                    zIndex: 5,
-                  }}
-                />
-              );
-            })}
+          {/* Trail overlays */}
+          {Object.entries(trailLookup).map(([key, objectIds]) => {
+            const [rowStr, colStr] = key.split('-');
+            const row = Number(rowStr);
+            const col = Number(colStr);
+            const objectId = objectIds[0];
+            const isPoweredTrail = poweredPlayers.includes(objectId);
+            const showBase = showTrails;
+            const color = TRAIL_COLORS[objectId] ?? 'rgba(139,92,246,0.15)';
 
-          {/* Objects */}
+            return (
+              <div key={`trail-${key}`} style={{ position: 'absolute', top: row * CELL_SIZE, left: col * CELL_SIZE, width: CELL_SIZE, height: CELL_SIZE, pointerEvents: 'none', zIndex: 5 }}>
+                {showBase && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      backgroundColor: color,
+                      boxShadow:
+                        objectId === 1
+                          ? 'inset 0 0 8px rgba(0,255,136,0.2)'
+                          : 'inset 0 0 8px rgba(0,196,255,0.2)',
+                    }}
+                  />
+                )}
+                {isPoweredTrail && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      backgroundColor: ELECTRIC_TRAIL_COLOR,
+                      boxShadow: 'inset 0 0 6px rgba(251,191,36,0.3)',
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+
+          {/* Boxes */}
+          {boxes.map((box) => (
+            <GameBoxObject
+              key={box.id}
+              box={box}
+              cellSize={CELL_SIZE}
+              isPowered={poweredCells.has(posKey(box.position))}
+            />
+          ))}
+
+          {/* Player objects */}
           {objects.map((obj) => (
             <GameObject key={obj.id} object={obj} cellSize={CELL_SIZE} />
           ))}

@@ -1,7 +1,9 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { LevelData } from '../types';
 import { useGameEngine } from '../hooks/useGameEngine';
+import { computePoweredCells } from '../logic/powerSystem';
 import GameBoard from './GameBoard';
 import HUD from './HUD';
 import WinOverlay from './WinOverlay';
@@ -16,6 +18,18 @@ interface GameShellProps {
 export default function GameShell({ level, onNextLevel }: GameShellProps) {
   const { state, restart, move } = useGameEngine(level);
 
+  const poweredCells = useMemo(
+    () =>
+      computePoweredCells(
+        state.level.grid,
+        state.level,
+        state.poweredPlayers,
+        state.trail,
+        state.boxes,
+      ),
+    [state.level, state.poweredPlayers, state.trail, state.boxes],
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div style={{ position: 'relative' }}>
@@ -26,7 +40,14 @@ export default function GameShell({ level, onNextLevel }: GameShellProps) {
           onRestart={restart}
         />
         <div style={{ position: 'relative' }}>
-          <GameBoard level={state.level} objects={state.objects} trail={state.trail} />
+          <GameBoard
+            level={state.level}
+            objects={state.objects}
+            boxes={state.boxes}
+            trail={state.trail}
+            poweredPlayers={state.poweredPlayers}
+            poweredCells={poweredCells}
+          />
           {state.phase === 'won' && (
             <WinOverlay
               moveCount={state.moveCount}

@@ -1,4 +1,4 @@
-import type { GameState, GameAction, LevelData, GameObjectState } from '../types';
+import type { GameState, GameAction, LevelData, GameObjectState, BoxState } from '../types';
 import { processMoveStep } from './movement';
 
 export function initialStateFromLevel(level: LevelData): GameState {
@@ -10,9 +10,17 @@ export function initialStateFromLevel(level: LevelData): GameState {
     isLocked: false,
   }));
 
+  const boxes: BoxState[] = (level.initialBoxes ?? []).map((def) => ({
+    id: def.id,
+    position: def.position,
+    requiresPower: def.requiresPower ?? false,
+  }));
+
   return {
     level,
     objects,
+    boxes,
+    poweredPlayers: [],
     phase: 'playing',
     moveCount: 0,
     trail: {},

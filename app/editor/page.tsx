@@ -3,14 +3,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
-import type { CellType, EdgeBehavior, MovementMode, LevelData } from '@/app/src/games/types';
+import type { CellType, EdgeBehavior, MovementMode, LevelData, Position } from '@/app/src/games/types';
 import type { StoredLevel } from '@/app/src/lib/db';
 import GameShell from '@/app/src/games/components/GameShell';
 import GameCell from '@/app/src/games/components/GameCell';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-type ToolType = CellType | 'place_obj1' | 'place_obj2' | 'erase';
+type ToolType = CellType | 'place_obj1' | 'place_obj2' | 'place_box' | 'erase';
 
 interface ObjConfig {
   id: number;
@@ -20,25 +20,70 @@ interface ObjConfig {
   lockOnTarget: boolean;
 }
 
+interface BoxConfig {
+  id: number;
+  row: number | null;
+  col: number | null;
+  requiresPower: boolean;
+}
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const CELL_TYPES: CellType[] = [
+const CELL_TYPES_BASIC: CellType[] = [
   'empty', 'obstacle', 'forbidden', 'target_1', 'target_2', 'direction_toggle',
+];
+const CELL_TYPES_ICE: CellType[] = ['ice'];
+const CELL_TYPES_POWER: CellType[] = ['power_node'];
+const CELL_TYPES_CONVEYOR: CellType[] = [
+  'conveyor_up', 'conveyor_down', 'conveyor_left', 'conveyor_right',
+];
+const CELL_TYPES_TELEPORTER: CellType[] = [
+  'teleporter_in_A', 'teleporter_out_A',
+  'teleporter_in_B', 'teleporter_out_B',
+  'teleporter_in_C', 'teleporter_out_C',
+];
+
+const CELL_TYPES: CellType[] = [
+  ...CELL_TYPES_BASIC,
+  ...CELL_TYPES_ICE,
+  ...CELL_TYPES_POWER,
+  ...CELL_TYPES_CONVEYOR,
+  ...CELL_TYPES_TELEPORTER,
 ];
 
 const CELL_LABEL: Record<CellType | 'erase', string> = {
   empty: 'Empty', obstacle: 'Obstacle', forbidden: 'Forbidden',
   target_1: 'Target 1', target_2: 'Target 2', direction_toggle: 'Toggle', erase: 'Erase',
+  ice: 'Ice',
+  power_node: 'Power',
+  conveyor_up: 'Conv ▲', conveyor_down: 'Conv ▼',
+  conveyor_left: 'Conv ◄', conveyor_right: 'Conv ►',
+  teleporter_in_A: 'Tel-In A', teleporter_out_A: 'Tel-Out A',
+  teleporter_in_B: 'Tel-In B', teleporter_out_B: 'Tel-Out B',
+  teleporter_in_C: 'Tel-In C', teleporter_out_C: 'Tel-Out C',
 };
 
 const CELL_ICON: Record<CellType | 'erase', string> = {
   empty: '▫', obstacle: '■', forbidden: '✕',
   target_1: '◎', target_2: '◎', direction_toggle: '⇄', erase: '⌫',
+  ice: '❄',
+  power_node: '⚡',
+  conveyor_up: '▲', conveyor_down: '▼', conveyor_left: '◄', conveyor_right: '►',
+  teleporter_in_A: '⟿A', teleporter_out_A: '⟾A',
+  teleporter_in_B: '⟿B', teleporter_out_B: '⟾B',
+  teleporter_in_C: '⟿C', teleporter_out_C: '⟾C',
 };
 
 const CELL_COLOR: Record<CellType | 'erase', string> = {
   empty: '#475569', obstacle: '#94a3b8', forbidden: '#ef4444',
   target_1: '#00ff88', target_2: '#00c4ff', direction_toggle: '#ffd700', erase: '#64748b',
+  ice: '#a5f3fc',
+  power_node: '#fbbf24',
+  conveyor_up: '#c4b5fd', conveyor_down: '#c4b5fd',
+  conveyor_left: '#c4b5fd', conveyor_right: '#c4b5fd',
+  teleporter_in_A: '#ec4899', teleporter_out_A: '#ec4899',
+  teleporter_in_B: '#f97316', teleporter_out_B: '#f97316',
+  teleporter_in_C: '#14b8a6', teleporter_out_C: '#14b8a6',
 };
 
 const EDGE_OPTIONS: EdgeBehavior[] = ['wall', 'portal', 'lava'];
@@ -103,6 +148,9 @@ function EditorInner() {
     { id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true },
     { id: 2, row: null, col: null, mode: 'normal', lockOnTarget: true },
   ]);
+  const [boxes, setBoxes] = useState<BoxConfig[]>([]);
+  const [activePlacingBoxId, setActivePlacingBoxId] = useState<number | null>(null);
+  const [conveyorPowerRequired, setConveyorPowerRequired] = useState<Position[]>([]);
 
   // Tool + painting
   const [activeTool, setActiveTool] = useState<ToolType>('obstacle');
@@ -155,6 +203,14 @@ function EditorInner() {
       if (idx >= 0) objs[idx] = { id: obj.id, row: obj.position.row, col: obj.position.col, mode: obj.mode, lockOnTarget: obj.lockOnTarget };
     });
     setObjects(objs);
+    setBoxes((stored.initialBoxes ?? []).map((b) => ({
+      id: b.id,
+      row: b.position.row,
+      col: b.position.col,
+      requiresPower: b.requiresPower ?? false,
+    })));
+    setConveyorPowerRequired(stored.conveyorPowerRequired ?? []);
+    setActivePlacingBoxId(null);
   }, []);
 
   useEffect(() => {
@@ -172,14 +228,21 @@ function EditorInner() {
     setWidth(newW); setHeight(newH);
     setGrid((g) => resizeGrid(g, newW, newH));
     setObjects((os) => os.map((o) => ({ ...o, row: o.row !== null && o.row < newH ? o.row : null, col: o.col !== null && o.col < newW ? o.col : null })));
+    setBoxes((bs) => bs.map((b) => ({ ...b, row: b.row !== null && b.row < newH ? b.row : null, col: b.col !== null && b.col < newW ? b.col : null })));
+    setConveyorPowerRequired((cpr) => cpr.filter((p) => p.row < newH && p.col < newW));
   }, [pendingW, pendingH]);
 
   // ── Paint cell ──────────────────────────────────────────────────────────
   const paintCell = useCallback((r: number, c: number, isDrag: boolean) => {
     if (activeTool === 'place_obj1') { setObjects((os) => os.map((o) => o.id === 1 ? { ...o, row: r, col: c } : o)); return; }
     if (activeTool === 'place_obj2') { setObjects((os) => os.map((o) => o.id === 2 ? { ...o, row: r, col: c } : o)); return; }
+    if (activeTool === 'place_box' && activePlacingBoxId !== null) {
+      setBoxes((bs) => bs.map((b) => b.id === activePlacingBoxId ? { ...b, row: r, col: c } : b));
+      setActivePlacingBoxId(null);
+      return;
+    }
 
-    const cellType: CellType = activeTool === 'erase' ? 'empty' : activeTool;
+    const cellType: CellType = activeTool === 'erase' ? 'empty' : (activeTool as CellType);
 
     setGrid((g) => {
       const next = g.map((row) => [...row]);
@@ -207,7 +270,7 @@ function EditorInner() {
       next[r][c] = cellType;
       return next;
     });
-  }, [activeTool]);
+  }, [activeTool, activePlacingBoxId]);
 
   // ── Generate LevelData ──────────────────────────────────────────────────
   const generateLevelData = useCallback((): { level: LevelData | null; error: string | null } => {
@@ -219,6 +282,15 @@ function EditorInner() {
       }
     const validObjs = objects.filter((o) => o.row !== null && o.col !== null);
     if (validObjs.length < 2) return { level: null, error: 'Place both objects on the grid first.' };
+    // Validate teleporter pairs: each in_X must have a matching out_X and vice versa
+    for (const letter of ['A', 'B', 'C'] as const) {
+      const hasIn = grid.some((row) => row.includes(`teleporter_in_${letter}` as CellType));
+      const hasOut = grid.some((row) => row.includes(`teleporter_out_${letter}` as CellType));
+      if (hasIn && !hasOut) return { level: null, error: `Teleporter ${letter} has an entrance but no exit.` };
+      if (!hasIn && hasOut) return { level: null, error: `Teleporter ${letter} has an exit but no entrance.` };
+    }
+
+    const validBoxes = boxes.filter((b) => b.row !== null && b.col !== null);
     const level: LevelData = {
       id: editId ?? 0,
       name: levelName || 'Unnamed Level',
@@ -226,9 +298,17 @@ function EditorInner() {
       initialObjects: validObjs.map((o) => ({ id: o.id, position: { row: o.row!, col: o.col! }, mode: o.mode, lockOnTarget: o.lockOnTarget })),
       targets,
       ...(trailCollision ? { trailCollision: true } : {}),
+      ...(validBoxes.length > 0 ? {
+        initialBoxes: validBoxes.map((b) => ({
+          id: b.id,
+          position: { row: b.row!, col: b.col! },
+          ...(b.requiresPower ? { requiresPower: true } : {}),
+        })),
+      } : {}),
+      ...(conveyorPowerRequired.length > 0 ? { conveyorPowerRequired } : {}),
     };
     return { level, error: null };
-  }, [editId, levelName, width, height, edges, grid, objects, trailCollision]);
+  }, [editId, levelName, width, height, edges, grid, objects, trailCollision, boxes, conveyorPowerRequired]);
 
   // ── Save ──────────────────────────────────────────────────────────────
   const doSave = useCallback(async (posInput?: string) => {
@@ -239,6 +319,8 @@ function EditorInner() {
       name: level.name, width: level.width, height: level.height, edges: level.edges,
       grid: level.grid, initialObjects: level.initialObjects, targets: level.targets,
       trailCollision: level.trailCollision,
+      initialBoxes: level.initialBoxes,
+      conveyorPowerRequired: level.conveyorPowerRequired,
     };
 
     if (editId !== null) {
@@ -292,6 +374,14 @@ function EditorInner() {
       if (parsed.edges) setEdges(parsed.edges as typeof edges);
       setGrid(parsed.grid as CellType[][]);
       setTrailCollision(!!parsed.trailCollision);
+      setBoxes((parsed.initialBoxes ?? []).map((b) => ({
+        id: b.id,
+        row: b.position.row,
+        col: b.position.col,
+        requiresPower: b.requiresPower ?? false,
+      })));
+      setConveyorPowerRequired(parsed.conveyorPowerRequired ?? []);
+      setActivePlacingBoxId(null);
       const objs: ObjConfig[] = [
         { id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true },
         { id: 2, row: null, col: null, mode: 'normal', lockOnTarget: true },
@@ -325,6 +415,9 @@ function EditorInner() {
       { id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true },
       { id: 2, row: null, col: null, mode: 'normal', lockOnTarget: true },
     ]);
+    setBoxes([]);
+    setConveyorPowerRequired([]);
+    setActivePlacingBoxId(null);
   }, [router]);
 
   // ── Test ─────────────────────────────────────────────────────────────
@@ -413,27 +506,65 @@ function EditorInner() {
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
           {/* Tool palette */}
-          <div style={{ width: 100, flexShrink: 0, borderRight: '1px solid rgba(30,58,95,0.3)', overflowY: 'auto', padding: '10px 6px' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#1e3a5f', marginBottom: 8 }}>Cells</div>
-            {([...CELL_TYPES, 'erase'] as (CellType | 'erase')[]).map((t) => (
-              <button key={t} onClick={() => setActiveTool(t as ToolType)} style={{ width: '100%', marginBottom: 3, padding: '6px 6px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: activeTool === t ? 700 : 400, border: `1px solid ${activeTool === t ? CELL_COLOR[t] : 'rgba(255,255,255,0.06)'}`, background: activeTool === t ? `${CELL_COLOR[t]}18` : 'rgba(255,255,255,0.01)', color: activeTool === t ? CELL_COLOR[t] : '#475569', borderRadius: 5, cursor: 'pointer', textAlign: 'left', transition: 'all 0.1s' }}>
-                <span style={{ fontSize: 13, lineHeight: 1 }}>{CELL_ICON[t]}</span>
-                <span style={{ fontSize: 10 }}>{CELL_LABEL[t]}</span>
-              </button>
+          <div style={{ width: 110, flexShrink: 0, borderRight: '1px solid rgba(30,58,95,0.3)', overflowY: 'auto', padding: '10px 6px' }}>
+
+            {/* Cell groups */}
+            {[
+              { label: 'Basic', types: CELL_TYPES_BASIC },
+              { label: 'Ice', types: CELL_TYPES_ICE },
+              { label: 'Power', types: CELL_TYPES_POWER },
+              { label: 'Conveyors', types: CELL_TYPES_CONVEYOR },
+              { label: 'Teleporters', types: CELL_TYPES_TELEPORTER },
+            ].map(({ label, types }) => (
+              <div key={label}>
+                <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#1e3a5f', marginBottom: 4, marginTop: label === 'Basic' ? 0 : 10 }}>{label}</div>
+                {types.map((t) => (
+                  <button key={t} onClick={() => setActiveTool(t as ToolType)} style={{ width: '100%', marginBottom: 2, padding: '5px 6px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: activeTool === t ? 700 : 400, border: `1px solid ${activeTool === t ? CELL_COLOR[t] : 'rgba(255,255,255,0.06)'}`, background: activeTool === t ? `${CELL_COLOR[t]}18` : 'rgba(255,255,255,0.01)', color: activeTool === t ? CELL_COLOR[t] : '#475569', borderRadius: 5, cursor: 'pointer', textAlign: 'left', transition: 'all 0.1s' }}>
+                    <span style={{ fontSize: 11, lineHeight: 1 }}>{CELL_ICON[t]}</span>
+                    <span style={{ fontSize: 9 }}>{CELL_LABEL[t]}</span>
+                  </button>
+                ))}
+              </div>
             ))}
 
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#1e3a5f', marginBottom: 8, marginTop: 14 }}>Objects</div>
+            {/* Erase */}
+            <div style={{ marginTop: 10 }}>
+              <button onClick={() => setActiveTool('erase')} style={{ width: '100%', marginBottom: 2, padding: '5px 6px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: activeTool === 'erase' ? 700 : 400, border: `1px solid ${activeTool === 'erase' ? CELL_COLOR.erase : 'rgba(255,255,255,0.06)'}`, background: activeTool === 'erase' ? `${CELL_COLOR.erase}18` : 'rgba(255,255,255,0.01)', color: activeTool === 'erase' ? CELL_COLOR.erase : '#475569', borderRadius: 5, cursor: 'pointer', textAlign: 'left', transition: 'all 0.1s' }}>
+                <span style={{ fontSize: 11 }}>⌫</span>
+                <span style={{ fontSize: 9 }}>Erase</span>
+              </button>
+            </div>
+
+            {/* Players */}
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#1e3a5f', marginBottom: 4, marginTop: 10 }}>Players</div>
             {[1, 2].map((id) => {
               const tool = `place_obj${id}` as ToolType;
               const color = id === 1 ? '#00ff88' : '#00c4ff';
               const obj = objects.find((o) => o.id === id)!;
               return (
-                <button key={id} onClick={() => setActiveTool(tool)} style={{ width: '100%', marginBottom: 3, padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, fontWeight: activeTool === tool ? 700 : 400, border: `1px solid ${activeTool === tool ? color : 'rgba(255,255,255,0.06)'}`, background: activeTool === tool ? `${color}18` : 'rgba(255,255,255,0.01)', color: activeTool === tool ? color : '#475569', borderRadius: 5, cursor: 'pointer', textAlign: 'left', transition: 'all 0.1s' }}>
+                <button key={id} onClick={() => setActiveTool(tool)} style={{ width: '100%', marginBottom: 2, padding: '5px 6px', display: 'flex', flexDirection: 'column', gap: 1, fontSize: 10, fontWeight: activeTool === tool ? 700 : 400, border: `1px solid ${activeTool === tool ? color : 'rgba(255,255,255,0.06)'}`, background: activeTool === tool ? `${color}18` : 'rgba(255,255,255,0.01)', color: activeTool === tool ? color : '#475569', borderRadius: 5, cursor: 'pointer', textAlign: 'left', transition: 'all 0.1s' }}>
                   <span>● P{id}</span>
-                  {obj.row !== null && <span style={{ fontSize: 9, opacity: 0.6 }}>({obj.row},{obj.col})</span>}
+                  {obj.row !== null && <span style={{ fontSize: 8, opacity: 0.6 }}>({obj.row},{obj.col})</span>}
                 </button>
               );
             })}
+
+            {/* Add box button */}
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#1e3a5f', marginBottom: 4, marginTop: 10 }}>Boxes</div>
+            <button
+              onClick={() => {
+                const newId = Date.now();
+                setBoxes((bs) => [...bs, { id: newId, row: null, col: null, requiresPower: false }]);
+                setActivePlacingBoxId(newId);
+                setActiveTool('place_box');
+              }}
+              style={{ width: '100%', padding: '5px 6px', fontSize: 9, border: '1px solid rgba(249,115,22,0.35)', background: 'rgba(249,115,22,0.06)', color: '#f97316', borderRadius: 5, cursor: 'pointer' }}
+            >
+              + Add Box
+            </button>
+            {activePlacingBoxId !== null && (
+              <div style={{ fontSize: 8, color: '#f97316', marginTop: 4, textAlign: 'center', opacity: 0.8 }}>Click grid to place</div>
+            )}
           </div>
 
           {/* Grid area — fixed center, no scroll */}
@@ -461,6 +592,9 @@ function EditorInner() {
                             <GameCell cellType={cell} cellSize={cellSize} />
                             {isObj1 && <ObjDot color="#00ff88" size={cellSize} label="1" />}
                             {isObj2 && <ObjDot color="#00c4ff" size={cellSize} label="2" />}
+                            {boxes.map((b) => b.row === r && b.col === c ? (
+                              <BoxDot key={b.id} size={cellSize} requiresPower={b.requiresPower} />
+                            ) : null)}
                           </div>
                         );
                       })}
@@ -507,10 +641,42 @@ function EditorInner() {
           </Sec>
 
           <Sec title="Options">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
               <input type="checkbox" checked={trailCollision} onChange={(e) => setTrailCollision(e.target.checked)} style={{ accentColor: '#00c4ff', width: 13, height: 13 }} />
               <span style={{ fontSize: 12, color: trailCollision ? '#00c4ff' : '#475569' }}>Trail Collision</span>
             </label>
+            {/* Conveyor power requirements */}
+            {(() => {
+              const conveyorCells: {r: number; c: number}[] = [];
+              for (let r = 0; r < height; r++)
+                for (let c = 0; c < width; c++)
+                  if (['conveyor_up','conveyor_down','conveyor_left','conveyor_right'].includes(grid[r][c]))
+                    conveyorCells.push({r, c});
+              if (conveyorCells.length === 0) return null;
+              return (
+                <>
+                  <Lbl>Conveyor Needs Power</Lbl>
+                  {conveyorCells.map(({r, c}) => {
+                    const key = `${r},${c}`;
+                    const isRequired = conveyorPowerRequired.some(p => p.row === r && p.col === c);
+                    return (
+                      <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 4 }}>
+                        <input type="checkbox" checked={isRequired}
+                          onChange={(e) => {
+                            if (e.target.checked) setConveyorPowerRequired((cpr) => [...cpr, {row: r, col: c}]);
+                            else setConveyorPowerRequired((cpr) => cpr.filter(p => !(p.row === r && p.col === c)));
+                          }}
+                          style={{ accentColor: '#c4b5fd', width: 12, height: 12 }}
+                        />
+                        <span style={{ fontSize: 10, color: isRequired ? '#c4b5fd' : '#475569' }}>
+                          {grid[r][c]} ({r},{c})
+                        </span>
+                      </label>
+                    );
+                  })}
+                </>
+              );
+            })()}
           </Sec>
 
           {objects.map((obj) => {
@@ -543,6 +709,43 @@ function EditorInner() {
               </Sec>
             );
           })}
+
+          {boxes.length > 0 && (
+            <Sec title="Boxes">
+              {boxes.map((box) => {
+                const isPlacing = activePlacingBoxId === box.id;
+                return (
+                  <div key={box.id} style={{ marginBottom: 10, padding: '8px 10px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.15)', borderRadius: 7 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, color: '#f97316', fontWeight: 700 }}>▣ Box</span>
+                      <button onClick={() => setBoxes((bs) => bs.filter((b) => b.id !== box.id))} style={{ fontSize: 10, background: 'none', border: 'none', color: '#334155', cursor: 'pointer' }}>✕</button>
+                    </div>
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, color: box.row !== null ? '#f97316' : '#334155' }}>
+                        {box.row !== null ? `Pos: (${box.row}, ${box.col})` : 'Not placed'}
+                      </span>
+                      {box.row !== null && (
+                        <button onClick={() => setBoxes((bs) => bs.map((b) => b.id === box.id ? { ...b, row: null, col: null } : b))} style={{ marginLeft: 6, fontSize: 9, background: 'none', border: 'none', color: '#334155', cursor: 'pointer' }}>✕</button>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => { setActivePlacingBoxId(box.id); setActiveTool('place_box'); }}
+                      style={{ fontSize: 9, padding: '3px 8px', background: isPlacing ? 'rgba(249,115,22,0.18)' : 'rgba(249,115,22,0.06)', border: `1px solid ${isPlacing ? 'rgba(249,115,22,0.6)' : 'rgba(249,115,22,0.25)'}`, color: '#f97316', borderRadius: 5, cursor: 'pointer', marginBottom: 6, width: '100%' }}
+                    >
+                      {isPlacing ? '⏳ Click grid…' : '📍 Place'}
+                    </button>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={box.requiresPower}
+                        onChange={(e) => setBoxes((bs) => bs.map((b) => b.id === box.id ? { ...b, requiresPower: e.target.checked } : b))}
+                        style={{ accentColor: '#fbbf24', width: 12, height: 12 }}
+                      />
+                      <span style={{ fontSize: 10, color: box.requiresPower ? '#fbbf24' : '#475569' }}>Needs power to push</span>
+                    </label>
+                  </div>
+                );
+              })}
+            </Sec>
+          )}
 
           <Sec title="Actions">
             {testError && <p style={{ fontSize: 11, color: '#ef4444', marginBottom: 8 }}>{testError}</p>}
@@ -646,6 +849,21 @@ function ObjDot({ color, size, label }: { color: string; size: number; label: st
   return (
     <div style={{ position: 'absolute', top: pad, left: pad, width: s, height: s, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}, 0 0 16px ${color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 10 }}>
       <span style={{ fontSize: s * 0.38, fontWeight: 900, color: color === '#00ff88' ? '#003320' : '#002233', lineHeight: 1 }}>{label}</span>
+    </div>
+  );
+}
+
+// ─── Box dot overlay ─────────────────────────────────────────────────────────
+
+function BoxDot({ size, requiresPower }: { size: number; requiresPower: boolean }) {
+  const pad = Math.round(size * 0.1);
+  const s = size - pad * 2;
+  return (
+    <div style={{ position: 'absolute', top: pad, left: pad, width: s, height: s, borderRadius: 6, background: 'rgba(15,23,35,0.9)', border: `2px solid #f97316`, boxShadow: '0 0 8px rgba(249,115,22,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 10 }}>
+      <span style={{ fontSize: s * 0.28, color: '#f97316', lineHeight: 1, fontWeight: 'bold', userSelect: 'none' }}>▣</span>
+      {requiresPower && (
+        <span style={{ position: 'absolute', top: 1, right: 2, fontSize: s * 0.2, color: '#fbbf24', lineHeight: 1, userSelect: 'none' }}>⚡</span>
+      )}
     </div>
   );
 }

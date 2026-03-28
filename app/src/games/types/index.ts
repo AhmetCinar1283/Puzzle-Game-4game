@@ -4,7 +4,19 @@ export type CellType =
   | 'forbidden'
   | 'target_1'
   | 'target_2'
-  | 'direction_toggle';
+  | 'direction_toggle'
+  | 'ice'
+  | 'power_node'
+  | 'conveyor_up'
+  | 'conveyor_down'
+  | 'conveyor_left'
+  | 'conveyor_right'
+  | 'teleporter_in_A'
+  | 'teleporter_out_A'
+  | 'teleporter_in_B'
+  | 'teleporter_out_B'
+  | 'teleporter_in_C'
+  | 'teleporter_out_C';
 
 export type EdgeBehavior = 'wall' | 'portal' | 'lava';
 
@@ -40,6 +52,19 @@ export interface LevelTargetDef {
   position: Position;
 }
 
+export interface BoxDef {
+  id: number;
+  position: Position;
+  /** If true, box can only be pushed when adjacent to a powered cell. Default: always pushable. */
+  requiresPower?: boolean;
+}
+
+export interface BoxState {
+  id: number;
+  position: Position;
+  requiresPower: boolean;
+}
+
 export interface LevelData {
   id: number;
   name: string;
@@ -51,6 +76,10 @@ export interface LevelData {
   targets: LevelTargetDef[];
   /** If true: landing on the opponent's trail causes a loss. Trails are only rendered when this is enabled. */
   trailCollision?: boolean;
+  /** Initial box placements. */
+  initialBoxes?: BoxDef[];
+  /** Conveyor cells that require adjacent power to activate. */
+  conveyorPowerRequired?: Position[];
 }
 
 export interface GameObjectState {
@@ -64,6 +93,9 @@ export interface GameObjectState {
 export interface GameState {
   level: LevelData;
   objects: GameObjectState[];
+  boxes: BoxState[];
+  /** Player IDs that have stepped on a power_node (their trail becomes an electric cable). */
+  poweredPlayers: number[];
   phase: GamePhase;
   moveCount: number;
   trail: Record<number, Position[]>;

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { LevelEdges, CellType, LevelObjectDef, LevelTargetDef } from '../games/types';
+import type { LevelEdges, CellType, LevelObjectDef, LevelTargetDef, BoxDef, Position } from '../games/types';
 
 // ─── Stored Types ─────────────────────────────────────────────────────────────
 
@@ -13,6 +13,8 @@ export interface StoredLevel {
   initialObjects: LevelObjectDef[];
   targets: LevelTargetDef[];
   trailCollision?: boolean;
+  initialBoxes?: BoxDef[];
+  conveyorPowerRequired?: Position[];
   createdAt: number;
   updatedAt: number;
 }
@@ -35,6 +37,11 @@ class KnowAndConquerDB extends Dexie {
   constructor() {
     super('KnowAndConquerDB');
     this.version(1).stores({
+      levels: '++id',
+      levelOrder: 'id',
+    });
+    // Version 2: added initialBoxes and conveyorPowerRequired (optional fields, no migration needed)
+    this.version(2).stores({
       levels: '++id',
       levelOrder: 'id',
     });
