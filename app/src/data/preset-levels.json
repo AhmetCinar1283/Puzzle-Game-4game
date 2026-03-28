@@ -1,0 +1,109 @@
+[
+    {
+        "id": 1,
+        "name": "İlk oyun",
+        "width": 6,
+        "height": 6,
+        "edges": {
+            "top": "wall",
+            "bottom": "wall",
+            "left": "wall",
+            "right": "wall"
+        },
+        "grid": [
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "ice",
+                "ice",
+                "ice",
+                "conveyor_down"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "conveyor_down"
+            ],
+            [
+                "teleporter_out_A",
+                "empty",
+                "forbidden",
+                "empty",
+                "empty",
+                "conveyor_down"
+            ],
+            [
+                "empty",
+                "empty",
+                "teleporter_in_A",
+                "empty",
+                "conveyor_left",
+                "conveyor_left"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "target_2",
+                "empty",
+                "target_1"
+            ]
+        ],
+        "initialObjects": [
+            {
+                "id": 1,
+                "position": {
+                    "row": 1,
+                    "col": 1
+                },
+                "mode": "normal",
+                "lockOnTarget": true
+            },
+            {
+                "id": 2,
+                "position": {
+                    "row": 5,
+                    "col": 2
+                },
+                "mode": "normal",
+                "lockOnTarget": true
+            }
+        ],
+        "targets": [
+            {
+                "objectId": 2,
+                "position": {
+                    "row": 5,
+                    "col": 3
+                }
+            },
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 5,
+                    "col": 5
+                }
+            }
+        ],
+        "initialBoxes": [
+            {
+                "id": 1774725308407,
+                "position": {
+                    "row": 4,
+                    "col": 3
+                }
+            }
+        ]
+    }
+]
