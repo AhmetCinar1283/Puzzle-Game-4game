@@ -34,5 +34,9 @@ export function useGameEngine(initialLevel: LevelData) {
     [],
   );
 
-  return { state, dispatch, restart, loadLevel };
+  const move = useCallback((direction: Direction) => {
+    dispatch({ type: 'MOVE', direction });
+  }, []);
+
+  return { state, dispatch, restart, loadLevel, move };
 }

@@ -1,9 +1,7 @@
 'use client';
 
-import { useCallback } from 'react';
 import type { LevelData } from '../types';
 import { useGameEngine } from '../hooks/useGameEngine';
-import { LEVELS } from '../levels';
 import GameBoard from './GameBoard';
 import HUD from './HUD';
 import WinOverlay from './WinOverlay';
@@ -11,17 +9,12 @@ import LostOverlay from './LostOverlay';
 
 interface GameShellProps {
   level: LevelData;
+  /** Called when the player requests the next level. Omit to hide the button. */
+  onNextLevel?: () => void;
 }
 
-export default function GameShell({ level }: GameShellProps) {
-  const { state, restart, loadLevel } = useGameEngine(level);
-
-  const currentLevelIndex = LEVELS.findIndex((l) => l.id === state.level.id);
-  const nextLevel = LEVELS[currentLevelIndex + 1];
-
-  const handleNextLevel = useCallback(() => {
-    if (nextLevel) loadLevel(nextLevel);
-  }, [nextLevel, loadLevel]);
+export default function GameShell({ level, onNextLevel }: GameShellProps) {
+  const { state, restart, move } = useGameEngine(level);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -38,7 +31,7 @@ export default function GameShell({ level }: GameShellProps) {
             <WinOverlay
               moveCount={state.moveCount}
               onRestart={restart}
-              onNextLevel={nextLevel ? handleNextLevel : undefined}
+              onNextLevel={onNextLevel}
             />
           )}
           {state.phase === 'lost' && (
@@ -46,17 +39,93 @@ export default function GameShell({ level }: GameShellProps) {
           )}
         </div>
       </div>
+
+      {/* D-pad for mobile / touch */}
+      <DPad onMove={move} />
+
       <p
         style={{
-          marginTop: 12,
-          fontSize: 11,
-          color: '#334155',
-          letterSpacing: '0.08em',
+          marginTop: 6,
+          fontSize: 10,
+          color: '#1e3a5f',
+          letterSpacing: '0.1em',
           textTransform: 'uppercase',
         }}
       >
-        Arrow keys to move
+        Arrow keys or tap controls to move
       </p>
+    </div>
+  );
+}
+
+// ─── D-Pad ────────────────────────────────────────────────────────────────────
+
+import type { Direction } from '../types';
+
+function DPad({ onMove }: { onMove: (dir: Direction) => void }) {
+  const btn = (dir: Direction, label: string) => (
+    <button
+      onPointerDown={(e) => {
+        e.preventDefault();
+        onMove(dir);
+      }}
+      style={{
+        width: 52,
+        height: 52,
+        fontSize: 20,
+        background: 'rgba(0,196,255,0.06)',
+        border: '1px solid rgba(0,196,255,0.25)',
+        color: '#00c4ff',
+        borderRadius: 10,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        touchAction: 'none',
+        transition: 'all 0.1s',
+        boxShadow: '0 0 8px rgba(0,196,255,0.1)',
+      }}
+      onPointerEnter={(e) => {
+        if (e.buttons > 0) return;
+        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,196,255,0.14)';
+      }}
+      onPointerLeave={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,196,255,0.06)';
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        display: 'grid',
+        gridTemplateColumns: '52px 52px 52px',
+        gridTemplateRows: '52px 52px 52px',
+        gap: 4,
+      }}
+    >
+      <div />
+      {btn('up', '↑')}
+      <div />
+      {btn('left', '←')}
+      <div
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: 10,
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255,255,255,0.05)',
+        }}
+      />
+      {btn('right', '→')}
+      <div />
+      {btn('down', '↓')}
+      <div />
     </div>
   );
 }
