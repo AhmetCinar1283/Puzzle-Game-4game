@@ -1,37 +1,26 @@
-import { saveLevelAtPosition, getDB } from './db';
+import { getDB } from './db';
 import type { StoredLevel } from './db';
-import presetLevels from '../data/preset-levels.json';
+import presetLevelsData from '../data/preset-levels.json';
 
-type PresetLevel = Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt'>;
-
-const SEED_KEY = 'kc_preset_seeded_v1';
+type PresetInput = Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt'> & { id?: number };
 
 /**
- * Seeds preset levels into Dexie on first launch.
- * Guarded by a localStorage flag — runs only once per browser.
- * Prepends presets at the beginning of the level order.
+ * Seeds preset levels into the dedicated `presetLevels` Dexie table.
+ * Uses the table's own count as the guard — no localStorage flag needed.
+ * If the table is empty, all entries from preset-levels.json are inserted.
  */
 export async function seedPresetLevels(): Promise<void> {
   if (typeof window === 'undefined') return;
-  if (localStorage.getItem(SEED_KEY)) return;
 
-  const levels = presetLevels as PresetLevel[];
-  if (levels.length === 0) {
-    localStorage.setItem(SEED_KEY, '1');
-    return;
-  }
+  const levels = presetLevelsData as PresetInput[];
+  if (levels.length === 0) return;
 
   const db = getDB();
-  const existingCount = await db.levels.count();
-  if (existingCount > 0) {
-    // DB already has data — skip to avoid duplicating on re-install scenarios
-    localStorage.setItem(SEED_KEY, '1');
-    return;
-  }
+  const count = await db.presetLevels.count();
+  if (count > 0) return;
 
-  for (let i = 0; i < levels.length; i++) {
-    await saveLevelAtPosition(levels[i], i);
-  }
-
-  localStorage.setItem(SEED_KEY, '1');
+  const now = Date.now();
+  // Strip any `id` field from JSON — Dexie assigns its own auto-increment IDs
+  const toInsert = levels.map(({ id: _id, ...rest }) => ({ ...rest, createdAt: now, updatedAt: now }));
+  await db.presetLevels.bulkAdd(toInsert);
 }

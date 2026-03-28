@@ -33,6 +33,7 @@ export interface LevelOrderRecord {
 class KnowAndConquerDB extends Dexie {
   levels!: Table<StoredLevel>;
   levelOrder!: Table<LevelOrderRecord>;
+  presetLevels!: Table<StoredLevel>;
 
   constructor() {
     super('KnowAndConquerDB');
@@ -44,6 +45,12 @@ class KnowAndConquerDB extends Dexie {
     this.version(2).stores({
       levels: '++id',
       levelOrder: 'id',
+    });
+    // Version 3: separate table for preset (campaign) levels — read-only for users
+    this.version(3).stores({
+      levels: '++id',
+      levelOrder: 'id',
+      presetLevels: '++id',
     });
   }
 }
@@ -131,4 +138,21 @@ export async function deleteStoredLevel(id: number): Promise<void> {
 export async function reorderLevels(newOrder: number[]): Promise<void> {
   const db = getDB();
   await db.levelOrder.put({ id: 1, order: newOrder });
+}
+
+// ─── Preset Level Helpers ─────────────────────────────────────────────────────
+
+/** Returns all preset levels ordered by their auto-increment ID. */
+export async function getPresetLevels(): Promise<(StoredLevel & { id: number })[]> {
+  const db = getDB();
+  return (await db.presetLevels.orderBy('id').toArray()) as (StoredLevel & { id: number })[];
+}
+
+/** Returns the preset level that comes after currentId, or null if it's the last. */
+export async function getNextPresetLevelId(currentId: number): Promise<number | null> {
+  const db = getDB();
+  const keys = (await db.presetLevels.orderBy('id').primaryKeys()) as number[];
+  const idx = keys.indexOf(currentId);
+  if (idx < 0 || idx >= keys.length - 1) return null;
+  return keys[idx + 1];
 }

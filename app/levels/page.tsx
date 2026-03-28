@@ -8,30 +8,32 @@ type LevelEntry = StoredLevel & { id: number };
 
 export default function LevelsPage() {
   const router = useRouter();
-  const [levels, setLevels] = useState<LevelEntry[]>([]);
+  const [presets, setPresets] = useState<LevelEntry[]>([]);
+  const [userLevels, setUserLevels] = useState<LevelEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
-    const { getOrderedLevels } = await import('@/app/src/lib/db');
-    const data = await getOrderedLevels();
-    setLevels(data as LevelEntry[]);
+    const { getOrderedLevels, getPresetLevels } = await import('@/app/src/lib/db');
+    const [presetData, userData] = await Promise.all([getPresetLevels(), getOrderedLevels()]);
+    setPresets(presetData as LevelEntry[]);
+    setUserLevels(userData as LevelEntry[]);
     setLoading(false);
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
 
-  // ── Reorder ────────────────────────────────────────────────────────────
+  // ── Reorder (user levels only) ─────────────────────────────────────────
   const move = useCallback(async (index: number, dir: -1 | 1) => {
     const target = index + dir;
-    if (target < 0 || target >= levels.length) return;
-    const newLevels = [...levels];
-    [newLevels[index], newLevels[target]] = [newLevels[target], newLevels[index]];
-    setLevels(newLevels); // optimistic update
+    if (target < 0 || target >= userLevels.length) return;
+    const next = [...userLevels];
+    [next[index], next[target]] = [next[target], next[index]];
+    setUserLevels(next);
     const { reorderLevels } = await import('@/app/src/lib/db');
-    await reorderLevels(newLevels.map((l) => l.id));
-  }, [levels]);
+    await reorderLevels(next.map((l) => l.id));
+  }, [userLevels]);
 
-  // ── Delete ─────────────────────────────────────────────────────────────
+  // ── Delete (user levels only) ──────────────────────────────────────────
   const handleDelete = useCallback(async (id: number) => {
     if (!confirm('Delete this level? This cannot be undone.')) return;
     const { deleteStoredLevel } = await import('@/app/src/lib/db');
@@ -94,51 +96,124 @@ export default function LevelsPage() {
           <div style={{ textAlign: 'center', color: '#1e3a5f', fontSize: 12, letterSpacing: '0.1em', paddingTop: 60 }}>
             LOADING...
           </div>
-        ) : levels.length === 0 ? (
-          <div style={{ textAlign: 'center', paddingTop: 80, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
-            <p style={{ color: '#1e3a5f', fontSize: 14, letterSpacing: '0.06em' }}>No levels saved yet.</p>
-            <button
-              onClick={() => router.push('/editor')}
-              style={{
-                padding: '12px 32px', fontSize: 14, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
-                background: 'rgba(0,196,255,0.06)', border: '1px solid rgba(0,196,255,0.4)',
-                color: '#00c4ff', borderRadius: 10, cursor: 'pointer',
-              }}
-            >
-              Create First Level
-            </button>
-          </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {/* Header */}
-            <div
-              style={{
-                display: 'grid', gridTemplateColumns: '36px 1fr 80px 80px 120px',
-                gap: 8, padding: '0 12px 8px',
-                borderBottom: '1px solid rgba(30,58,95,0.4)',
-              }}
-            >
-              {['#', 'Name', 'Size', 'Order', 'Actions'].map((h) => (
-                <span key={h} style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#1e3a5f' }}>{h}</span>
-              ))}
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
 
-            {levels.map((lv, idx) => (
-              <LevelRow
-                key={lv.id}
-                level={lv}
-                index={idx}
-                total={levels.length}
-                onPlay={() => router.push(`/game?id=${lv.id}`)}
-                onEdit={() => router.push(`/editor?id=${lv.id}`)}
-                onDelete={() => handleDelete(lv.id)}
-                onMoveUp={() => move(idx, -1)}
-                onMoveDown={() => move(idx, 1)}
-              />
-            ))}
+            {/* Campaign section */}
+            {presets.length > 0 && (
+              <section>
+                <SectionHeader label="Campaign" color="#ffd700" />
+                <LevelTable>
+                  {presets.map((lv, idx) => (
+                    <LevelRow
+                      key={lv.id}
+                      level={lv}
+                      index={idx}
+                      total={presets.length}
+                      isPreset
+                      onPlay={() => router.push(`/game?id=${lv.id}&source=preset`)}
+                      onEdit={() => {}}
+                      onDelete={() => {}}
+                      onMoveUp={() => {}}
+                      onMoveDown={() => {}}
+                    />
+                  ))}
+                </LevelTable>
+              </section>
+            )}
+
+            {/* Custom section */}
+            <section>
+              <SectionHeader label="Custom" color="#00c4ff" />
+              {userLevels.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, paddingTop: 24 }}>
+                  <p style={{ color: '#1e3a5f', fontSize: 13, letterSpacing: '0.06em' }}>No custom levels yet.</p>
+                  <button
+                    onClick={() => router.push('/editor')}
+                    style={{
+                      padding: '10px 28px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                      background: 'rgba(0,196,255,0.06)', border: '1px solid rgba(0,196,255,0.4)',
+                      color: '#00c4ff', borderRadius: 10, cursor: 'pointer',
+                    }}
+                  >
+                    Create First Level
+                  </button>
+                </div>
+              ) : (
+                <LevelTable>
+                  {userLevels.map((lv, idx) => (
+                    <LevelRow
+                      key={lv.id}
+                      level={lv}
+                      index={idx}
+                      total={userLevels.length}
+                      isPreset={false}
+                      onPlay={() => router.push(`/game?id=${lv.id}`)}
+                      onEdit={() => router.push(`/editor?id=${lv.id}`)}
+                      onDelete={() => handleDelete(lv.id)}
+                      onMoveUp={() => move(idx, -1)}
+                      onMoveDown={() => move(idx, 1)}
+                    />
+                  ))}
+                </LevelTable>
+              )}
+            </section>
+
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Section Header ───────────────────────────────────────────────────────────
+
+function SectionHeader({ label, color }: { label: string; color: string }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 10,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 800,
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color,
+          textShadow: `0 0 10px ${color}80`,
+        }}
+      >
+        {label}
+      </span>
+      <div style={{ flex: 1, height: 1, background: `${color}20` }} />
+    </div>
+  );
+}
+
+// ─── Level Table ──────────────────────────────────────────────────────────────
+
+function LevelTable({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '36px 1fr 80px 80px 120px',
+          gap: 8,
+          padding: '0 12px 6px',
+          borderBottom: '1px solid rgba(30,58,95,0.4)',
+        }}
+      >
+        {['#', 'Name', 'Size', 'Order', 'Actions'].map((h) => (
+          <span key={h} style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#1e3a5f' }}>{h}</span>
+        ))}
+      </div>
+      {children}
     </div>
   );
 }
@@ -149,6 +224,7 @@ interface RowProps {
   level: LevelEntry;
   index: number;
   total: number;
+  isPreset: boolean;
   onPlay: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -156,7 +232,7 @@ interface RowProps {
   onMoveDown: () => void;
 }
 
-function LevelRow({ level, index, total, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
+function LevelRow({ level, index, total, isPreset, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -181,10 +257,13 @@ function LevelRow({ level, index, total, onPlay, onEdit, onDelete, onMoveUp, onM
       </span>
 
       {/* Name */}
-      <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>{level.name}</span>
         {level.trailCollision && (
-          <span style={{ marginLeft: 8, fontSize: 9, color: '#00c4ff', border: '1px solid rgba(0,196,255,0.35)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em' }}>TRAIL</span>
+          <span style={{ fontSize: 9, color: '#00c4ff', border: '1px solid rgba(0,196,255,0.35)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em' }}>TRAIL</span>
+        )}
+        {isPreset && (
+          <span style={{ fontSize: 9, color: '#ffd700', border: '1px solid rgba(255,215,0,0.3)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em' }}>PRESET</span>
         )}
       </div>
 
@@ -193,15 +272,25 @@ function LevelRow({ level, index, total, onPlay, onEdit, onDelete, onMoveUp, onM
 
       {/* Order buttons */}
       <div style={{ display: 'flex', gap: 4 }}>
-        <ArrowBtn onClick={onMoveUp} disabled={index === 0} label="↑" />
-        <ArrowBtn onClick={onMoveDown} disabled={index === total - 1} label="↓" />
+        {isPreset ? (
+          <span style={{ fontSize: 11, color: '#1e3a5f' }}>—</span>
+        ) : (
+          <>
+            <ArrowBtn onClick={onMoveUp} disabled={index === 0} label="↑" />
+            <ArrowBtn onClick={onMoveDown} disabled={index === total - 1} label="↓" />
+          </>
+        )}
       </div>
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 5 }}>
         <ActionBtn onClick={onPlay} color="#00ff88" label="▶" title="Play" />
-        <ActionBtn onClick={onEdit} color="#00c4ff" label="✎" title="Edit" />
-        <ActionBtn onClick={onDelete} color="#ef4444" label="✕" title="Delete" />
+        {!isPreset && (
+          <>
+            <ActionBtn onClick={onEdit} color="#00c4ff" label="✎" title="Edit" />
+            <ActionBtn onClick={onDelete} color="#ef4444" label="✕" title="Delete" />
+          </>
+        )}
       </div>
     </div>
   );

@@ -19,6 +19,8 @@ function storedToLevelData(stored: StoredLevel & { id: number }): LevelData {
     initialObjects: stored.initialObjects,
     targets: stored.targets,
     trailCollision: stored.trailCollision,
+    initialBoxes: stored.initialBoxes,
+    conveyorPowerRequired: stored.conveyorPowerRequired,
   };
 }
 
@@ -28,6 +30,8 @@ function GameContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const idParam = searchParams.get('id');
+  const source = searchParams.get('source'); // 'preset' | null (null = user level)
+  const isPreset = source === 'preset';
   const levelId = idParam ? Number(idParam) : null;
 
   const [level, setLevel] = useState<LevelData | null>(null);
@@ -37,39 +41,46 @@ function GameContent() {
 
   useEffect(() => {
     if (levelId === null) {
-      // No id param → go to levels list
       router.replace('/levels');
       return;
     }
 
     let cancelled = false;
     async function load() {
-      const { getDB, getNextLevelId } = await import('@/app/src/lib/db');
-      const db = getDB();
-      const stored = await db.levels.get(levelId!);
+      if (isPreset) {
+        const { getDB, getNextPresetLevelId } = await import('@/app/src/lib/db');
+        const db = getDB();
+        const stored = await db.presetLevels.get(levelId!);
 
-      if (cancelled) return;
-      if (!stored) {
-        setError(true);
-        setLoading(false);
-        return;
-      }
+        if (cancelled) return;
+        if (!stored) { setError(true); setLoading(false); return; }
 
-      setLevel(storedToLevelData(stored as StoredLevel & { id: number }));
-      const next = await getNextLevelId(levelId!);
-      if (!cancelled) {
-        setNextLevelId(next);
-        setLoading(false);
+        setLevel(storedToLevelData(stored as StoredLevel & { id: number }));
+        const next = await getNextPresetLevelId(levelId!);
+        if (!cancelled) { setNextLevelId(next); setLoading(false); }
+      } else {
+        const { getDB, getNextLevelId } = await import('@/app/src/lib/db');
+        const db = getDB();
+        const stored = await db.levels.get(levelId!);
+
+        if (cancelled) return;
+        if (!stored) { setError(true); setLoading(false); return; }
+
+        setLevel(storedToLevelData(stored as StoredLevel & { id: number }));
+        const next = await getNextLevelId(levelId!);
+        if (!cancelled) { setNextLevelId(next); setLoading(false); }
       }
     }
 
     load();
     return () => { cancelled = true; };
-  }, [levelId, router]);
+  }, [levelId, isPreset, router]);
 
   const handleNextLevel = useCallback(() => {
-    if (nextLevelId !== null) router.push(`/game?id=${nextLevelId}`);
-  }, [nextLevelId, router]);
+    if (nextLevelId !== null) {
+      router.push(isPreset ? `/game?id=${nextLevelId}&source=preset` : `/game?id=${nextLevelId}`);
+    }
+  }, [nextLevelId, isPreset, router]);
 
   if (loading) return <LoadingScreen />;
   if (error || !level) return <ErrorScreen onBack={() => router.push('/levels')} />;
@@ -87,7 +98,6 @@ function GameContent() {
         boxSizing: 'border-box',
       }}
     >
-      {/* Back link */}
       <button
         onClick={() => router.push('/levels')}
         style={{
