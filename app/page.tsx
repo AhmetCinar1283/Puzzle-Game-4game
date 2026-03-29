@@ -88,10 +88,11 @@ export default function Home() {
             margin: 0,
           }}
         >
-          Know & Conquer
+          Syncron
         </h1>
         <p
           style={{
+            
             marginTop: 10,
             fontSize: 11,
             color: '#1e3a5f',
