@@ -35,6 +35,16 @@ export function teleporterInToOut(cell: CellType): CellType | null {
   }
 }
 
+/** Maps teleporter_out_X → teleporter_in_X. Returns null if not a teleporter_out. */
+export function teleporterOutToIn(cell: CellType): CellType | null {
+  switch (cell) {
+    case 'teleporter_out_A': return 'teleporter_in_A';
+    case 'teleporter_out_B': return 'teleporter_in_B';
+    case 'teleporter_out_C': return 'teleporter_in_C';
+    default: return null;
+  }
+}
+
 export function isTeleporterIn(cell: CellType): boolean {
   return cell === 'teleporter_in_A' || cell === 'teleporter_in_B' || cell === 'teleporter_in_C';
 }

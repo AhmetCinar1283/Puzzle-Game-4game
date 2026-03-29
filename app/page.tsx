@@ -1,14 +1,65 @@
 'use client';
 import { useRouter } from 'next/navigation';
 
-const NAV = [
-  { href: '/game', label: '▶ Play', color: '#00ff88', sub: 'Continue from levels list' },
+const NAV_LOWER = [
   { href: '/levels', label: '☰ Levels', color: '#ffd700', sub: 'Browse & reorder levels' },
   { href: '/editor', label: '✦ Editor', color: '#00c4ff', sub: 'Create & edit levels' },
 ];
 
+function NavButton({ label, sub, color, onClick }: { label: string; sub: string; color: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%',
+        padding: '14px 0',
+        fontSize: 14,
+        fontWeight: 700,
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        background: `${color}0d`,
+        border: `1px solid ${color}50`,
+        color,
+        borderRadius: 10,
+        cursor: 'pointer',
+        boxShadow: `0 0 18px ${color}18`,
+        transition: 'all 0.2s',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 4,
+      }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget;
+        el.style.background = `${color}18`;
+        el.style.boxShadow = `0 0 26px ${color}2e`;
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget;
+        el.style.background = `${color}0d`;
+        el.style.boxShadow = `0 0 18px ${color}18`;
+      }}
+    >
+      <span>{label}</span>
+      <span style={{ fontSize: 9, fontWeight: 400, letterSpacing: '0.08em', opacity: 0.5, textTransform: 'none' }}>{sub}</span>
+    </button>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
+
+  function handlePlayClick() {
+    try {
+      const id = localStorage.getItem('lastPlayedLevelId');
+      const src = localStorage.getItem('lastPlayedSource');
+      if (id) {
+        router.push(src === 'preset' ? `/game?id=${id}&source=preset` : `/game?id=${id}`);
+        return;
+      }
+    } catch { /* ignore */ }
+    router.push('/levels');
+  }
 
   return (
     <main
@@ -54,43 +105,20 @@ export default function Home() {
 
       {/* Nav buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', width: '100%', maxWidth: 260 }}>
-        {NAV.map(({ href, label, color, sub }) => (
-          <button
+        <NavButton
+          label="▶ Play"
+          sub="Continue last level"
+          color="#00ff88"
+          onClick={handlePlayClick}
+        />
+        {NAV_LOWER.map(({ href, label, color, sub }) => (
+          <NavButton
             key={href}
+            label={label}
+            sub={sub}
+            color={color}
             onClick={() => router.push(href)}
-            style={{
-              width: '100%',
-              padding: '14px 0',
-              fontSize: 14,
-              fontWeight: 700,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              background: `${color}0d`,
-              border: `1px solid ${color}50`,
-              color,
-              borderRadius: 10,
-              cursor: 'pointer',
-              boxShadow: `0 0 18px ${color}18`,
-              transition: 'all 0.2s',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 4,
-            }}
-            onMouseEnter={(e) => {
-              const el = e.currentTarget;
-              el.style.background = `${color}18`;
-              el.style.boxShadow = `0 0 26px ${color}2e`;
-            }}
-            onMouseLeave={(e) => {
-              const el = e.currentTarget;
-              el.style.background = `${color}0d`;
-              el.style.boxShadow = `0 0 18px ${color}18`;
-            }}
-          >
-            <span>{label}</span>
-            <span style={{ fontSize: 9, fontWeight: 400, letterSpacing: '0.08em', opacity: 0.5, textTransform: 'none' }}>{sub}</span>
-          </button>
+          />
         ))}
       </div>
     </main>

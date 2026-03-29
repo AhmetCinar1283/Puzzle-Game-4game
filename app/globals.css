@@ -14,11 +14,50 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* ── Custom neon crosshair cursor ───────────────────────────────────────────
+   Hotspot at center (12,12) of the 24×24 SVG.
+   The %23 is # (neon green #00ff88).
+   Fallback: crosshair (built-in browser cursor).
+────────────────────────────────────────────────────────────────────────── */
+:root {
+  --cursor-crosshair: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='4' fill='none' stroke='%2300ff88' stroke-width='1.5' opacity='0.9'/%3E%3Cline x1='12' y1='1' x2='12' y2='7' stroke='%2300ff88' stroke-width='1.5' opacity='0.9'/%3E%3Cline x1='12' y1='17' x2='12' y2='23' stroke='%2300ff88' stroke-width='1.5' opacity='0.9'/%3E%3Cline x1='1' y1='12' x2='7' y2='12' stroke='%2300ff88' stroke-width='1.5' opacity='0.9'/%3E%3Cline x1='17' y1='12' x2='23' y2='12' stroke='%2300ff88' stroke-width='1.5' opacity='0.9'/%3E%3C/svg%3E") 12 12, crosshair;
+}
+
+html, body {
+  cursor: var(--cursor-crosshair);
+}
+
+/* Buttons and interactive elements keep the crosshair (game feel) */
+button, a, [role="button"], input, textarea, select, label {
+  cursor: var(--cursor-crosshair);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  /* Prevent text selection flash on rapid clicks (game feel) */
+  -webkit-user-select: none;
+  user-select: none;
 }
+
+/* Re-enable selection where it makes sense */
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ── Target hücre nabız animasyonları ─────────────────────────────────────── */
+@keyframes target-pulse-green {
+  0%,100% { transform: scale(1);    text-shadow: 0 0 10px rgba(0,255,136,0.8); }
+  50%      { transform: scale(1.18); text-shadow: 0 0 20px rgba(0,255,136,1), 0 0 36px rgba(0,255,136,0.5); }
+}
+@keyframes target-pulse-blue {
+  0%,100% { transform: scale(1);    text-shadow: 0 0 10px rgba(0,196,255,0.8); }
+  50%      { transform: scale(1.18); text-shadow: 0 0 20px rgba(0,196,255,1), 0 0 36px rgba(0,196,255,0.5); }
+}
+.target-pulse-green { animation: target-pulse-green 2s ease-in-out infinite; }
+.target-pulse-blue  { animation: target-pulse-blue  2s ease-in-out infinite; animation-delay: 0.5s; }
 
 /* Neon glow utilities */
 .neon-text-green {

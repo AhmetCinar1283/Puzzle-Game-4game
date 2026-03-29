@@ -7,10 +7,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev      # Start dev server (Turbopack, default in Next.js 16)
-npm run build    # Production build
-npm run lint     # ESLint (Next.js 16 uses ESLint CLI, not next lint)
-npx tsc --noEmit # Type-check without emitting files
+npm run dev           # Start dev server (Turbopack, default in Next.js 16)
+npm run build         # Production build → out/ (static export, used by Cloudflare Pages)
+npm run lint          # ESLint (Next.js 16 uses ESLint CLI, not next lint)
+npx tsc --noEmit      # Type-check without emitting files
+npm run build:mobile      # next build + cap sync → prepares Android project
+npm run cap:open          # Open android/ in Android Studio to build APK
+npx cap sync              # Sync web assets to native project after build
+npm run electron:dev      # Electron dev (needs `npm run dev` running on :3000 first)
+npm run electron:serve    # next build → open in Electron (no installer)
+npm run electron:dist     # next build → create installer for current OS
+npm run electron:dist:win # Windows .exe (NSIS installer)
+npm run electron:dist:mac # macOS .dmg
+npm run electron:dist:linux # Linux .AppImage
 ```
 
 No test framework is set up yet.
@@ -250,6 +259,58 @@ Dark base `#030712`. Neon glows via `box-shadow` and `text-shadow` inline styles
 
 `GameObject` uses `<motion.div animate={{ x, y }}>` with absolute positioning. `x = col * CELL_SIZE`, `y = row * CELL_SIZE`. Spring config: `stiffness: 400, damping: 30`. `WinOverlay` and `LostOverlay` use `AnimatePresence` with scale+opacity transitions.
 
-### Mobile Controls
+### Mobile Controls & Responsive Layout
 
-`GameShell` renders a D-pad below the board (9-cell grid: ↑ ← · → ↓). Uses `onPointerDown` to support both touch and mouse.
+- **Desktop (≥ 768px):** D-pad rendered below board (9-cell grid: ↑ ← · → ↓), uses `onPointerDown`
+- **Mobile (< 768px):** D-pad hidden; swipe gestures on the board area (touchstart/touchend, 30px threshold)
+- **Dynamic cell size:** `GameShell` computes `cellSize` from viewport on resize; clamped `[32, 72]px`; passed as prop to `GameBoard`
+- **Levels page:** Collapses to 3-column grid on mobile (Size + Order columns hidden)
+- **Editor page:** Tab-based layout on mobile (`< 900px`): tabs switch between Levels / Grid / Settings panels
+
+### Teleporter Behaviour (Bidirectional)
+
+- **Forward (teleporter_in → teleporter_out):** Always applies when entity is on a `teleporter_in_X` cell.
+- **Reverse (teleporter_out → teleporter_in):** Applies when entity **moved into** a `teleporter_out_X` cell this turn (i.e. `prevPos ≠ newPos`). If the entity was already on the exit and got blocked (didn't move), reverse teleport does NOT trigger.
+- `positionUtils.ts` exports `teleporterOutToIn()` for the reverse mapping.
+- `applyEntityTeleport` accepts `prevPos: Position | null = null`; movement.ts passes `state.objects[i].position` as `prevPos`.
+
+### Preset Level Seeding
+
+`seedPresets.ts` uses a content hash stored in `localStorage` (`presetLevelsHash`) to detect changes in `preset-levels.json`. When the hash changes (or table is empty), it clears `presetLevels` and re-seeds from the JSON. Also clears `lastPlayedLevelId`/`lastPlayedSource` on re-seed since IDs change.
+
+### Last Played Level
+
+- `game/page.tsx` saves `lastPlayedLevelId` and `lastPlayedSource` (`'preset'` | `'user'`) to `localStorage` after loading a level.
+- Main menu Play button reads these values and navigates directly to the last played level. Falls back to `/levels` if not set.
+- `game/page.tsx` `useEffect` resets `loading/level/nextLevelId` at the start to prevent stale level state during navigation. `<GameShell key={level.id}>` forces remount on level change.
+
+### Capacitor (Android APK)
+
+- `capacitor.config.ts` at project root: `appId: 'com.knowandconquer.app'`, `webDir: 'out'`, `androidScheme: 'https'`
+- `android/` directory contains the native Android project (committed to git; build artifacts gitignored)
+- `next.config.ts` has `trailingSlash: true` — required for Capacitor WebView routing with Next.js App Router
+- **Workflow to build APK:**
+  1. `npm run build:mobile` → runs `next build && cap sync`
+  2. `npm run cap:open` → opens Android Studio
+  3. In Android Studio: Build → Generate Signed APK / Bundle
+- Cloudflare Pages deployment is unaffected: it runs `npm run build` which outputs to `out/`
+
+### Electron (Desktop — Windows/Mac/Linux)
+
+- `electron/main.js` — main process: creates fullscreen BrowserWindow, disables native context menu, disables DevTools in prod, F11 toggles fullscreen, ESC exits fullscreen
+- `electron/preload.js` — exposes `window.electron.isElectron = true` so web code can detect the environment
+- `electron-builder.yml` — build config: `asar: false` (required for Next.js static files via file://), outputs to `dist-electron/`
+- `"main": "electron/main.js"` in package.json
+- **Game feel features:**
+  - Starts fullscreen (`fullscreen: true`)
+  - No menu bar (`Menu.setApplicationMenu(null)`)
+  - Native context menu disabled (`webContents.on('context-menu', e => e.preventDefault())`)
+  - DevTools shortcuts blocked in production (F12, Ctrl+Shift+I, Ctrl+U)
+  - F11 / ESC to toggle fullscreen
+- **CSS game feel (globals.css):**
+  - Custom neon crosshair cursor (SVG data URI, `#00ff88`, 24×24, hotspot 12,12)
+  - `user-select: none` on body (re-enabled for inputs/textareas)
+- **Workflow to build .exe:**
+  1. `npm run electron:dist:win` — builds Next.js static export + packages with electron-builder
+  2. Output in `dist-electron/` — NSIS installer (.exe)
+- **Dev workflow:** `npm run dev` in one terminal, `npm run electron:dev` in another

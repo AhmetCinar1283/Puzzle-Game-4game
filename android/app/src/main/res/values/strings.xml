@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Know &amp; Conquer</string>
+    <string name="title_activity_main">Know &amp; Conquer</string>
+    <string name="package_name">com.knowandconquer.app</string>
+    <string name="custom_url_scheme">com.knowandconquer.app</string>
+</resources>

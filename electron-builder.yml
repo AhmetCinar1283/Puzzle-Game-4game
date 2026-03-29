@@ -1,0 +1,36 @@
+appId: com.knowandconquer.app
+productName: Know & Conquer
+
+directories:
+  output: dist-electron
+
+# Include the static export + electron entry files
+files:
+  - out/**/*
+  - electron/**/*
+  - package.json
+
+# Don't pack into asar — Next.js static files must be accessible via file://
+asar: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # Place a .ico file at public/icon.ico to use it here:
+  # icon: public/icon.ico
+
+mac:
+  target: dmg
+  # icon: public/icon.icns
+
+linux:
+  target: AppImage
+  # icon: public/icon.png
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true

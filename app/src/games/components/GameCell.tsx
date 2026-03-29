@@ -187,19 +187,20 @@ export default function GameCell({ cellType, cellSize, isPowered }: GameCellProp
             fontWeight: 'bold',
           }}
         >
-          ⇄
+          ↕
         </span>
       )}
 
       {/* Target 1 */}
       {cellType === 'target_1' && (
         <span
+          className="target-pulse-green"
           style={{
             fontSize: cellSize * 0.38,
             lineHeight: 1,
             color: '#00ff88',
-            textShadow: '0 0 10px rgba(0,255,136,0.8)',
             userSelect: 'none',
+            display: 'inline-block',
           }}
         >
           ◎
@@ -209,12 +210,13 @@ export default function GameCell({ cellType, cellSize, isPowered }: GameCellProp
       {/* Target 2 */}
       {cellType === 'target_2' && (
         <span
+          className="target-pulse-blue"
           style={{
             fontSize: cellSize * 0.38,
             lineHeight: 1,
             color: '#00c4ff',
-            textShadow: '0 0 10px rgba(0,196,255,0.8)',
             userSelect: 'none',
+            display: 'inline-block',
           }}
         >
           ◎

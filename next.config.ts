@@ -2,8 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'export',
+  // trailingSlash: routes generate as /route/index.html — required for Capacitor WebView routing
+  trailingSlash: true,
   images: {
-    unoptimized: true, // Statik exportlarda bu genelde gereklidir
+    unoptimized: true,
   },
 };
 

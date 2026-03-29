@@ -172,6 +172,17 @@ function EditorInner() {
   const [copied, setCopied] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState('');
 
+  // Responsive
+  const [isMobile, setIsMobile] = useState(false);
+  const [activeTab, setActiveTab] = useState<'levels' | 'grid' | 'settings'>('grid');
+
+  useEffect(() => {
+    function check() { setIsMobile(window.innerWidth < 900); }
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   // Load saved levels from Dexie
   const reloadLevels = useCallback(async () => {
     const { getOrderedLevels } = await import('@/app/src/lib/db');
@@ -462,11 +473,32 @@ function EditorInner() {
         </div>
       </div>
 
-      {/* Body: three columns */}
+      {/* Mobile tab bar */}
+      {isMobile && (
+        <div style={{ flexShrink: 0, display: 'flex', borderBottom: '1px solid rgba(30,58,95,0.4)', background: 'rgba(3,7,18,0.97)' }}>
+          {(['levels', 'grid', 'settings'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                flex: 1, padding: '8px 4px', fontSize: 10, fontWeight: 700,
+                letterSpacing: '0.1em', textTransform: 'uppercase', background: 'none',
+                border: 'none', borderBottom: `2px solid ${activeTab === tab ? '#00c4ff' : 'transparent'}`,
+                color: activeTab === tab ? '#00c4ff' : '#334155', cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              {tab === 'levels' ? '☰ Levels' : tab === 'grid' ? '⊞ Grid' : '⚙ Settings'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Body: three columns (or tabs on mobile) */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* ── Left: Saved Levels ── */}
-        <div style={{ width: 170, flexShrink: 0, borderRight: '1px solid rgba(30,58,95,0.4)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ width: isMobile ? '100%' : 170, flexShrink: 0, borderRight: isMobile ? 'none' : '1px solid rgba(30,58,95,0.4)', display: isMobile ? (activeTab === 'levels' ? 'flex' : 'none') : 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ flexShrink: 0, padding: '10px 12px 6px', borderBottom: '1px solid rgba(30,58,95,0.3)' }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#1e3a5f' }}>Saved Levels</span>
           </div>
@@ -503,7 +535,7 @@ function EditorInner() {
         </div>
 
         {/* ── Center: Tool palette + Grid ── */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: isMobile ? (activeTab === 'grid' ? 'flex' : 'none') : 'flex', overflow: 'hidden' }}>
 
           {/* Tool palette */}
           <div style={{ width: 110, flexShrink: 0, borderRight: '1px solid rgba(30,58,95,0.3)', overflowY: 'auto', padding: '10px 6px' }}>
@@ -610,7 +642,7 @@ function EditorInner() {
         </div>
 
         {/* ── Right: Settings ── */}
-        <div style={{ width: 270, flexShrink: 0, borderLeft: '1px solid rgba(30,58,95,0.4)', overflowY: 'auto', padding: '12px 14px' }}>
+        <div style={{ width: isMobile ? '100%' : 270, flexShrink: 0, borderLeft: isMobile ? 'none' : '1px solid rgba(30,58,95,0.4)', overflowY: 'auto', padding: '12px 14px', display: isMobile ? (activeTab === 'settings' ? 'block' : 'none') : 'block' }}>
 
           <Sec title="Level Info">
             <Lbl>Name</Lbl>

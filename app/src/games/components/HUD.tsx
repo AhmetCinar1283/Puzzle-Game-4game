@@ -5,6 +5,8 @@ interface HUDProps {
   moveCount: number;
   objects: GameObjectState[];
   onRestart: () => void;
+  muted: boolean;
+  onToggleMute: () => void;
 }
 
 const OBJECT_NEON: Record<number, { color: string; label: string; glow: string }> = {
@@ -12,7 +14,7 @@ const OBJECT_NEON: Record<number, { color: string; label: string; glow: string }
   2: { color: '#00c4ff', label: 'P2', glow: '0 0 6px rgba(0,196,255,0.7)' },
 };
 
-export default function HUD({ levelName, moveCount, objects, onRestart }: HUDProps) {
+export default function HUD({ levelName, moveCount, objects, onRestart, muted, onToggleMute }: HUDProps) {
   return (
     <div
       style={{
@@ -71,30 +73,59 @@ export default function HUD({ levelName, moveCount, objects, onRestart }: HUDPro
         </span>
       </div>
 
-      <button
-        onClick={onRestart}
-        style={{
-          fontSize: 11,
-          padding: '4px 12px',
-          background: 'rgba(0,255,136,0.05)',
-          border: '1px solid rgba(0,255,136,0.3)',
-          color: '#00ff88',
-          borderRadius: 6,
-          cursor: 'pointer',
-          letterSpacing: '0.04em',
-          transition: 'all 0.15s',
-        }}
-        onMouseEnter={(e) => {
-          (e.target as HTMLButtonElement).style.background = 'rgba(0,255,136,0.12)';
-          (e.target as HTMLButtonElement).style.boxShadow = '0 0 8px rgba(0,255,136,0.3)';
-        }}
-        onMouseLeave={(e) => {
-          (e.target as HTMLButtonElement).style.background = 'rgba(0,255,136,0.05)';
-          (e.target as HTMLButtonElement).style.boxShadow = 'none';
-        }}
-      >
-        RESTART
-      </button>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <button
+          onClick={onToggleMute}
+          title={muted ? 'Sesi aç' : 'Sesi kapat'}
+          style={{
+            fontSize: 15,
+            width: 30,
+            height: 30,
+            background: 'rgba(0,255,136,0.05)',
+            border: '1px solid rgba(0,255,136,0.2)',
+            color: muted ? '#334155' : '#00ff88',
+            borderRadius: 6,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.15s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,255,136,0.10)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,255,136,0.05)';
+          }}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
+        <button
+          onClick={onRestart}
+          style={{
+            fontSize: 11,
+            padding: '4px 12px',
+            background: 'rgba(0,255,136,0.05)',
+            border: '1px solid rgba(0,255,136,0.3)',
+            color: '#00ff88',
+            borderRadius: 6,
+            cursor: 'pointer',
+            letterSpacing: '0.04em',
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,255,136,0.12)';
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 8px rgba(0,255,136,0.3)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,255,136,0.05)';
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
+          }}
+        >
+          RESTART
+        </button>
+      </div>
     </div>
   );
 }

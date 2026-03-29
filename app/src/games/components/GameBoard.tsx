@@ -1,4 +1,4 @@
-import type { LevelData, GameObjectState, Position, EdgeBehavior, BoxState } from '../types';
+import type { LevelData, GameObjectState, Position, EdgeBehavior, BoxState, MoveAnimType } from '../types';
 import { posKey } from '../logic/positionUtils';
 import GameCell from './GameCell';
 import GameObject from './GameObject';
@@ -22,6 +22,8 @@ interface GameBoardProps {
   trail: Record<number, Position[]>;
   poweredPlayers: number[];
   poweredCells: Set<string>;
+  cellSize?: number;
+  moveAnimTypes?: Record<number, MoveAnimType>;
 }
 
 function edgeBorderStyle(behavior: EdgeBehavior): { color: string; glow: string } {
@@ -61,9 +63,12 @@ export default function GameBoard({
   trail,
   poweredPlayers,
   poweredCells,
+  cellSize,
+  moveAnimTypes,
 }: GameBoardProps) {
-  const boardWidth = level.width * CELL_SIZE;
-  const boardHeight = level.height * CELL_SIZE;
+  const cs = cellSize ?? CELL_SIZE;
+  const boardWidth = level.width * cs;
+  const boardHeight = level.height * cs;
   const showTrails = !!level.trailCollision;
 
   // Build trail lookup only when needed
@@ -123,8 +128,8 @@ export default function GameBoard({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: `repeat(${level.width}, ${CELL_SIZE}px)`,
-              gridTemplateRows: `repeat(${level.height}, ${CELL_SIZE}px)`,
+              gridTemplateColumns: `repeat(${level.width}, ${cs}px)`,
+              gridTemplateRows: `repeat(${level.height}, ${cs}px)`,
             }}
           >
             {level.grid.map((row, rowIdx) =>
@@ -135,7 +140,7 @@ export default function GameBoard({
                   <GameCell
                     key={`${rowIdx}-${colIdx}`}
                     cellType={cellType}
-                    cellSize={CELL_SIZE}
+                    cellSize={cs}
                     isPowered={isPoweredCell}
                   />
                 );
@@ -154,7 +159,7 @@ export default function GameBoard({
             const color = TRAIL_COLORS[objectId] ?? 'rgba(139,92,246,0.15)';
 
             return (
-              <div key={`trail-${key}`} style={{ position: 'absolute', top: row * CELL_SIZE, left: col * CELL_SIZE, width: CELL_SIZE, height: CELL_SIZE, pointerEvents: 'none', zIndex: 5 }}>
+              <div key={`trail-${key}`} style={{ position: 'absolute', top: row * cs, left: col * cs, width: cs, height: cs, pointerEvents: 'none', zIndex: 5 }}>
                 {showBase && (
                   <div
                     style={{
@@ -187,14 +192,19 @@ export default function GameBoard({
             <GameBoxObject
               key={box.id}
               box={box}
-              cellSize={CELL_SIZE}
+              cellSize={cs}
               isPowered={poweredCells.has(posKey(box.position))}
             />
           ))}
 
           {/* Player objects */}
           {objects.map((obj) => (
-            <GameObject key={obj.id} object={obj} cellSize={CELL_SIZE} />
+            <GameObject
+              key={obj.id}
+              object={obj}
+              cellSize={cs}
+              animType={moveAnimTypes?.[obj.id] ?? 'normal'}
+            />
           ))}
         </div>
 

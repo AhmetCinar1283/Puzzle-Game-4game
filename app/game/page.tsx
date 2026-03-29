@@ -45,6 +45,12 @@ function GameContent() {
       return;
     }
 
+    // Reset state immediately so old level is not shown while new one loads
+    setLoading(true);
+    setLevel(null);
+    setNextLevelId(null);
+    setError(false);
+
     let cancelled = false;
     async function load() {
       if (isPreset) {
@@ -55,7 +61,12 @@ function GameContent() {
         if (cancelled) return;
         if (!stored) { setError(true); setLoading(false); return; }
 
-        setLevel(storedToLevelData(stored as StoredLevel & { id: number }));
+        const levelData = storedToLevelData(stored as StoredLevel & { id: number });
+        setLevel(levelData);
+        try {
+          localStorage.setItem('lastPlayedLevelId', String(levelId));
+          localStorage.setItem('lastPlayedSource', 'preset');
+        } catch { /* quota exceeded, ignore */ }
         const next = await getNextPresetLevelId(levelId!);
         if (!cancelled) { setNextLevelId(next); setLoading(false); }
       } else {
@@ -66,7 +77,12 @@ function GameContent() {
         if (cancelled) return;
         if (!stored) { setError(true); setLoading(false); return; }
 
-        setLevel(storedToLevelData(stored as StoredLevel & { id: number }));
+        const levelData = storedToLevelData(stored as StoredLevel & { id: number });
+        setLevel(levelData);
+        try {
+          localStorage.setItem('lastPlayedLevelId', String(levelId));
+          localStorage.setItem('lastPlayedSource', 'user');
+        } catch { /* quota exceeded, ignore */ }
         const next = await getNextLevelId(levelId!);
         if (!cancelled) { setNextLevelId(next); setLoading(false); }
       }
@@ -117,6 +133,7 @@ function GameContent() {
       </button>
 
       <GameShell
+        key={level.id}
         level={level}
         onNextLevel={nextLevelId !== null ? handleNextLevel : undefined}
       />

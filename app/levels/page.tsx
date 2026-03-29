@@ -11,6 +11,14 @@ export default function LevelsPage() {
   const [presets, setPresets] = useState<LevelEntry[]>([]);
   const [userLevels, setUserLevels] = useState<LevelEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function check() { setIsMobile(window.innerWidth < 600); }
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const reload = useCallback(async () => {
     const { getOrderedLevels, getPresetLevels } = await import('@/app/src/lib/db');
@@ -41,6 +49,9 @@ export default function LevelsPage() {
     await reload();
   }, [reload]);
 
+  const cols = isMobile ? '28px 1fr 90px' : '36px 1fr 80px 80px 120px';
+  const headers = isMobile ? ['#', 'Name', 'Actions'] : ['#', 'Name', 'Size', 'Order', 'Actions'];
+
   return (
     <div
       style={{
@@ -58,7 +69,7 @@ export default function LevelsPage() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 24px',
+          padding: isMobile ? '12px 12px' : '12px 24px',
           background: 'rgba(3,7,18,0.97)',
           borderBottom: '1px solid rgba(0,255,136,0.12)',
         }}
@@ -81,17 +92,17 @@ export default function LevelsPage() {
         <button
           onClick={() => router.push('/editor')}
           style={{
-            fontSize: 12, padding: '6px 16px', fontWeight: 700, letterSpacing: '0.06em',
+            fontSize: 12, padding: '6px 12px', fontWeight: 700, letterSpacing: '0.06em',
             background: 'rgba(0,196,255,0.06)', border: '1px solid rgba(0,196,255,0.35)',
             color: '#00c4ff', borderRadius: 7, cursor: 'pointer',
           }}
         >
-          + New Level
+          {isMobile ? '+ New' : '+ New Level'}
         </button>
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, maxWidth: 720, width: '100%', margin: '0 auto', padding: '24px 16px' }}>
+      <div style={{ flex: 1, maxWidth: 720, width: '100%', margin: '0 auto', padding: isMobile ? '16px 8px' : '24px 16px' }}>
         {loading ? (
           <div style={{ textAlign: 'center', color: '#1e3a5f', fontSize: 12, letterSpacing: '0.1em', paddingTop: 60 }}>
             LOADING...
@@ -103,7 +114,7 @@ export default function LevelsPage() {
             {presets.length > 0 && (
               <section>
                 <SectionHeader label="Campaign" color="#ffd700" />
-                <LevelTable>
+                <LevelTable cols={cols} headers={headers}>
                   {presets.map((lv, idx) => (
                     <LevelRow
                       key={lv.id}
@@ -111,6 +122,8 @@ export default function LevelsPage() {
                       index={idx}
                       total={presets.length}
                       isPreset
+                      isMobile={isMobile}
+                      cols={cols}
                       onPlay={() => router.push(`/game?id=${lv.id}&source=preset`)}
                       onEdit={() => {}}
                       onDelete={() => {}}
@@ -140,7 +153,7 @@ export default function LevelsPage() {
                   </button>
                 </div>
               ) : (
-                <LevelTable>
+                <LevelTable cols={cols} headers={headers}>
                   {userLevels.map((lv, idx) => (
                     <LevelRow
                       key={lv.id}
@@ -148,6 +161,8 @@ export default function LevelsPage() {
                       index={idx}
                       total={userLevels.length}
                       isPreset={false}
+                      isMobile={isMobile}
+                      cols={cols}
                       onPlay={() => router.push(`/game?id=${lv.id}`)}
                       onEdit={() => router.push(`/editor?id=${lv.id}`)}
                       onDelete={() => handleDelete(lv.id)}
@@ -170,24 +185,8 @@ export default function LevelsPage() {
 
 function SectionHeader({ label, color }: { label: string; color: string }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        marginBottom: 10,
-      }}
-    >
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 800,
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          color,
-          textShadow: `0 0 10px ${color}80`,
-        }}
-      >
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.2em', textTransform: 'uppercase', color, textShadow: `0 0 10px ${color}80` }}>
         {label}
       </span>
       <div style={{ flex: 1, height: 1, background: `${color}20` }} />
@@ -197,19 +196,19 @@ function SectionHeader({ label, color }: { label: string; color: string }) {
 
 // ─── Level Table ──────────────────────────────────────────────────────────────
 
-function LevelTable({ children }: { children: React.ReactNode }) {
+function LevelTable({ children, cols, headers }: { children: React.ReactNode; cols: string; headers: string[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '36px 1fr 80px 80px 120px',
+          gridTemplateColumns: cols,
           gap: 8,
           padding: '0 12px 6px',
           borderBottom: '1px solid rgba(30,58,95,0.4)',
         }}
       >
-        {['#', 'Name', 'Size', 'Order', 'Actions'].map((h) => (
+        {headers.map((h) => (
           <span key={h} style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#1e3a5f' }}>{h}</span>
         ))}
       </div>
@@ -225,6 +224,8 @@ interface RowProps {
   index: number;
   total: number;
   isPreset: boolean;
+  isMobile: boolean;
+  cols: string;
   onPlay: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -232,7 +233,7 @@ interface RowProps {
   onMoveDown: () => void;
 }
 
-function LevelRow({ level, index, total, isPreset, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
+function LevelRow({ level, index, total, isPreset, isMobile, cols, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -241,7 +242,7 @@ function LevelRow({ level, index, total, isPreset, onPlay, onEdit, onDelete, onM
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'grid',
-        gridTemplateColumns: '36px 1fr 80px 80px 120px',
+        gridTemplateColumns: cols,
         gap: 8,
         alignItems: 'center',
         padding: '10px 12px',
@@ -257,30 +258,34 @@ function LevelRow({ level, index, total, isPreset, onPlay, onEdit, onDelete, onM
       </span>
 
       {/* Name */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>{level.name}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+        <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{level.name}</span>
         {level.trailCollision && (
-          <span style={{ fontSize: 9, color: '#00c4ff', border: '1px solid rgba(0,196,255,0.35)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em' }}>TRAIL</span>
+          <span style={{ fontSize: 9, color: '#00c4ff', border: '1px solid rgba(0,196,255,0.35)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>TRAIL</span>
         )}
         {isPreset && (
-          <span style={{ fontSize: 9, color: '#ffd700', border: '1px solid rgba(255,215,0,0.3)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em' }}>PRESET</span>
+          <span style={{ fontSize: 9, color: '#ffd700', border: '1px solid rgba(255,215,0,0.3)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>PRESET</span>
         )}
       </div>
 
-      {/* Size */}
-      <span style={{ fontSize: 11, color: '#475569' }}>{level.width}×{level.height}</span>
+      {/* Size — hidden on mobile */}
+      {!isMobile && (
+        <span style={{ fontSize: 11, color: '#475569' }}>{level.width}×{level.height}</span>
+      )}
 
-      {/* Order buttons */}
-      <div style={{ display: 'flex', gap: 4 }}>
-        {isPreset ? (
-          <span style={{ fontSize: 11, color: '#1e3a5f' }}>—</span>
-        ) : (
-          <>
-            <ArrowBtn onClick={onMoveUp} disabled={index === 0} label="↑" />
-            <ArrowBtn onClick={onMoveDown} disabled={index === total - 1} label="↓" />
-          </>
-        )}
-      </div>
+      {/* Order buttons — hidden on mobile */}
+      {!isMobile && (
+        <div style={{ display: 'flex', gap: 4 }}>
+          {isPreset ? (
+            <span style={{ fontSize: 11, color: '#1e3a5f' }}>—</span>
+          ) : (
+            <>
+              <ArrowBtn onClick={onMoveUp} disabled={index === 0} label="↑" />
+              <ArrowBtn onClick={onMoveDown} disabled={index === total - 1} label="↓" />
+            </>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 5 }}>

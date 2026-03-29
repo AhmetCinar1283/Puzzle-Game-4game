@@ -9,6 +9,7 @@ import type {
   LevelTargetDef,
   LostReason,
   BoxState,
+  MoveAnimType,
 } from '../types';
 import { DELTA, posKey, posEqual } from './positionUtils';
 import { computePoweredCells } from './powerSystem';
@@ -308,7 +309,10 @@ export function processMoveStep(state: GameState, direction: Direction): GameSta
   }, []);
 
   const tentativeTeleport: Position[] = postIce.map((pos, i) =>
-    applyEntityTeleport(pos, state.level.grid, projectedBoxes, state.objects, state.objects[i].id),
+    applyEntityTeleport(
+      pos, state.level.grid, projectedBoxes, state.objects, state.objects[i].id,
+      false, state.objects[i].position,
+    ),
   );
 
   // Same-exit guard: if two players teleport to the same exit, both stay at teleporter_in
@@ -440,6 +444,42 @@ export function processMoveStep(state: GameState, direction: Direction): GameSta
   // ── Step 15: Check win condition ──────────────────────────────────────────
   const won = checkWinCondition(postConveyorObjects, state.level.targets);
 
+  // ── Step 16a: Her nesne için animasyon tipi ───────────────────────────────
+  const moveAnimTypes: Record<number, MoveAnimType> = {};
+  state.objects.forEach((obj, i) => {
+    if (obj.isLocked) { moveAnimTypes[obj.id] = 'normal'; return; }
+
+    const startPos = obj.position;
+
+    // Teleport: postIce → postTeleport değişti
+    if (!posEqual(postIce[i], postTeleport[i])) {
+      moveAnimTypes[obj.id] = 'teleport'; return;
+    }
+
+    // Portal: Pass1'de 1'den fazla hücre atladı (edge-wrap)
+    if (
+      Math.abs(rawPositions[i].row - startPos.row) > 1 ||
+      Math.abs(rawPositions[i].col - startPos.col) > 1
+    ) {
+      moveAnimTypes[obj.id] = 'portal'; return;
+    }
+
+    // Ice: rawPositions → postIce VEYA postTeleport → finalPositions değişti
+    if (
+      !posEqual(rawPositions[i], postIce[i]) ||
+      !posEqual(postTeleport[i], finalPositions[i])
+    ) {
+      moveAnimTypes[obj.id] = 'ice'; return;
+    }
+
+    // Conveyor: finalPositions → postConveyorObjects değişti
+    if (!posEqual(finalPositions[i], postConveyorObjects[i].position)) {
+      moveAnimTypes[obj.id] = 'conveyor'; return;
+    }
+
+    moveAnimTypes[obj.id] = 'normal';
+  });
+
   // ── Step 16: Assemble new state ───────────────────────────────────────────
   return {
     ...state,
@@ -450,6 +490,7 @@ export function processMoveStep(state: GameState, direction: Direction): GameSta
     phase: won ? 'won' : 'playing',
     lostReason: undefined,
     moveCount: state.moveCount + 1,
+    moveAnimTypes,
   };
 }
 

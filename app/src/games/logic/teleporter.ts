@@ -1,21 +1,54 @@
 import type { BoxState, CellType, GameObjectState, Position } from '../types';
-import { isTeleporterIn, teleporterInToOut, findCellPosition, posEqual } from './positionUtils';
+import { isTeleporterIn, isTeleporterOut, teleporterInToOut, teleporterOutToIn, findCellPosition, posEqual } from './positionUtils';
+
+/**
+ * Shared occupancy check: teleports entity from stayPos to exitPos if exit is clear.
+ */
+function checkAndTeleport(
+  stayPos: Position,
+  exitPos: Position,
+  grid: CellType[][],
+  allBoxes: BoxState[],
+  allObjects: GameObjectState[],
+  selfId: number | null,
+  selfIsBox: boolean,
+): Position {
+  // Check if exit cell type is blocking (obstacle)
+  if (grid[exitPos.row]?.[exitPos.col] === 'obstacle') return stayPos;
+
+  // Check if exit is occupied by a player
+  const blockedByPlayer = allObjects.some(
+    (o) => (selfIsBox || o.id !== selfId) && posEqual(o.position, exitPos),
+  );
+  if (blockedByPlayer) return stayPos;
+
+  // Check if exit is occupied by a box (other than self if self is a box)
+  const blockedByBox = allBoxes.some(
+    (b) => (selfIsBox && selfId !== null ? b.id !== selfId : true) && posEqual(b.position, exitPos),
+  );
+  if (blockedByBox) return stayPos;
+
+  return exitPos;
+}
 
 /**
  * Applies teleportation to an entity (player or box) at the given position.
  *
- * If the position is a teleporter_in_X cell:
- *   - Finds the paired teleporter_out_X position.
- *   - If the exit is clear (not blocking cell, not occupied by another player or box): teleports.
- *   - If exit is blocked: entity stays at teleporter_in cell (no teleport this turn).
+ * Forward (teleporter_in → teleporter_out):
+ *   Always applies when entity is on a teleporter_in cell.
  *
- * @param pos         Current position (may or may not be a teleporter_in).
+ * Reverse (teleporter_out → teleporter_in):
+ *   Applies only when the entity actually moved into this cell this turn.
+ *   Pass prevPos (the entity's position at the start of the turn) to enable this.
+ *   If prevPos equals pos (entity didn't move), reverse teleport is skipped.
+ *
+ * @param pos         Current position after movement resolution.
  * @param grid        Level grid.
  * @param allBoxes    Current box positions (for exit occupancy check).
  * @param allObjects  Current player positions (for exit occupancy check).
  * @param selfId      The ID of the entity being teleported (to exclude self from collision).
- *                    Pass null for boxes (boxes don't have IDs in the collision sense here).
  * @param selfIsBox   True if the entity being teleported is a box.
+ * @param prevPos     Entity's position before this move step (enables reverse teleport).
  */
 export function applyEntityTeleport(
   pos: Position,
@@ -24,31 +57,29 @@ export function applyEntityTeleport(
   allObjects: GameObjectState[],
   selfId: number | null,
   selfIsBox: boolean = false,
+  prevPos: Position | null = null,
 ): Position {
   const cell = grid[pos.row]?.[pos.col];
-  if (!cell || !isTeleporterIn(cell)) return pos;
+  if (!cell) return pos;
 
-  const outType = teleporterInToOut(cell);
-  if (!outType) return pos;
+  // ── Forward: teleporter_in → teleporter_out ──────────────────────────────
+  if (isTeleporterIn(cell)) {
+    const outType = teleporterInToOut(cell);
+    if (!outType) return pos;
+    const exitPos = findCellPosition(grid, outType);
+    if (!exitPos) return pos;
+    return checkAndTeleport(pos, exitPos, grid, allBoxes, allObjects, selfId, selfIsBox);
+  }
 
-  const exitPos = findCellPosition(grid, outType);
-  if (!exitPos) return pos;
+  // ── Reverse: teleporter_out → teleporter_in ──────────────────────────────
+  // Only triggers if the entity actually moved into this exit cell this turn.
+  if (isTeleporterOut(cell) && prevPos !== null && !posEqual(pos, prevPos)) {
+    const inType = teleporterOutToIn(cell);
+    if (!inType) return pos;
+    const exitPos = findCellPosition(grid, inType);
+    if (!exitPos) return pos;
+    return checkAndTeleport(pos, exitPos, grid, allBoxes, allObjects, selfId, selfIsBox);
+  }
 
-  // Check if exit cell type is blocking (obstacle)
-  const exitCell = grid[exitPos.row][exitPos.col];
-  if (exitCell === 'obstacle') return pos; // can't teleport to obstacle
-
-  // Check if exit is occupied by a player
-  const blockedByPlayer = allObjects.some(
-    (o) => (selfIsBox || o.id !== selfId) && posEqual(o.position, exitPos),
-  );
-  if (blockedByPlayer) return pos;
-
-  // Check if exit is occupied by a box (other than self if self is a box)
-  const blockedByBox = allBoxes.some(
-    (b) => (selfIsBox && selfId !== null ? b.id !== selfId : true) && posEqual(b.position, exitPos),
-  );
-  if (blockedByBox) return pos;
-
-  return exitPos;
+  return pos;
 }

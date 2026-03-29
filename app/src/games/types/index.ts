@@ -28,6 +28,8 @@ export type GamePhase = 'playing' | 'won' | 'lost';
 
 export type LostReason = 'forbidden' | 'lava_edge' | 'trail';
 
+export type MoveAnimType = 'portal' | 'teleport' | 'ice' | 'conveyor' | 'normal';
+
 export interface Position {
   row: number;
   col: number;
@@ -100,6 +102,7 @@ export interface GameState {
   moveCount: number;
   trail: Record<number, Position[]>;
   lostReason?: LostReason;
+  moveAnimTypes?: Record<number, MoveAnimType>;
 }
 
 export type GameAction =
