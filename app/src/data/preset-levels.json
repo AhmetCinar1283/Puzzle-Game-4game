@@ -1,9 +1,9 @@
 [
     {
-        "id": 1,
-        "name": "İlk oyun",
-        "width": 6,
-        "height": 6,
+        "id": 4,
+        "name": "Level 1",
+        "width": 7,
+        "height": 7,
         "edges": {
             "top": "wall",
             "bottom": "wall",
@@ -17,98 +17,798 @@
                 "empty",
                 "empty",
                 "empty",
+                "empty",
                 "empty"
             ],
             [
                 "empty",
                 "empty",
-                "ice",
-                "ice",
-                "ice",
-                "conveyor_down"
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
             ],
             [
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "conveyor_down"
-            ],
-            [
-                "teleporter_out_A",
-                "empty",
-                "forbidden",
-                "empty",
-                "empty",
-                "conveyor_down"
-            ],
-            [
-                "empty",
-                "empty",
-                "teleporter_in_A",
-                "empty",
-                "conveyor_left",
-                "conveyor_left"
-            ],
-            [
-                "empty",
                 "empty",
                 "empty",
                 "target_2",
                 "empty",
-                "target_1"
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "target_1",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
             ]
         ],
         "initialObjects": [
             {
                 "id": 1,
                 "position": {
-                    "row": 1,
-                    "col": 1
+                    "row": 0,
+                    "col": 0
                 },
-                "mode": "normal",
-                "lockOnTarget": true
+                "mode": "reversed",
+                "lockOnTarget": false
             },
             {
                 "id": 2,
                 "position": {
-                    "row": 5,
-                    "col": 2
+                    "row": 6,
+                    "col": 6
                 },
                 "mode": "normal",
-                "lockOnTarget": true
+                "lockOnTarget": false
             }
         ],
         "targets": [
             {
                 "objectId": 2,
                 "position": {
-                    "row": 5,
-                    "col": 3
+                    "row": 2,
+                    "col": 2
                 }
             },
             {
                 "objectId": 1,
                 "position": {
-                    "row": 5,
-                    "col": 5
+                    "row": 4,
+                    "col": 4
                 }
             }
+        ]
+    },
+    {
+        "id": 5,
+        "name": "Level 2",
+        "width": 7,
+        "height": 7,
+        "edges": {
+            "top": "wall",
+            "bottom": "wall",
+            "left": "wall",
+            "right": "wall"
+        },
+        "grid": [
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "target_1",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "target_2",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ]
         ],
-        "initialBoxes": [
+        "initialObjects": [
             {
-                "id": 1774725308407,
+                "id": 1,
+                "position": {
+                    "row": 0,
+                    "col": 0
+                },
+                "mode": "reversed",
+                "lockOnTarget": false
+            },
+            {
+                "id": 2,
+                "position": {
+                    "row": 6,
+                    "col": 6
+                },
+                "mode": "normal",
+                "lockOnTarget": false
+            }
+        ],
+        "targets": [
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 3,
+                    "col": 2
+                }
+            },
+            {
+                "objectId": 2,
                 "position": {
                     "row": 4,
+                    "col": 4
+                }
+            }
+        ]
+    },
+    {
+        "id": 6,
+        "name": "Level 3",
+        "width": 7,
+        "height": 7,
+        "edges": {
+            "top": "wall",
+            "bottom": "wall",
+            "left": "wall",
+            "right": "wall"
+        },
+        "grid": [
+            [
+                "empty",
+                "obstacle",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "target_1",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "empty",
+                "target_2",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle"
+            ],
+            [
+                "empty",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "empty"
+            ]
+        ],
+        "initialObjects": [
+            {
+                "id": 1,
+                "position": {
+                    "row": 5,
+                    "col": 1
+                },
+                "mode": "reversed",
+                "lockOnTarget": false
+            },
+            {
+                "id": 2,
+                "position": {
+                    "row": 4,
+                    "col": 6
+                },
+                "mode": "normal",
+                "lockOnTarget": false
+            }
+        ],
+        "targets": [
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 2,
+                    "col": 3
+                }
+            },
+            {
+                "objectId": 2,
+                "position": {
+                    "row": 3,
                     "col": 3
                 }
             }
         ]
     },
     {
-        "id": 1,
-        "name": "easy",
+        "id": 13,
+        "name": "Level 4",
+        "width": 10,
+        "height": 10,
+        "edges": {
+            "top": "wall",
+            "bottom": "wall",
+            "left": "wall",
+            "right": "wall"
+        },
+        "grid": [
+            [
+                "obstacle",
+                "target_1",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "target_2",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "ice",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "ice",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "teleporter_out_A",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "teleporter_out_B",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "ice",
+                "empty",
+                "obstacle",
+                "obstacle",
+                "empty",
+                "ice",
+                "empty",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "ice",
+                "forbidden",
+                "ice",
+                "obstacle",
+                "obstacle",
+                "ice",
+                "forbidden",
+                "ice",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "ice",
+                "forbidden",
+                "empty",
+                "teleporter_in_A",
+                "teleporter_in_B",
+                "empty",
+                "forbidden",
+                "ice",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "ice",
+                "forbidden",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "forbidden",
+                "ice",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "empty",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "empty",
+                "empty",
+                "obstacle"
+            ]
+        ],
+        "initialObjects": [
+            {
+                "id": 1,
+                "position": {
+                    "row": 9,
+                    "col": 1
+                },
+                "mode": "normal",
+                "lockOnTarget": false
+            },
+            {
+                "id": 2,
+                "position": {
+                    "row": 9,
+                    "col": 8
+                },
+                "mode": "normal",
+                "lockOnTarget": false
+            }
+        ],
+        "targets": [
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 0,
+                    "col": 1
+                }
+            },
+            {
+                "objectId": 2,
+                "position": {
+                    "row": 0,
+                    "col": 8
+                }
+            }
+        ]
+    },
+    {
+        "id": 7,
+        "name": "Level 5",
+        "width": 9,
+        "height": 9,
+        "edges": {
+            "top": "wall",
+            "bottom": "wall",
+            "left": "wall",
+            "right": "wall"
+        },
+        "grid": [
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "target_1",
+                "ice"
+            ],
+            [
+                "empty",
+                "target_2",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "obstacle",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "ice",
+                "empty",
+                "empty",
+                "ice",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "ice",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "ice",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "ice",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ]
+        ],
+        "initialObjects": [
+            {
+                "id": 1,
+                "position": {
+                    "row": 6,
+                    "col": 2
+                },
+                "mode": "reversed",
+                "lockOnTarget": false
+            },
+            {
+                "id": 2,
+                "position": {
+                    "row": 7,
+                    "col": 5
+                },
+                "mode": "normal",
+                "lockOnTarget": false
+            }
+        ],
+        "targets": [
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 2,
+                    "col": 7
+                }
+            },
+            {
+                "objectId": 2,
+                "position": {
+                    "row": 3,
+                    "col": 1
+                }
+            }
+        ]
+    },
+    {
+        "id": 8,
+        "name": "Level 6",
+        "width": 9,
+        "height": 9,
+        "edges": {
+            "top": "wall",
+            "bottom": "wall",
+            "left": "wall",
+            "right": "wall"
+        },
+        "grid": [
+            [
+                "obstacle",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle",
+                "teleporter_out_A",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "ice",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle",
+                "target_2",
+                "target_1",
+                "empty"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "forbidden",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "ice",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "ice",
+                "empty",
+                "teleporter_in_A",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "ice",
+                "empty",
+                "ice",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "forbidden",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ]
+        ],
+        "initialObjects": [
+            {
+                "id": 1,
+                "position": {
+                    "row": 7,
+                    "col": 3
+                },
+                "mode": "reversed",
+                "lockOnTarget": false
+            },
+            {
+                "id": 2,
+                "position": {
+                    "row": 5,
+                    "col": 1
+                },
+                "mode": "normal",
+                "lockOnTarget": false
+            }
+        ],
+        "targets": [
+            {
+                "objectId": 2,
+                "position": {
+                    "row": 2,
+                    "col": 6
+                }
+            },
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 2,
+                    "col": 7
+                }
+            }
+        ]
+    },
+    {
+        "id": 12,
+        "name": "Level 7",
         "width": 5,
         "height": 5,
         "edges": {
@@ -137,7 +837,7 @@
                 "obstacle",
                 "forbidden",
                 "obstacle",
-                "power_node"
+                "direction_toggle"
             ],
             [
                 "obstacle",
@@ -192,10 +892,10 @@
         ]
     },
     {
-        "id": 2,
-        "name": "birinci",
-        "width": 8,
-        "height": 8,
+        "id": 9,
+        "name": "Level 8",
+        "width": 9,
+        "height": 9,
         "edges": {
             "top": "wall",
             "bottom": "wall",
@@ -204,11 +904,12 @@
         },
         "grid": [
             [
-                "target_1",
+                "obstacle",
                 "empty",
                 "empty",
-                "power_node",
-                "power_node",
+                "obstacle",
+                "obstacle",
+                "empty",
                 "empty",
                 "empty",
                 "target_2"
@@ -216,45 +917,6 @@
             [
                 "empty",
                 "empty",
-                "teleporter_out_A",
-                "obstacle",
-                "obstacle",
-                "teleporter_out_B",
-                "empty",
-                "empty"
-            ],
-            [
-                "obstacle",
-                "forbidden",
-                "forbidden",
-                "obstacle",
-                "obstacle",
-                "forbidden",
-                "forbidden",
-                "obstacle"
-            ],
-            [
-                "empty",
-                "empty",
-                "empty",
-                "power_node",
-                "power_node",
-                "empty",
-                "empty",
-                "empty"
-            ],
-            [
-                "empty",
-                "obstacle",
-                "teleporter_in_B",
-                "forbidden",
-                "forbidden",
-                "teleporter_in_A",
-                "obstacle",
-                "empty"
-            ],
-            [
-                "empty",
                 "empty",
                 "empty",
                 "obstacle",
@@ -264,18 +926,75 @@
                 "empty"
             ],
             [
-                "obstacle",
+                "empty",
+                "target_1",
+                "empty",
+                "empty",
                 "empty",
                 "obstacle",
+                "obstacle",
+                "obstacle",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "forbidden",
+                "ice",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "empty",
+                "forbidden",
+                "ice",
+                "direction_toggle",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
                 "conveyor_up",
-                "conveyor_up",
+                "empty",
+                "empty",
+                "obstacle",
                 "obstacle",
                 "empty",
-                "obstacle"
+                "empty"
             ],
             [
                 "empty",
                 "empty",
+                "conveyor_right",
                 "empty",
                 "empty",
                 "empty",
@@ -288,42 +1007,96 @@
             {
                 "id": 1,
                 "position": {
-                    "row": 7,
-                    "col": 0
+                    "row": 5,
+                    "col": 6
                 },
-                "mode": "normal",
-                "lockOnTarget": true
+                "mode": "reversed",
+                "lockOnTarget": false
             },
             {
                 "id": 2,
                 "position": {
-                    "row": 7,
-                    "col": 7
+                    "row": 8,
+                    "col": 0
                 },
                 "mode": "normal",
-                "lockOnTarget": true
+                "lockOnTarget": false
             }
         ],
         "targets": [
             {
-                "objectId": 1,
-                "position": {
-                    "row": 0,
-                    "col": 0
-                }
-            },
-            {
                 "objectId": 2,
                 "position": {
                     "row": 0,
-                    "col": 7
+                    "col": 8
                 }
+            },
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 2,
+                    "col": 1
+                }
+            }
+        ],
+        "conveyorPowerRequired": [
+            {
+                "row": 4,
+                "col": 7
+            },
+            {
+                "row": 5,
+                "col": 7
+            },
+            {
+                "row": 6,
+                "col": 7
+            },
+            {
+                "row": 5,
+                "col": 8
+            },
+            {
+                "row": 6,
+                "col": 8
+            },
+            {
+                "row": 7,
+                "col": 8
+            },
+            {
+                "row": 8,
+                "col": 3
+            },
+            {
+                "row": 8,
+                "col": 4
+            },
+            {
+                "row": 8,
+                "col": 5
+            },
+            {
+                "row": 8,
+                "col": 6
+            },
+            {
+                "row": 4,
+                "col": 8
+            },
+            {
+                "row": 3,
+                "col": 8
+            },
+            {
+                "row": 2,
+                "col": 8
             }
         ]
     },
     {
-        "id": 3,
-        "name": "ikinci",
+        "id": 10,
+        "name": "Level 9",
         "width": 9,
         "height": 9,
         "edges": {
@@ -335,57 +1108,35 @@
         "grid": [
             [
                 "empty",
+                "empty",
                 "obstacle",
+                "empty",
+                "empty",
                 "teleporter_out_A",
-                "empty",
-                "empty",
-                "empty",
-                "teleporter_out_B",
-                "obstacle",
-                "empty"
-            ],
-            [
-                "empty",
-                "forbidden",
-                "forbidden",
                 "forbidden",
                 "empty",
-                "forbidden",
-                "forbidden",
-                "forbidden",
                 "empty"
             ],
             [
                 "empty",
                 "empty",
+                "obstacle",
+                "obstacle",
                 "empty",
                 "empty",
-                "empty",
-                "empty",
-                "empty",
+                "forbidden",
                 "empty",
                 "empty"
             ],
             [
-                "obstacle",
-                "obstacle",
                 "empty",
+                "obstacle",
                 "target_1",
-                "obstacle",
                 "target_2",
-                "empty",
-                "obstacle",
-                "obstacle"
-            ],
-            [
-                "empty",
-                "conveyor_up",
-                "empty",
-                "obstacle",
-                "power_node",
                 "obstacle",
                 "empty",
-                "conveyor_up",
+                "empty",
+                "empty",
                 "empty"
             ],
             [
@@ -393,43 +1144,65 @@
                 "empty",
                 "empty",
                 "empty",
-                "teleporter_out_C",
                 "empty",
                 "empty",
                 "empty",
-                "empty"
+                "obstacle",
+                "forbidden"
             ],
             [
-                "forbidden",
-                "forbidden",
-                "empty",
-                "obstacle",
-                "obstacle",
                 "obstacle",
                 "empty",
-                "forbidden",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
                 "forbidden"
             ],
             [
                 "teleporter_in_B",
                 "empty",
-                "empty",
-                "teleporter_in_C",
+                "ice",
                 "conveyor_up",
-                "teleporter_in_A",
+                "empty",
+                "obstacle",
                 "empty",
                 "empty",
-                "teleporter_in_A"
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "direction_toggle",
+                "conveyor_up",
+                "empty",
+                "empty",
+                "teleporter_out_B",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "ice",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle"
             ],
             [
                 "empty",
                 "empty",
                 "empty",
                 "empty",
+                "teleporter_in_A",
                 "empty",
                 "empty",
-                "empty",
-                "empty",
+                "obstacle",
                 "empty"
             ]
         ],
@@ -440,41 +1213,41 @@
                     "row": 8,
                     "col": 0
                 },
-                "mode": "normal",
-                "lockOnTarget": true
+                "mode": "reversed",
+                "lockOnTarget": false
             },
             {
                 "id": 2,
                 "position": {
-                    "row": 8,
-                    "col": 8
+                    "row": 0,
+                    "col": 0
                 },
                 "mode": "normal",
-                "lockOnTarget": true
+                "lockOnTarget": false
             }
         ],
         "targets": [
             {
                 "objectId": 1,
                 "position": {
-                    "row": 3,
-                    "col": 3
+                    "row": 2,
+                    "col": 2
                 }
             },
             {
                 "objectId": 2,
                 "position": {
-                    "row": 3,
-                    "col": 5
+                    "row": 2,
+                    "col": 3
                 }
             }
         ]
     },
     {
-        "id": 4,
-        "name": "ucuncu",
-        "width": 10,
-        "height": 10,
+        "id": 11,
+        "name": "Level 10",
+        "width": 5,
+        "height": 5,
         "edges": {
             "top": "wall",
             "bottom": "wall",
@@ -483,119 +1256,34 @@
         },
         "grid": [
             [
-                "teleporter_out_C",
-                "forbidden",
-                "empty",
-                "empty",
-                "target_1",
-                "target_2",
-                "empty",
-                "empty",
-                "forbidden",
-                "teleporter_out_A"
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "target_2"
             ],
             [
-                "empty",
+                "obstacle",
                 "forbidden",
-                "empty",
-                "obstacle",
-                "obstacle",
-                "obstacle",
-                "obstacle",
-                "empty",
                 "forbidden",
-                "empty"
+                "obstacle",
+                "target_1"
             ],
             [
-                "empty",
                 "obstacle",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "obstacle",
-                "empty"
-            ],
-            [
-                "empty",
                 "obstacle",
                 "forbidden",
-                "teleporter_out_B",
-                "power_node",
-                "power_node",
-                "teleporter_in_C",
-                "forbidden",
                 "obstacle",
-                "empty"
+                "direction_toggle"
             ],
             [
-                "empty",
+                "obstacle",
+                "obstacle",
                 "conveyor_up",
-                "forbidden",
-                "empty",
                 "obstacle",
-                "obstacle",
-                "empty",
-                "forbidden",
-                "conveyor_up",
                 "empty"
             ],
             [
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty"
-            ],
-            [
-                "obstacle",
-                "obstacle",
-                "empty",
-                "obstacle",
-                "forbidden",
-                "forbidden",
-                "obstacle",
-                "empty",
-                "obstacle",
-                "obstacle"
-            ],
-            [
-                "empty",
-                "teleporter_in_A",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "teleporter_in_B",
-                "empty"
-            ],
-            [
-                "empty",
-                "empty",
-                "empty",
-                "conveyor_up",
-                "empty",
-                "empty",
-                "conveyor_up",
-                "empty",
-                "empty",
-                "empty"
-            ],
-            [
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
                 "empty",
                 "empty",
                 "empty",
@@ -607,44 +1295,44 @@
             {
                 "id": 1,
                 "position": {
-                    "row": 9,
+                    "row": 3,
                     "col": 0
                 },
                 "mode": "normal",
-                "lockOnTarget": false
+                "lockOnTarget": true
             },
             {
                 "id": 2,
                 "position": {
-                    "row": 9,
-                    "col": 9
+                    "row": 4,
+                    "col": 0
                 },
                 "mode": "normal",
-                "lockOnTarget": false
+                "lockOnTarget": true
             }
         ],
         "targets": [
             {
-                "objectId": 1,
+                "objectId": 2,
                 "position": {
                     "row": 0,
                     "col": 4
                 }
             },
             {
-                "objectId": 2,
+                "objectId": 1,
                 "position": {
-                    "row": 0,
-                    "col": 5
+                    "row": 1,
+                    "col": 4
                 }
             }
         ]
     },
     {
-        "id": 5,
-        "name": "dördüncü",
-        "width": 10,
-        "height": 10,
+        "id": 14,
+        "name": "BONUS",
+        "width": 12,
+        "height": 12,
         "edges": {
             "top": "wall",
             "bottom": "wall",
@@ -654,50 +1342,72 @@
         "grid": [
             [
                 "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
                 "target_1",
-                "obstacle",
-                "obstacle",
-                "obstacle",
-                "obstacle",
-                "obstacle",
-                "obstacle",
                 "target_2",
-                "obstacle"
-            ],
-            [
-                "obstacle",
-                "ice",
                 "obstacle",
                 "obstacle",
                 "obstacle",
                 "obstacle",
-                "obstacle",
-                "obstacle",
-                "ice",
                 "obstacle"
             ],
             [
                 "obstacle",
                 "teleporter_out_A",
+                "forbidden",
                 "obstacle",
                 "obstacle",
+                "teleporter_out_C",
+                "teleporter_out_C",
                 "obstacle",
                 "obstacle",
-                "obstacle",
-                "obstacle",
+                "forbidden",
                 "teleporter_out_B",
                 "obstacle"
             ],
             [
                 "obstacle",
+                "empty",
+                "ice",
+                "empty",
                 "obstacle",
                 "obstacle",
                 "obstacle",
                 "obstacle",
+                "empty",
+                "ice",
+                "empty",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "empty",
                 "obstacle",
                 "obstacle",
                 "obstacle",
                 "obstacle",
+                "empty",
+                "obstacle",
+                "obstacle",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "teleporter_in_C",
+                "ice",
+                "empty",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "empty",
+                "ice",
+                "teleporter_in_C",
                 "obstacle"
             ],
             [
@@ -710,75 +1420,101 @@
                 "obstacle",
                 "obstacle",
                 "obstacle",
+                "obstacle",
+                "obstacle",
                 "obstacle"
             ],
             [
                 "obstacle",
                 "empty",
                 "ice",
-                "empty",
-                "obstacle",
-                "obstacle",
-                "empty",
-                "ice",
-                "empty",
-                "obstacle"
-            ],
-            [
-                "obstacle",
-                "ice",
-                "forbidden",
-                "ice",
-                "obstacle",
-                "obstacle",
-                "ice",
-                "forbidden",
-                "ice",
-                "obstacle"
-            ],
-            [
-                "obstacle",
-                "ice",
-                "forbidden",
-                "empty",
                 "teleporter_in_A",
+                "obstacle",
+                "power_node",
+                "power_node",
+                "obstacle",
                 "teleporter_in_B",
+                "ice",
                 "empty",
-                "forbidden",
-                "ice",
-                "obstacle"
-            ],
-            [
-                "obstacle",
-                "ice",
-                "forbidden",
-                "obstacle",
-                "obstacle",
-                "obstacle",
-                "obstacle",
-                "forbidden",
-                "ice",
                 "obstacle"
             ],
             [
                 "obstacle",
                 "empty",
-                "empty",
-                "obstacle",
                 "obstacle",
                 "obstacle",
                 "obstacle",
                 "empty",
+                "empty",
+                "obstacle",
+                "obstacle",
+                "obstacle",
                 "empty",
                 "obstacle"
+            ],
+            [
+                "obstacle",
+                "conveyor_up",
+                "ice",
+                "ice",
+                "ice",
+                "empty",
+                "empty",
+                "ice",
+                "ice",
+                "ice",
+                "conveyor_up",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "empty",
+                "obstacle"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "empty",
+                "obstacle"
+            ],
+            [
+                "empty",
+                "empty",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "obstacle",
+                "empty",
+                "empty"
             ]
         ],
         "initialObjects": [
             {
                 "id": 1,
                 "position": {
-                    "row": 9,
-                    "col": 1
+                    "row": 11,
+                    "col": 0
                 },
                 "mode": "normal",
                 "lockOnTarget": false
@@ -786,8 +1522,8 @@
             {
                 "id": 2,
                 "position": {
-                    "row": 9,
-                    "col": 8
+                    "row": 11,
+                    "col": 11
                 },
                 "mode": "normal",
                 "lockOnTarget": false
@@ -798,14 +1534,14 @@
                 "objectId": 1,
                 "position": {
                     "row": 0,
-                    "col": 1
+                    "col": 5
                 }
             },
             {
                 "objectId": 2,
                 "position": {
                     "row": 0,
-                    "col": 8
+                    "col": 6
                 }
             }
         ]
