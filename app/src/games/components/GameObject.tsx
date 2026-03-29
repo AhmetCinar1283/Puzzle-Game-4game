@@ -100,7 +100,7 @@ export default function GameObject({ object, cellSize, animType = 'normal' }: Ga
               fontWeight: 'bold',
             }}
           >
-            {object.mode === 'reversed' ? '↺' : '↻'}
+            {object.mode === 'reversed' ? '⬇' : '⬆'}
           </span>
         )}
       </div>

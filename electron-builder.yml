@@ -1,5 +1,5 @@
-appId: com.knowandconquer.app
-productName: Know & Conquer
+appId: com.syncron.app
+productName: Syncron
 
 directories:
   output: dist-electron
@@ -9,6 +9,7 @@ files:
   - out/**/*
   - electron/**/*
   - package.json
+  - "!node_modules/**/*"
 
 # Don't pack into asar — Next.js static files must be accessible via file://
 asar: false
@@ -18,19 +19,17 @@ win:
     - target: nsis
       arch:
         - x64
-  # Place a .ico file at public/icon.ico to use it here:
-  # icon: public/icon.ico
+  forceCodeSigning: false
 
 mac:
   target: dmg
-  # icon: public/icon.icns
 
 linux:
   target: AppImage
-  # icon: public/icon.png
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  shortcutName: Syncron

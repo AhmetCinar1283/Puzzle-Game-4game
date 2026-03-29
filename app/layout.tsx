@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Know & Conquer",
+  title: "Syncron",
   description: "Grid-based puzzle game — move two objects to their targets simultaneously.",
 };
 

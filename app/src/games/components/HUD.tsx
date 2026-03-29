@@ -59,7 +59,7 @@ export default function HUD({ levelName, moveCount, objects, onRestart, muted, o
               <span style={{ fontSize: 12, color: '#94a3b8' }}>
                 {info.label}:{' '}
                 <span style={{ color: info.color }}>
-                  {obj.isLocked ? '✓' : obj.mode === 'reversed' ? '↺' : '↻'}
+                  {obj.isLocked ? '✓' : obj.mode === 'reversed' ? '⬇' : '⬆'}
                 </span>
               </span>
             </div>

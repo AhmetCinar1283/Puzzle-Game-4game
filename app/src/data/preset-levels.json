@@ -339,8 +339,274 @@
         ]
     },
     {
-        "id": 13,
+        "id": 17,
         "name": "Level 4",
+        "width": 7,
+        "height": 7,
+        "edges": {
+            "top": "wall",
+            "bottom": "wall",
+            "left": "wall",
+            "right": "wall"
+        },
+        "grid": [
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "target_1",
+                "empty",
+                "ice",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "ice",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "target_2",
+                "obstacle",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ]
+        ],
+        "initialObjects": [
+            {
+                "id": 1,
+                "position": {
+                    "row": 3,
+                    "col": 6
+                },
+                "mode": "reversed",
+                "lockOnTarget": false
+            },
+            {
+                "id": 2,
+                "position": {
+                    "row": 3,
+                    "col": 0
+                },
+                "mode": "normal",
+                "lockOnTarget": false
+            }
+        ],
+        "targets": [
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 1,
+                    "col": 1
+                }
+            },
+            {
+                "objectId": 2,
+                "position": {
+                    "row": 4,
+                    "col": 4
+                }
+            }
+        ],
+        "initialBoxes": [
+            {
+                "id": 1774790457339,
+                "position": {
+                    "row": 4,
+                    "col": 3
+                }
+            },
+            {
+                "id": 1774790554397,
+                "position": {
+                    "row": 3,
+                    "col": 4
+                }
+            },
+            {
+                "id": 1774790618230,
+                "position": {
+                    "row": 1,
+                    "col": 6
+                }
+            }
+        ]
+    },
+    {
+        "id": 15,
+        "name": "Level 5",
+        "width": 7,
+        "height": 7,
+        "edges": {
+            "top": "wall",
+            "bottom": "wall",
+            "left": "wall",
+            "right": "wall"
+        },
+        "grid": [
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "power_node",
+                "empty",
+                "empty",
+                "empty",
+                "target_1",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "ice",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "ice",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "target_2",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ]
+        ],
+        "initialObjects": [
+            {
+                "id": 1,
+                "position": {
+                    "row": 3,
+                    "col": 2
+                },
+                "mode": "normal",
+                "lockOnTarget": false
+            },
+            {
+                "id": 2,
+                "position": {
+                    "row": 5,
+                    "col": 2
+                },
+                "mode": "normal",
+                "lockOnTarget": false
+            }
+        ],
+        "targets": [
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 1,
+                    "col": 5
+                }
+            },
+            {
+                "objectId": 2,
+                "position": {
+                    "row": 4,
+                    "col": 5
+                }
+            }
+        ],
+        "initialBoxes": [
+            {
+                "id": 1774790232197,
+                "position": {
+                    "row": 1,
+                    "col": 5
+                }
+            },
+            {
+                "id": 1774790242678,
+                "position": {
+                    "row": 4,
+                    "col": 5
+                },
+                "requiresPower": true
+            }
+        ]
+    },
+    {
+        "id": 13,
+        "name": "Level 6",
         "width": 10,
         "height": 10,
         "edges": {
@@ -509,8 +775,8 @@
         ]
     },
     {
-        "id": 7,
-        "name": "Level 5",
+        "id": 18,
+        "name": "Level 7",
         "width": 9,
         "height": 9,
         "edges": {
@@ -523,44 +789,77 @@
             [
                 "empty",
                 "empty",
-                "empty",
-                "empty",
-                "empty",
                 "obstacle",
+                "empty",
+                "empty",
+                "empty",
                 "empty",
                 "empty",
                 "empty"
             ],
             [
-                "empty",
-                "empty",
+                "obstacle",
                 "obstacle",
                 "empty",
-                "empty",
-                "empty",
-                "obstacle",
-                "empty",
-                "empty"
-            ],
-            [
-                "empty",
-                "empty",
-                "empty",
-                "obstacle",
                 "empty",
                 "empty",
                 "empty",
                 "target_1",
-                "ice"
+                "obstacle",
+                "empty"
             ],
             [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "power_node",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "ice",
+                "ice",
+                "empty"
+            ],
+            [
+                "empty",
+                "obstacle",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
                 "empty",
                 "target_2",
-                "empty",
-                "empty",
                 "obstacle",
                 "empty",
-                "obstacle",
                 "empty",
                 "empty"
             ],
@@ -570,17 +869,6 @@
                 "ice",
                 "empty",
                 "empty",
-                "ice",
-                "empty",
-                "empty",
-                "empty"
-            ],
-            [
-                "obstacle",
-                "empty",
-                "ice",
-                "obstacle",
-                "empty",
                 "empty",
                 "empty",
                 "empty",
@@ -589,29 +877,7 @@
             [
                 "empty",
                 "empty",
-                "empty",
-                "empty",
                 "ice",
-                "empty",
-                "empty",
-                "empty",
-                "obstacle"
-            ],
-            [
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "ice",
-                "empty"
-            ],
-            [
-                "empty",
-                "empty",
-                "empty",
                 "empty",
                 "empty",
                 "empty",
@@ -624,8 +890,8 @@
             {
                 "id": 1,
                 "position": {
-                    "row": 6,
-                    "col": 2
+                    "row": 4,
+                    "col": 0
                 },
                 "mode": "reversed",
                 "lockOnTarget": false
@@ -633,8 +899,8 @@
             {
                 "id": 2,
                 "position": {
-                    "row": 7,
-                    "col": 5
+                    "row": 8,
+                    "col": 8
                 },
                 "mode": "normal",
                 "lockOnTarget": false
@@ -644,22 +910,239 @@
             {
                 "objectId": 1,
                 "position": {
-                    "row": 2,
-                    "col": 7
+                    "row": 1,
+                    "col": 6
                 }
             },
             {
                 "objectId": 2,
                 "position": {
-                    "row": 3,
-                    "col": 1
+                    "row": 6,
+                    "col": 4
                 }
+            }
+        ],
+        "initialBoxes": [
+            {
+                "id": 1774790958633,
+                "position": {
+                    "row": 2,
+                    "col": 6
+                },
+                "requiresPower": true
+            },
+            {
+                "id": 1774790960286,
+                "position": {
+                    "row": 1,
+                    "col": 5
+                },
+                "requiresPower": true
+            },
+            {
+                "id": 1774790961825,
+                "position": {
+                    "row": 4,
+                    "col": 3
+                },
+                "requiresPower": true
+            },
+            {
+                "id": 1774791138804,
+                "position": {
+                    "row": 0,
+                    "col": 6
+                },
+                "requiresPower": true
+            }
+        ]
+    },
+    {
+        "id": 18,
+        "name": "Level 7",
+        "width": 9,
+        "height": 9,
+        "edges": {
+            "top": "wall",
+            "bottom": "wall",
+            "left": "wall",
+            "right": "wall"
+        },
+        "grid": [
+            [
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "obstacle",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "target_1",
+                "obstacle",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "power_node",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "ice",
+                "ice",
+                "empty"
+            ],
+            [
+                "empty",
+                "obstacle",
+                "empty",
+                "empty",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "target_2",
+                "obstacle",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "ice",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ],
+            [
+                "empty",
+                "empty",
+                "ice",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty",
+                "empty"
+            ]
+        ],
+        "initialObjects": [
+            {
+                "id": 1,
+                "position": {
+                    "row": 4,
+                    "col": 0
+                },
+                "mode": "reversed",
+                "lockOnTarget": false
+            },
+            {
+                "id": 2,
+                "position": {
+                    "row": 8,
+                    "col": 8
+                },
+                "mode": "normal",
+                "lockOnTarget": false
+            }
+        ],
+        "targets": [
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 1,
+                    "col": 6
+                }
+            },
+            {
+                "objectId": 2,
+                "position": {
+                    "row": 6,
+                    "col": 4
+                }
+            }
+        ],
+        "initialBoxes": [
+            {
+                "id": 1774790958633,
+                "position": {
+                    "row": 2,
+                    "col": 6
+                },
+                "requiresPower": true
+            },
+            {
+                "id": 1774790960286,
+                "position": {
+                    "row": 1,
+                    "col": 5
+                },
+                "requiresPower": true
+            },
+            {
+                "id": 1774790961825,
+                "position": {
+                    "row": 4,
+                    "col": 3
+                },
+                "requiresPower": true
+            },
+            {
+                "id": 1774791138804,
+                "position": {
+                    "row": 0,
+                    "col": 6
+                },
+                "requiresPower": true
             }
         ]
     },
     {
         "id": 8,
-        "name": "Level 6",
+        "name": "Level 9",
         "width": 9,
         "height": 9,
         "edges": {
@@ -807,8 +1290,93 @@
         ]
     },
     {
+        "id": 16,
+        "name": "Level 10",
+        "width": 5,
+        "height": 5,
+        "edges": {
+            "top": "portal",
+            "bottom": "portal",
+            "left": "lava",
+            "right": "lava"
+        },
+        "grid": [
+            [
+                "ice",
+                "obstacle",
+                "empty",
+                "forbidden",
+                "empty"
+            ],
+            [
+                "ice",
+                "ice",
+                "empty",
+                "power_node",
+                "obstacle"
+            ],
+            [
+                "conveyor_up",
+                "empty",
+                "empty",
+                "empty",
+                "teleporter_in_A"
+            ],
+            [
+                "obstacle",
+                "empty",
+                "forbidden",
+                "forbidden",
+                "obstacle"
+            ],
+            [
+                "target_2",
+                "forbidden",
+                "teleporter_out_A",
+                "target_1",
+                "ice"
+            ]
+        ],
+        "initialObjects": [
+            {
+                "id": 1,
+                "position": {
+                    "row": 2,
+                    "col": 1
+                },
+                "mode": "normal",
+                "lockOnTarget": true
+            },
+            {
+                "id": 2,
+                "position": {
+                    "row": 2,
+                    "col": 2
+                },
+                "mode": "normal",
+                "lockOnTarget": true
+            }
+        ],
+        "targets": [
+            {
+                "objectId": 2,
+                "position": {
+                    "row": 4,
+                    "col": 0
+                }
+            },
+            {
+                "objectId": 1,
+                "position": {
+                    "row": 4,
+                    "col": 3
+                }
+            }
+        ]
+    },
+    {
         "id": 12,
-        "name": "Level 7",
+        "name": "Level 11",
         "width": 5,
         "height": 5,
         "edges": {
@@ -892,10 +1460,10 @@
         ]
     },
     {
-        "id": 9,
-        "name": "Level 8",
-        "width": 9,
-        "height": 9,
+        "id": 12,
+        "name": "Level 11",
+        "width": 5,
+        "height": 5,
         "edges": {
             "top": "wall",
             "bottom": "wall",
@@ -905,97 +1473,33 @@
         "grid": [
             [
                 "obstacle",
-                "empty",
-                "empty",
                 "obstacle",
                 "obstacle",
-                "empty",
-                "empty",
-                "empty",
+                "obstacle",
                 "target_2"
             ],
             [
-                "empty",
-                "empty",
-                "empty",
-                "empty",
                 "obstacle",
-                "obstacle",
-                "empty",
-                "empty",
-                "empty"
-            ],
-            [
-                "empty",
-                "target_1",
-                "empty",
-                "empty",
-                "empty",
-                "obstacle",
-                "obstacle",
-                "obstacle",
-                "empty"
-            ],
-            [
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "obstacle",
-                "empty"
-            ],
-            [
-                "empty",
-                "empty",
-                "empty",
                 "forbidden",
-                "ice",
-                "empty",
-                "empty",
-                "empty",
-                "empty"
-            ],
-            [
-                "obstacle",
-                "empty",
-                "empty",
                 "forbidden",
-                "ice",
-                "direction_toggle",
-                "empty",
-                "empty",
-                "empty"
+                "obstacle",
+                "target_1"
             ],
             [
                 "obstacle",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty"
+                "obstacle",
+                "forbidden",
+                "obstacle",
+                "direction_toggle"
             ],
             [
-                "empty",
-                "empty",
+                "obstacle",
+                "obstacle",
                 "conveyor_up",
-                "empty",
-                "empty",
                 "obstacle",
-                "obstacle",
-                "empty",
                 "empty"
             ],
             [
-                "empty",
-                "empty",
-                "conveyor_right",
-                "empty",
                 "empty",
                 "empty",
                 "empty",
@@ -1007,20 +1511,20 @@
             {
                 "id": 1,
                 "position": {
-                    "row": 5,
-                    "col": 6
+                    "row": 3,
+                    "col": 0
                 },
-                "mode": "reversed",
-                "lockOnTarget": false
+                "mode": "normal",
+                "lockOnTarget": true
             },
             {
                 "id": 2,
                 "position": {
-                    "row": 8,
+                    "row": 4,
                     "col": 0
                 },
                 "mode": "normal",
-                "lockOnTarget": false
+                "lockOnTarget": true
             }
         ],
         "targets": [
@@ -1028,224 +1532,21 @@
                 "objectId": 2,
                 "position": {
                     "row": 0,
-                    "col": 8
+                    "col": 4
                 }
             },
             {
                 "objectId": 1,
                 "position": {
-                    "row": 2,
-                    "col": 1
-                }
-            }
-        ],
-        "conveyorPowerRequired": [
-            {
-                "row": 4,
-                "col": 7
-            },
-            {
-                "row": 5,
-                "col": 7
-            },
-            {
-                "row": 6,
-                "col": 7
-            },
-            {
-                "row": 5,
-                "col": 8
-            },
-            {
-                "row": 6,
-                "col": 8
-            },
-            {
-                "row": 7,
-                "col": 8
-            },
-            {
-                "row": 8,
-                "col": 3
-            },
-            {
-                "row": 8,
-                "col": 4
-            },
-            {
-                "row": 8,
-                "col": 5
-            },
-            {
-                "row": 8,
-                "col": 6
-            },
-            {
-                "row": 4,
-                "col": 8
-            },
-            {
-                "row": 3,
-                "col": 8
-            },
-            {
-                "row": 2,
-                "col": 8
-            }
-        ]
-    },
-    {
-        "id": 10,
-        "name": "Level 9",
-        "width": 9,
-        "height": 9,
-        "edges": {
-            "top": "wall",
-            "bottom": "wall",
-            "left": "wall",
-            "right": "wall"
-        },
-        "grid": [
-            [
-                "empty",
-                "empty",
-                "obstacle",
-                "empty",
-                "empty",
-                "teleporter_out_A",
-                "forbidden",
-                "empty",
-                "empty"
-            ],
-            [
-                "empty",
-                "empty",
-                "obstacle",
-                "obstacle",
-                "empty",
-                "empty",
-                "forbidden",
-                "empty",
-                "empty"
-            ],
-            [
-                "empty",
-                "obstacle",
-                "target_1",
-                "target_2",
-                "obstacle",
-                "empty",
-                "empty",
-                "empty",
-                "empty"
-            ],
-            [
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "obstacle",
-                "forbidden"
-            ],
-            [
-                "obstacle",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "obstacle",
-                "empty",
-                "forbidden"
-            ],
-            [
-                "teleporter_in_B",
-                "empty",
-                "ice",
-                "conveyor_up",
-                "empty",
-                "obstacle",
-                "empty",
-                "empty",
-                "empty"
-            ],
-            [
-                "empty",
-                "empty",
-                "direction_toggle",
-                "conveyor_up",
-                "empty",
-                "empty",
-                "teleporter_out_B",
-                "empty",
-                "empty"
-            ],
-            [
-                "empty",
-                "empty",
-                "ice",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "obstacle"
-            ],
-            [
-                "empty",
-                "empty",
-                "empty",
-                "empty",
-                "teleporter_in_A",
-                "empty",
-                "empty",
-                "obstacle",
-                "empty"
-            ]
-        ],
-        "initialObjects": [
-            {
-                "id": 1,
-                "position": {
-                    "row": 8,
-                    "col": 0
-                },
-                "mode": "reversed",
-                "lockOnTarget": false
-            },
-            {
-                "id": 2,
-                "position": {
-                    "row": 0,
-                    "col": 0
-                },
-                "mode": "normal",
-                "lockOnTarget": false
-            }
-        ],
-        "targets": [
-            {
-                "objectId": 1,
-                "position": {
-                    "row": 2,
-                    "col": 2
-                }
-            },
-            {
-                "objectId": 2,
-                "position": {
-                    "row": 2,
-                    "col": 3
+                    "row": 1,
+                    "col": 4
                 }
             }
         ]
     },
     {
-        "id": 11,
-        "name": "Level 10",
+        "id": 12,
+        "name": "Level 11",
         "width": 5,
         "height": 5,
         "edges": {

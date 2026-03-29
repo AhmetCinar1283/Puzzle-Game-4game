@@ -187,7 +187,7 @@ export default function GameCell({ cellType, cellSize, isPowered }: GameCellProp
             fontWeight: 'bold',
           }}
         >
-          ↕
+          ⇄
         </span>
       )}
 

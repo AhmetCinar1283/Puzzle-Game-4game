@@ -729,7 +729,7 @@ function EditorInner() {
                   <div style={{ display: 'flex', gap: 5 }}>
                     {(['normal', 'reversed'] as MovementMode[]).map((m) => (
                       <NBtn key={m} onClick={() => setObjects((os) => os.map((o) => o.id === obj.id ? { ...o, mode: m } : o))} active={obj.mode === m} color={color} style={{ padding: '3px 8px', fontSize: 10 }}>
-                        {m === 'normal' ? '↻ Norm' : '↺ Rev'}
+                        {m === 'normal' ? '⬆ Norm' : '⬇ Rev'}
                       </NBtn>
                     ))}
                   </div>

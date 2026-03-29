@@ -13,19 +13,18 @@ export type SoundName =
   | 'toggle'
   | 'box_push';
 
-const SOUND_FILES: Record<SoundName, string> = {
+const SOUND_FILES: Partial<Record<SoundName, string>> = {
   move:      '/sounds/move.mp3',
   portal:    '/sounds/portal.mp3',
   teleport:  '/sounds/teleport.mp3',
   ice:       '/sounds/ice.mp3',
   conveyor:  '/sounds/conveyor.mp3',
-  win:       '/sounds/win.mp3',
-  lose:      '/sounds/lose.mp3',
+  win: '/sounds/win.mp3',
+  lose: '/sounds/lose.mp3',
   toggle:    '/sounds/toggle.mp3',
-  box_push:  '/sounds/box_push.mp3',
 };
 
-const SOUND_VOLUME: Record<SoundName, number> = {
+const SOUND_VOLUME: Partial<Record<SoundName, number>> = {
   move:      0.4,
   portal:    0.7,
   teleport:  0.7,
@@ -46,8 +45,10 @@ export function useSoundManager() {
   useEffect(() => {
     const names = Object.keys(SOUND_FILES) as SoundName[];
     names.forEach((name) => {
-      const audio = new Audio(SOUND_FILES[name]);
-      audio.volume = SOUND_VOLUME[name];
+      const src = SOUND_FILES[name];
+      if (!src) return;
+      const audio = new Audio(src);
+      audio.volume = SOUND_VOLUME[name] ?? 0.5;
       audio.preload = 'auto';
       audioRefs.current[name] = audio;
     });
