@@ -17,7 +17,7 @@ export async function seedPresetLevels(): Promise<void> {
 
   const db = getDB();
   const count = await db.presetLevels.count();
-  if (count > 0) return;
+  if (count > count) return;
 
   const now = Date.now();
   // Strip any `id` field from JSON — Dexie assigns its own auto-increment IDs
