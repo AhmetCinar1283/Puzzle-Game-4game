@@ -229,6 +229,62 @@ export default function Home() {
             />
           ))}
         </div>
+
+        {/* How To Play — semantic content for SEO */}
+        <section
+          aria-label="How to play Syncron"
+          style={{
+            width: '100%',
+            maxWidth: 480,
+            borderTop: '1px solid #00ff8820',
+            paddingTop: 28,
+            color: '#4b5563',
+            fontSize: 12,
+            lineHeight: 1.7,
+          }}
+        >
+          <h2
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              color: '#00ff8844',
+              marginBottom: 14,
+              marginTop: 0,
+            }}
+          >
+            How to Play
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px' }}>
+            {[
+              { icon: '↑↓←→', text: 'Arrow keys or D-pad to move' },
+              { icon: '⊕', text: 'Land both objects on targets to win' },
+              { icon: '❄', text: 'Ice — slide until hitting a wall' },
+              { icon: '⟳', text: 'Direction toggle — reverses your controls' },
+              { icon: '◎', text: 'Teleporters move you across the grid' },
+              { icon: '▶', text: 'Conveyors push you automatically' },
+              { icon: '⚡', text: 'Power nodes electrify your trail' },
+              { icon: '✦', text: 'Build your own levels in the editor' },
+            ].map(({ icon, text }) => (
+              <div key={text} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <span style={{ color: '#00ff8833', flexShrink: 0, width: 18 }}>{icon}</span>
+                <span>{text}</span>
+              </div>
+            ))}
+          </div>
+          <p style={{ marginTop: 16, marginBottom: 0, color: '#374151', fontSize: 11 }}>
+            Syncron is a free browser puzzle game. No download, no login required.
+            Play directly at{' '}
+            <a
+              href="https://syncron.polyvoclub.com"
+              style={{ color: '#00ff8844', textDecoration: 'none' }}
+            >
+              syncron.polyvoclub.com
+            </a>
+            .
+          </p>
+        </section>
       </main>
     </>
   );
