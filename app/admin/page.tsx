@@ -36,6 +36,20 @@ function GridPreview({ grid, cellSize = 20 }: { grid: CellType[][]; cellSize?: n
   );
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DIFFICULTY_LABELS: Record<number, string> = { 1: 'Kolay', 2: 'Orta', 3: 'Zor', 4: 'Çok Zor' };
+const DIFFICULTY_COLORS: Record<number, string> = { 1: '#00ff88', 2: '#fbbf24', 3: '#f97316', 4: '#ef4444' };
+
+const CELL_FILTER_GROUPS = [
+  { label: 'Buz', types: ['ice'] },
+  { label: 'Işınlanma', types: ['teleporter_in_A', 'teleporter_out_A', 'teleporter_in_B', 'teleporter_out_B', 'teleporter_in_C', 'teleporter_out_C'] },
+  { label: 'Güç', types: ['power_node'] },
+  { label: 'Konveyör', types: ['conveyor_up', 'conveyor_down', 'conveyor_left', 'conveyor_right'] },
+  { label: 'Yön Tog', types: ['direction_toggle'] },
+  { label: 'Yasak', types: ['forbidden'] },
+] as const;
+
 // ─── Request row ───────────────────────────────────────────────────────────────
 
 interface RequestRowProps {
@@ -82,7 +96,9 @@ function RequestRow({ req, parts, onApprove, onReject }: RequestRowProps) {
           <span style={{ fontSize: 11, color: '#475569' }}>
             by <span style={{ color: '#a78bfa' }}>{req.creatorName}</span>
             {req.creatorTag && <span style={{ color: '#475569' }}> #{req.creatorTag}</span>}
-            &nbsp;·&nbsp;{req.width}×{req.height}&nbsp;·&nbsp;{timeAgo(req.submittedAt)}
+            &nbsp;·&nbsp;{req.width}×{req.height}
+            {req.difficulty && <span style={{ color: DIFFICULTY_COLORS[req.difficulty], fontWeight: 700 }}>&nbsp;·&nbsp;{DIFFICULTY_LABELS[req.difficulty]}</span>}
+            &nbsp;·&nbsp;{timeAgo(req.submittedAt)}
           </span>
         </div>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -187,6 +203,8 @@ function RequestRow({ req, parts, onApprove, onReject }: RequestRowProps) {
 
 // ─── Admin Page ────────────────────────────────────────────────────────────────
 
+// ─── Admin Page ────────────────────────────────────────────────────────────────
+
 export default function AdminPage() {
   const router = useRouter();
   const { user, role, loading } = useAuth();
@@ -194,6 +212,11 @@ export default function AdminPage() {
   const [parts, setParts] = useState<LevelPart[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [toast, setToast] = useState('');
+
+  // Filters
+  const [search, setSearch] = useState('');
+  const [filterDifficulty, setFilterDifficulty] = useState<number | null>(null);
+  const [filterCellTypes, setFilterCellTypes] = useState<Set<string>>(new Set());
 
   // Redirect non-admins
   useEffect(() => {
@@ -238,6 +261,31 @@ export default function AdminPage() {
     showToast(`"${req.name}" reddedildi.`);
   }, [showToast]);
 
+  // Filtered requests
+  const filteredRequests = requests.filter((req) => {
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      if (!req.name.toLowerCase().includes(q) && !req.creatorName.toLowerCase().includes(q)) return false;
+    }
+    if (filterDifficulty !== null && (req.difficulty ?? null) !== filterDifficulty) return false;
+    if (filterCellTypes.size > 0) {
+      const flat = (req.grid as string[][]).flat();
+      const hasAll = [...filterCellTypes].every((ct) => flat.includes(ct));
+      if (!hasAll) return false;
+    }
+    return true;
+  });
+
+  const toggleCellType = (types: readonly string[]) => {
+    setFilterCellTypes((prev) => {
+      const next = new Set(prev);
+      const allIn = types.every((t) => next.has(t));
+      if (allIn) types.forEach((t) => next.delete(t));
+      else types.forEach((t) => next.add(t));
+      return next;
+    });
+  };
+
   if (loading || role !== 'admin') {
     return (
       <main style={{ minHeight: '100dvh', background: '#030712', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -270,27 +318,77 @@ export default function AdminPage() {
           <div style={{ textAlign: 'center', color: '#1e3a5f', fontSize: 12, letterSpacing: '0.1em', paddingTop: 60 }}>
             LOADING...
           </div>
-        ) : requests.length === 0 ? (
-          <div style={{ textAlign: 'center', paddingTop: 80 }}>
-            <p style={{ color: '#1e3a5f', fontSize: 13, letterSpacing: '0.06em' }}>Bekleyen level talebi yok.</p>
-          </div>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+            {/* ── Filter bar ── */}
+            <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(251,191,36,0.1)', borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Level adı veya yapımcı ara..."
+                  style={{ flex: 1, minWidth: 160, background: '#060d1a', border: '1px solid rgba(30,58,95,0.6)', color: '#94a3b8', borderRadius: 6, padding: '5px 10px', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                />
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button
+                    onClick={() => setFilterDifficulty(null)}
+                    style={{ padding: '4px 10px', fontSize: 10, borderRadius: 5, border: `1px solid ${filterDifficulty === null ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.1)'}`, background: filterDifficulty === null ? 'rgba(251,191,36,0.1)' : 'rgba(255,255,255,0.02)', color: filterDifficulty === null ? '#fbbf24' : '#475569', cursor: 'pointer' }}
+                  >Tümü</button>
+                  {[1, 2, 3, 4].map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setFilterDifficulty(filterDifficulty === d ? null : d)}
+                      style={{ padding: '4px 10px', fontSize: 10, borderRadius: 5, border: `1px solid ${filterDifficulty === d ? DIFFICULTY_COLORS[d] + '99' : 'rgba(255,255,255,0.1)'}`, background: filterDifficulty === d ? DIFFICULTY_COLORS[d] + '22' : 'rgba(255,255,255,0.02)', color: filterDifficulty === d ? DIFFICULTY_COLORS[d] : '#475569', cursor: 'pointer' }}
+                    >{DIFFICULTY_LABELS[d]}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 9, color: '#1e3a5f', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Grid içeriği:</span>
+                {CELL_FILTER_GROUPS.map((g) => {
+                  const active = g.types.some((t) => filterCellTypes.has(t));
+                  return (
+                    <button
+                      key={g.label}
+                      onClick={() => toggleCellType(g.types)}
+                      style={{ padding: '3px 9px', fontSize: 10, borderRadius: 5, border: `1px solid ${active ? 'rgba(0,196,255,0.5)' : 'rgba(255,255,255,0.1)'}`, background: active ? 'rgba(0,196,255,0.12)' : 'rgba(255,255,255,0.02)', color: active ? '#00c4ff' : '#475569', cursor: 'pointer' }}
+                    >{g.label}</button>
+                  );
+                })}
+                {filterCellTypes.size > 0 && (
+                  <button onClick={() => setFilterCellTypes(new Set())} style={{ padding: '3px 9px', fontSize: 10, borderRadius: 5, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.06)', color: '#ef4444', cursor: 'pointer' }}>✕ Temizle</button>
+                )}
+              </div>
+            </div>
+
+            {/* ── Results header ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#fbbf24', textShadow: '0 0 10px rgba(251,191,36,0.5)' }}>
                 Bekleyen Talepler
               </span>
+              <span style={{ fontSize: 10, color: '#334155' }}>
+                {filteredRequests.length}/{requests.length}
+              </span>
               <div style={{ flex: 1, height: 1, background: 'rgba(251,191,36,0.15)' }} />
             </div>
-            {requests.map((req) => (
-              <RequestRow
-                key={req.id}
-                req={req}
-                parts={parts}
-                onApprove={handleApprove}
-                onReject={handleReject}
-              />
-            ))}
+
+            {filteredRequests.length === 0 ? (
+              <div style={{ textAlign: 'center', paddingTop: 40 }}>
+                <p style={{ color: '#1e3a5f', fontSize: 13, letterSpacing: '0.06em' }}>
+                  {requests.length === 0 ? 'Bekleyen level talebi yok.' : 'Filtreyle eşleşen talep bulunamadı.'}
+                </p>
+              </div>
+            ) : (
+              filteredRequests.map((req) => (
+                <RequestRow
+                  key={req.id}
+                  req={req}
+                  parts={parts}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                />
+              ))
+            )}
           </>
         )}
       </div>

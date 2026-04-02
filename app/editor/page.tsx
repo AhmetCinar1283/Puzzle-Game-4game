@@ -138,6 +138,7 @@ function EditorInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('id') ? Number(searchParams.get('id')) : null;
+  const firestoreIdParam = searchParams.get('firestoreId');
 
   // Level data
   const [levelName, setLevelName] = useState('My Level');
@@ -146,6 +147,9 @@ function EditorInner() {
   const [pendingW, setPendingW] = useState(5);
   const [pendingH, setPendingH] = useState(5);
   const [trailCollision, setTrailCollision] = useState(false);
+  const [difficulty, setDifficulty] = useState<1 | 2 | 3 | 4>(2);
+  const [savedRequestId, setSavedRequestId] = useState<string | null>(null);
+  const savedIdForSubmitRef = useRef<number | null>(null);
   const [edges, setEdges] = useState<Record<'top' | 'bottom' | 'left' | 'right', EdgeBehavior>>({ top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' });
   const [grid, setGrid] = useState<CellType[][]>(() => makeGrid(5, 5));
   const [objects, setObjects] = useState<ObjConfig[]>([
@@ -246,6 +250,8 @@ function EditorInner() {
     setEdges(stored.edges as typeof edges);
     setGrid(stored.grid as CellType[][]);
     setTrailCollision(!!stored.trailCollision);
+    setDifficulty((stored.difficulty ?? 2) as 1 | 2 | 3 | 4);
+    setSavedRequestId(stored.requestId ?? null);
     const objs: ObjConfig[] = [
       { id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true },
       { id: 2, row: null, col: null, mode: 'normal', lockOnTarget: true },
@@ -272,6 +278,7 @@ function EditorInner() {
   useEffect(() => {
     if (editId !== null) loadForEdit(editId);
   }, [editId, loadForEdit]);
+
 
   // ── Resize grid ─────────────────────────────────────────────────────────
   const applyResize = useCallback(() => {
@@ -373,6 +380,8 @@ function EditorInner() {
       trailCollision: level.trailCollision,
       initialBoxes: level.initialBoxes,
       conveyorPowerRequired: level.conveyorPowerRequired,
+      difficulty,
+      ...(savedRequestId ? { requestId: savedRequestId } : {}),
     };
 
     if (editId !== null) {
@@ -421,20 +430,64 @@ function EditorInner() {
     setSubmitError('');
     const creatorName = userTag ?? user.displayName ?? user.email ?? 'Unknown';
     try {
-      console.log('1')
-      const { submitLevelRequest } = await import('@/app/src/lib/firebase/firestore');
-      console.log('2')
-      await submitLevelRequest(user.uid, level, creatorName, userTag);
-      console.log('3')
-      setSubmitStatus('Gönderildi!');
-      console.log('4')
+      if (savedRequestId) {
+        // Update existing pending request
+        const { updateLevelRequest } = await import('@/app/src/lib/firebase/firestore');
+        await updateLevelRequest(savedRequestId, level, difficulty);
+        setSubmitStatus('Güncellendi!');
+      } else {
+        // Create new request
+        const { submitLevelRequest } = await import('@/app/src/lib/firebase/firestore');
+        const reqId = await submitLevelRequest(user.uid, level, creatorName, userTag, difficulty);
+        setSavedRequestId(reqId);
+        // Persist requestId to Dexie so it survives page reload
+        const targetId = savedIdForSubmitRef.current ?? (editId ?? null);
+        if (targetId !== null) {
+          const { setLevelRequestId } = await import('@/app/src/lib/db');
+          await setLevelRequestId(targetId, reqId);
+        }
+        setSubmitStatus('Gönderildi!');
+      }
       setTimeout(() => { setSubmitStatus(''); setSubmitDialogOpen(false); setSubmitNote(''); }, 2000);
-      console.log('5')
     } catch (err) {
       console.error('[Submit]', err);
       setSubmitError('Gönderim başarısız. Tekrar dene.');
     }
-  }, [user, isAnonymous, generateLevelData, userTag]);
+  }, [user, isAnonymous, generateLevelData, userTag, savedRequestId, difficulty, editId]);
+
+  // ── Save then open submit dialog ─────────────────────────────────────────
+  const handleSaveAndSubmit = useCallback(async () => {
+    if (!user || isAnonymous) return;
+    const { level, error } = generateLevelData();
+    if (error || !level) { setTestError(error); return; }
+
+    const payload: Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt'> = {
+      name: level.name, width: level.width, height: level.height, edges: level.edges,
+      grid: level.grid, initialObjects: level.initialObjects, targets: level.targets,
+      trailCollision: level.trailCollision,
+      initialBoxes: level.initialBoxes,
+      conveyorPowerRequired: level.conveyorPowerRequired,
+      difficulty,
+      ...(savedRequestId ? { requestId: savedRequestId } : {}),
+    };
+
+    if (editId !== null) {
+      const { updateStoredLevel } = await import('@/app/src/lib/db');
+      await updateStoredLevel(editId, payload);
+      savedIdForSubmitRef.current = editId;
+    } else {
+      const { saveLevelAtPosition } = await import('@/app/src/lib/db');
+      const newId = await saveLevelAtPosition(payload);
+      savedIdForSubmitRef.current = newId;
+      await reloadLevels();
+      router.replace(`/editor?id=${newId}`);
+    }
+
+    setSaveSuccess('Kaydedildi!');
+    setTimeout(() => setSaveSuccess(''), 2000);
+    setSubmitError('');
+    setSubmitDialogOpen(true);
+  }, [user, isAnonymous, editId, generateLevelData, difficulty, savedRequestId, reloadLevels, router]);
 
   // ── Paste JSON ──────────────────────────────────────────────────────────
   const handlePaste = useCallback(() => {
@@ -507,7 +560,7 @@ function EditorInner() {
     const { publishLevel, updateFirestoreLevel } = await import('@/app/src/lib/firebase/admin');
 
     if (firestoreEditId) {
-      await updateFirestoreLevel(firestoreEditId, payload, user.uid);
+      await updateFirestoreLevel(firestoreEditId, payload, user.uid, selectedPartId);
     } else {
       const newId = await publishLevel(payload, selectedPartId, user.uid);
       setFirestoreEditId(newId);
@@ -520,6 +573,25 @@ function EditorInner() {
     }
     setTimeout(() => setPublishStatus(''), 2000);
   }, [user, isModerator, generateLevelData, selectedPartId, firestoreEditId, showFirestoreLevels]);
+
+  // Load Firestore level when ?firestoreId= param is present (admin shortcut from /levels)
+  useEffect(() => {
+    if (!firestoreIdParam || !isModerator) return;
+    (async () => {
+      const { getPartLevels, getAllParts } = await import('@/app/src/lib/firebase/admin');
+      const parts = await getAllParts();
+      for (const part of parts) {
+        const levels = await getPartLevels(part.partId);
+        const fl = levels.find((l) => l.firestoreId === firestoreIdParam);
+        if (fl) {
+          loadFirestoreLevel(fl);
+          setSelectedPartId(part.partId);
+          setShowFirestoreLevels(true);
+          break;
+        }
+      }
+    })();
+  }, [firestoreIdParam, isModerator, loadFirestoreLevel]);
 
   // ── Load saved level into editor ────────────────────────────────────────
   const handleLoadLevel = useCallback((stored: StoredLevel & { id: number }) => {
@@ -534,6 +606,9 @@ function EditorInner() {
     setEdges({ top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' });
     setGrid(makeGrid(5, 5));
     setTrailCollision(false);
+    setDifficulty(2);
+    setSavedRequestId(null);
+    savedIdForSubmitRef.current = null;
     setObjects([
       { id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true },
       { id: 2, row: null, col: null, mode: 'normal', lockOnTarget: true },
@@ -600,13 +675,20 @@ function EditorInner() {
         <div style={{ display: 'flex', gap: 8 }}>
           <NBtn onClick={() => setPasteDialogOpen(true)} color="#94a3b8" style={{ fontSize: 11 }}>Paste JSON</NBtn>
           {!isAnonymous && !isModerator && (
-            <NBtn onClick={() => { setSubmitError(''); setSubmitDialogOpen(true); }} color="#a78bfa" style={{ padding: '5px 14px' }}>
-              Gönder
+            <>
+              <NBtn onClick={handleSaveClick} color="#a78bfa" active style={{ padding: '5px 16px' }}>
+                {saveSuccess || (editId !== null ? 'Güncelle' : 'Kaydet')}
+              </NBtn>
+              <NBtn onClick={handleSaveAndSubmit} color="#00ff88" style={{ padding: '5px 14px', fontSize: 11 }}>
+                {editId !== null ? 'Güncelle ve Gönder' : 'Kaydet ve Gönder'}
+              </NBtn>
+            </>
+          )}
+          {(isAnonymous || isModerator) && (
+            <NBtn onClick={handleSaveClick} color="#00ff88" active style={{ padding: '5px 16px' }}>
+              {saveSuccess || (editId !== null ? 'Update' : 'Save')}
             </NBtn>
           )}
-          <NBtn onClick={handleSaveClick} color="#00ff88" active style={{ padding: '5px 16px' }}>
-            {saveSuccess || (editId !== null ? 'Update' : 'Save')}
-          </NBtn>
         </div>
       </div>
 
@@ -831,7 +913,19 @@ function EditorInner() {
 
           <Sec title="Level Info">
             <Lbl>Name</Lbl>
-            <input value={levelName} onChange={(e) => setLevelName(e.target.value)} style={{ ...iStyle, width: '100%', marginBottom: 0 }} />
+            <input value={levelName} onChange={(e) => setLevelName(e.target.value)} style={{ ...iStyle, width: '100%', marginBottom: 10 }} />
+            <Lbl>Zorluk</Lbl>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {([1, 2, 3, 4] as const).map((d) => {
+                const labels = { 1: 'Kolay', 2: 'Orta', 3: 'Zor', 4: 'Çok Zor' };
+                const colors = { 1: '#00ff88', 2: '#fbbf24', 3: '#f97316', 4: '#ef4444' };
+                return (
+                  <NBtn key={d} onClick={() => setDifficulty(d)} active={difficulty === d} color={colors[d]} style={{ flex: 1, padding: '3px 4px', fontSize: 9 }}>
+                    {labels[d]}
+                  </NBtn>
+                );
+              })}
+            </div>
           </Sec>
 
           <Sec title="Grid Size">
@@ -1043,16 +1137,26 @@ function EditorInner() {
       {/* ── Submit level dialog ── */}
       {submitDialogOpen && (
         <Modal onClose={() => { setSubmitDialogOpen(false); setSubmitError(''); setSubmitNote(''); }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 14, color: '#a78bfa', letterSpacing: '0.06em', textShadow: '0 0 8px rgba(167,139,250,0.5)' }}>Level Talebi Gönder</h3>
-          <div style={{ marginBottom: 12 }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: 14, color: '#a78bfa', letterSpacing: '0.06em', textShadow: '0 0 8px rgba(167,139,250,0.5)' }}>
+            {savedRequestId ? 'Talebi Güncelle' : 'Level Talebi Gönder'}
+          </h3>
+          <div style={{ marginBottom: 10 }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#334155', display: 'block', marginBottom: 4 }}>Level Adı</span>
             <span style={{ fontSize: 13, color: '#94a3b8' }}>{levelName || 'Unnamed Level'}</span>
           </div>
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ marginBottom: 10 }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#334155', display: 'block', marginBottom: 4 }}>Hazırlayan</span>
             <span style={{ fontSize: 13, color: '#a78bfa' }}>
               {userTag ?? user?.displayName ?? user?.email ?? 'Unknown'}
             </span>
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#334155', display: 'block', marginBottom: 4 }}>Zorluk</span>
+            {(() => {
+              const labels = { 1: 'Kolay', 2: 'Orta', 3: 'Zor', 4: 'Çok Zor' };
+              const colors = { 1: '#00ff88', 2: '#fbbf24', 3: '#f97316', 4: '#ef4444' };
+              return <span style={{ fontSize: 13, color: colors[difficulty], fontWeight: 700 }}>{labels[difficulty]}</span>;
+            })()}
           </div>
           <div style={{ marginBottom: 14 }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#334155', display: 'block', marginBottom: 4 }}>Not (opsiyonel)</span>
@@ -1060,18 +1164,18 @@ function EditorInner() {
               value={submitNote}
               onChange={(e) => setSubmitNote(e.target.value)}
               placeholder="Level hakkında kısa bir açıklama..."
-              style={{ width: 320, height: 72, background: '#060d1a', border: '1px solid rgba(30,58,95,0.5)', color: '#94a3b8', fontFamily: 'inherit', fontSize: 12, borderRadius: 6, padding: 8, outline: 'none', resize: 'none', boxSizing: 'border-box' }}
+              style={{ width: 320, height: 60, background: '#060d1a', border: '1px solid rgba(30,58,95,0.5)', color: '#94a3b8', fontFamily: 'inherit', fontSize: 12, borderRadius: 6, padding: 8, outline: 'none', resize: 'none', boxSizing: 'border-box' }}
             />
           </div>
           {submitError && <p style={{ fontSize: 11, color: '#ef4444', marginBottom: 8 }}>{submitError}</p>}
           <div style={{ display: 'flex', gap: 8 }}>
             <NBtn onClick={handleSubmitLevel} color="#a78bfa" active style={{ padding: '7px 20px', fontSize: 12 }}>
-              {submitStatus || 'Gönder'}
+              {submitStatus || (savedRequestId ? 'Güncelle' : 'Gönder')}
             </NBtn>
             <NBtn onClick={() => { setSubmitDialogOpen(false); setSubmitError(''); setSubmitNote(''); }} style={{ padding: '7px 16px', fontSize: 12 }}>İptal</NBtn>
           </div>
           <p style={{ fontSize: 10, color: '#1e3a5f', margin: '10px 0 0', lineHeight: 1.5 }}>
-            Gönderilen level admin onayından sonra kampanyaya eklenir.
+            {savedRequestId ? 'Mevcut talep güncellenir.' : 'Gönderilen level admin onayından sonra kampanyaya eklenir.'}
           </p>
         </Modal>
       )}

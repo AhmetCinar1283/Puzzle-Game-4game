@@ -17,6 +17,10 @@ export interface StoredLevel {
   initialBoxes?: BoxDef[];
   conveyorPowerRequired?: Position[];
   creatorName?: string;  // Attribution for community-submitted levels
+  difficulty?: 1 | 2 | 3 | 4;  // 1=Kolay, 2=Orta, 3=Zor, 4=Çok Zor
+  part?: number;          // Firestore part number (preset levels only)
+  requestId?: string;     // Firestore levelRequests doc ID (tracks pending submission)
+  isNeedSync?: boolean;   // true = fetch fresh full data from Firestore before playing
   createdAt: number;
   updatedAt: number;
 }
@@ -73,6 +77,22 @@ class KnowAndConquerDB extends Dexie {
     });
     // Version 6: creatorName field added to StoredLevel (optional, no destructive migration needed)
     this.version(6).stores({
+      levels: '++id',
+      levelOrder: 'id',
+      presetLevels: '++id, firestoreId',
+      syncMeta: 'collection',
+      playedLevels: 'levelId, updatedAt',
+    });
+    // Version 7: difficulty, part, requestId fields (optional, no destructive migration needed)
+    this.version(7).stores({
+      levels: '++id',
+      levelOrder: 'id',
+      presetLevels: '++id, firestoreId',
+      syncMeta: 'collection',
+      playedLevels: 'levelId, updatedAt',
+    });
+    // Version 8: isNeedSync field for lazy Firestore fetch (optional, no destructive migration needed)
+    this.version(8).stores({
       levels: '++id',
       levelOrder: 'id',
       presetLevels: '++id, firestoreId',
@@ -182,4 +202,20 @@ export async function getNextPresetLevelId(currentId: number): Promise<number | 
   const idx = keys.indexOf(currentId);
   if (idx < 0 || idx >= keys.length - 1) return null;
   return keys[idx + 1];
+}
+
+
+/** Updates only the requestId field on a stored level (tracks Firestore submission). */
+export async function setLevelRequestId(id: number, requestId: string): Promise<void> {
+  const db = getDB();
+  await db.levels.update(id, { requestId });
+}
+
+
+export async function localClear() {
+  const db = getDB();
+  db.tables.map(async (t, i) => {
+    await t.clear()
+  })
+  localStorage.clear()
 }

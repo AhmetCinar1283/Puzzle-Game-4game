@@ -1,13 +1,13 @@
 import {
   collection,
   doc,
-  addDoc,
   updateDoc,
   deleteDoc,
   getDoc,
   getDocs,
   serverTimestamp,
   writeBatch,
+  Timestamp,
 } from 'firebase/firestore';
 import type { LevelRequest } from './firestore';
 import { db } from './config';
@@ -15,7 +15,7 @@ import type { StoredLevel } from '../db';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type AdminLevelInput = Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt' | 'firestoreId'> & {
+export type AdminLevelInput = Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt' | 'firestoreId' | 'isNeedSync'> & {
   part: number;
 };
 
@@ -26,12 +26,33 @@ export interface FirestoreLevel extends AdminLevelInput {
   publishedBy: string;
 }
 
+/**
+ * Metadata embedded in levelParts.order for each level.
+ * Provides enough data for the levels list without reading levels/ collection.
+ */
+export interface LevelOrderEntry {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  difficulty?: 1 | 2 | 3 | 4;
+  creatorName?: string;
+  updatedAt: Timestamp | number;
+}
+
 export interface LevelPart {
   partId: string;
   name: string;
   unlockRequirement: number;
-  order: string[];
+  order: LevelOrderEntry[];  // was string[] — now embeds metadata per level
   updatedAt: number;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Normalises an order entry that may be a legacy string (old format) or a new object. */
+function entryId(e: string | LevelOrderEntry): string {
+  return typeof e === 'string' ? e : e.id;
 }
 
 // ─── Part helpers ─────────────────────────────────────────────────────────────
@@ -57,7 +78,7 @@ export async function getPart(partId: string): Promise<LevelPart | null> {
 
 /**
  * Publishes a new level to Firestore and appends it to the end of the
- * specified part's order array.
+ * specified part's order array (as a LevelOrderEntry object).
  * Returns the new Firestore document ID.
  */
 export async function publishLevel(
@@ -77,16 +98,27 @@ export async function publishLevel(
     updatedAt: serverTimestamp(),
   });
 
-  // 2. Append to part order
+  // 2. Build the order entry
+  const entry: Omit<LevelOrderEntry, 'updatedAt'> & { updatedAt: ReturnType<typeof serverTimestamp> } = {
+    id: levelRef.id,
+    name: data.name,
+    width: data.width,
+    height: data.height,
+    difficulty: data.difficulty ?? undefined,
+    creatorName: data.creatorName ?? undefined,
+    updatedAt: serverTimestamp(),
+  };
+
+  // 3. Append to part order
   const partRef = doc(db, 'levelParts', partId);
   const partSnap = await getDoc(partRef);
-  const currentOrder: string[] = partSnap.exists()
-    ? (partSnap.data().order as string[]) ?? []
+  const currentOrder: (string | LevelOrderEntry)[] = partSnap.exists()
+    ? (partSnap.data().order as (string | LevelOrderEntry)[]) ?? []
     : [];
 
   if (partSnap.exists()) {
     batch.update(partRef, {
-      order: [...currentOrder, levelRef.id],
+      order: [...currentOrder, entry],
       updatedAt: serverTimestamp(),
     });
   } else {
@@ -94,7 +126,7 @@ export async function publishLevel(
     batch.set(partRef, {
       name: `Part ${partId}`,
       unlockRequirement: 0,
-      order: [levelRef.id],
+      order: [entry],
       updatedAt: serverTimestamp(),
     });
   }
@@ -105,20 +137,51 @@ export async function publishLevel(
 
 /**
  * Updates an existing Firestore level's content.
- * The level's position in the part order is NOT changed.
+ * Also updates the metadata entry in the part's order array and bumps levelParts.updatedAt
+ * so that sync clients know to re-fetch.
  */
 export async function updateFirestoreLevel(
   firestoreId: string,
   data: AdminLevelInput,
   publishedBy: string,
+  partId: string,
 ): Promise<void> {
-  const ref = doc(db, 'levels', firestoreId);
-  await updateDoc(ref, {
+  const batch = writeBatch(db);
+
+  // 1. Update the level document
+  const levelRef = doc(db, 'levels', firestoreId);
+  batch.update(levelRef, {
     ...data,
     grid: JSON.stringify(data.grid), // Firestore doesn't support nested arrays
     publishedBy,
     updatedAt: serverTimestamp(),
   });
+
+  // 2. Update the metadata entry in the part's order array
+  const partRef = doc(db, 'levelParts', partId);
+  const partSnap = await getDoc(partRef);
+  if (partSnap.exists()) {
+    const currentOrder = partSnap.data().order as (string | LevelOrderEntry)[];
+    const updatedOrder = currentOrder.map((e) => {
+      if (entryId(e) !== firestoreId) return e;
+      // Replace with updated metadata
+      return {
+        id: firestoreId,
+        name: data.name,
+        width: data.width,
+        height: data.height,
+        difficulty: data.difficulty ?? undefined,
+        creatorName: data.creatorName ?? undefined,
+        updatedAt: serverTimestamp(),
+      };
+    });
+    batch.update(partRef, {
+      order: updatedOrder,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  await batch.commit();
 }
 
 /**
@@ -135,7 +198,8 @@ export async function deleteFirestoreLevel(
   const partRef = doc(db, 'levelParts', partId);
   const partSnap = await getDoc(partRef);
   if (partSnap.exists()) {
-    const order = (partSnap.data().order as string[]).filter((id) => id !== firestoreId);
+    const order = (partSnap.data().order as (string | LevelOrderEntry)[])
+      .filter((e) => entryId(e) !== firestoreId);
     batch.update(partRef, { order, updatedAt: serverTimestamp() });
   }
 
@@ -147,7 +211,7 @@ export async function deleteFirestoreLevel(
  */
 export async function reorderPartLevels(
   partId: string,
-  newOrder: string[],
+  newOrder: (string | LevelOrderEntry)[],
 ): Promise<void> {
   await updateDoc(doc(db, 'levelParts', partId), {
     order: newOrder,
@@ -158,7 +222,7 @@ export async function reorderPartLevels(
 /**
  * Approves a community level request:
  * 1. Creates a new doc in `levels/` with attribution fields
- * 2. Appends the new level ID to `levelParts/{partId}.order`
+ * 2. Appends the new LevelOrderEntry to `levelParts/{partId}.order`
  * 3. Marks the request as 'approved'
  *
  * Uses a batch write so steps 1+2 are atomic; step 3 updates separately.
@@ -184,6 +248,7 @@ export async function approveLevelRequest(
     trailCollision: req.trailCollision ?? false,
     initialBoxes: req.initialBoxes ?? [],
     conveyorPowerRequired: req.conveyorPowerRequired ?? [],
+    difficulty: req.difficulty ?? null,
     part: Number(partId),
     publishedBy: approvedBy,
     createdBy: req.submittedBy,
@@ -193,19 +258,29 @@ export async function approveLevelRequest(
     updatedAt: serverTimestamp(),
   });
 
-  // 2. Append to part order
+  // 2. Build order entry and append to part
+  const entry: Omit<LevelOrderEntry, 'updatedAt'> & { updatedAt: ReturnType<typeof serverTimestamp> } = {
+    id: levelRef.id,
+    name: req.name,
+    width: req.width,
+    height: req.height,
+    difficulty: req.difficulty ?? undefined,
+    creatorName: req.creatorName ?? undefined,
+    updatedAt: serverTimestamp(),
+  };
+
   const partRef = doc(db, 'levelParts', partId);
   const partSnap = await getDoc(partRef);
-  const currentOrder: string[] = partSnap.exists()
-    ? (partSnap.data().order as string[]) ?? []
+  const currentOrder: (string | LevelOrderEntry)[] = partSnap.exists()
+    ? (partSnap.data().order as (string | LevelOrderEntry)[]) ?? []
     : [];
   if (partSnap.exists()) {
-    batch.update(partRef, { order: [...currentOrder, levelRef.id], updatedAt: serverTimestamp() });
+    batch.update(partRef, { order: [...currentOrder, entry], updatedAt: serverTimestamp() });
   } else {
     batch.set(partRef, {
       name: `Part ${partId}`,
       unlockRequirement: 0,
-      order: [levelRef.id],
+      order: [entry],
       updatedAt: serverTimestamp(),
     });
   }
@@ -240,7 +315,7 @@ export async function getPartLevels(partId: string): Promise<FirestoreLevel[]> {
 
   // Batch fetch all level docs
   const levelDocs = await Promise.all(
-    part.order.map((id) => getDoc(doc(db, 'levels', id))),
+    part.order.map((e) => getDoc(doc(db, 'levels', entryId(e)))),
   );
 
   return levelDocs

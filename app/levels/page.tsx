@@ -2,17 +2,21 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import type { StoredLevel } from '@/app/src/lib/db';
+import { localClear, type StoredLevel } from '@/app/src/lib/db';
+import { useAuth } from '@/app/src/hooks/useAuth';
 
 type LevelEntry = StoredLevel & { id: number };
 
 export default function LevelsPage() {
   const router = useRouter();
+  const { isModerator } = useAuth();
   const [presets, setPresets] = useState<LevelEntry[]>([]);
   const [userLevels, setUserLevels] = useState<LevelEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<LevelEntry | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     function check() { setIsMobile(window.innerWidth < 600); }
@@ -31,11 +35,21 @@ export default function LevelsPage() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Sync level metadata from Firestore on every page open (5-min cooldown)
+  useEffect(() => {
+    import('@/app/src/lib/firebase/sync').then(({ syncLevelsMeta }) => {
+      syncLevelsMeta().then(() => reload()).catch((err) =>
+        console.warn('[Sync] Meta sync failed:', err),
+      );
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleRefresh = useCallback(async () => {
     setSyncing(true);
     try {
-      const { syncAllParts } = await import('@/app/src/lib/firebase/sync');
-      await syncAllParts(true); // force = true: cooldown'u atla
+      const { syncLevelsMeta } = await import('@/app/src/lib/firebase/sync');
+      await syncLevelsMeta(true); // force = true: cooldown'u atla
     } catch (err) {
       console.warn('[Sync] Refresh failed:', err);
     }
@@ -61,6 +75,39 @@ export default function LevelsPage() {
     await deleteStoredLevel(id);
     await reload();
   }, [reload]);
+
+  // ── Delete preset level (admin only) ─────────────────────────────────────
+  const handleDeletePreset = useCallback(async (lv: LevelEntry) => {
+    setDeleteConfirm(lv);
+  }, []);
+
+  const confirmDeletePreset = useCallback(async () => {
+    if (!deleteConfirm?.firestoreId) return;
+    setDeleting(true);
+    try {
+      // Find the part this level belongs to
+      const { deleteFirestoreLevel, getAllParts } = await import('@/app/src/lib/firebase/admin');
+      const parts = await getAllParts();
+      const part = parts.find((p) =>
+        p.order.some((e) => (typeof e === 'string' ? e : e.id) === deleteConfirm.firestoreId),
+      );
+      if (!part) {
+        // Level not found in any part order — just delete the doc
+        await deleteFirestoreLevel(deleteConfirm.firestoreId, '');
+      } else {
+        await deleteFirestoreLevel(deleteConfirm.firestoreId, part.partId);
+      }
+      // Remove from local Dexie presetLevels
+      const { getDB } = await import('@/app/src/lib/db');
+      const db = getDB();
+      await db.presetLevels.delete(deleteConfirm.id);
+      await reload();
+    } catch (err) {
+      console.error('[DeletePreset]', err);
+    }
+    setDeleting(false);
+    setDeleteConfirm(null);
+  }, [deleteConfirm, reload]);
 
   const cols = isMobile ? '28px 1fr 90px' : '36px 1fr 80px 80px 120px';
   const headers = isMobile ? ['#', 'Name', 'Actions'] : ['#', 'Name', 'Size', 'Order', 'Actions'];
@@ -103,6 +150,20 @@ export default function LevelsPage() {
           Levels
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={localClear}
+            disabled={syncing}
+            title="Firestore'dan güncelle"
+            style={{
+              fontSize: 14, padding: '5px 10px', background: 'rgba(255,50,50,0.03)',
+              border: '1px solid rgba(255,255,255,0.1)', color: syncing ? '#1e3a5f' : '#475569',
+              borderRadius: 7, cursor: syncing ? 'not-allowed' : 'pointer',
+              transition: 'color 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <span style={{ display: 'inline-block', animation: syncing ? 'spin 1s linear infinite' : 'none' }}>Del</span>
+          </button>
           <button
             onClick={handleRefresh}
             disabled={syncing}
@@ -151,13 +212,14 @@ export default function LevelsPage() {
                       index={idx}
                       total={presets.length}
                       isPreset
+                      isAdmin={isModerator}
                       isMobile={isMobile}
                       cols={cols}
                       onPlay={() => router.push(`/game?id=${lv.id}&source=preset`)}
-                      onEdit={() => {}}
-                      onDelete={() => {}}
-                      onMoveUp={() => {}}
-                      onMoveDown={() => {}}
+                      onEdit={() => lv.firestoreId ? router.push(`/editor?firestoreId=${lv.firestoreId}`) : undefined}
+                      onDelete={() => handleDeletePreset(lv)}
+                      onMoveUp={() => { }}
+                      onMoveDown={() => { }}
                     />
                   ))}
                 </LevelTable>
@@ -206,9 +268,52 @@ export default function LevelsPage() {
           </div>
         )}
       </div>
+      {/* ── Delete preset confirmation dialog ── */}
+      {deleteConfirm && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(3,7,18,0.88)', backdropFilter: 'blur(6px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => !deleting && setDeleteConfirm(null)}
+        >
+          <div
+            style={{ background: '#0a0f1a', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 14, padding: '24px 28px', maxWidth: 360, width: '100%', boxShadow: '0 0 40px rgba(239,68,68,0.1)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, color: '#ef4444', letterSpacing: '0.05em' }}>
+              Emin misiniz?
+            </h3>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 6px' }}>
+              <span style={{ color: '#94a3b8', fontWeight: 600 }}>"{deleteConfirm.name}"</span> adlı kampanya leveli kalıcı olarak silinecek.
+            </p>
+            <p style={{ fontSize: 11, color: '#334155', margin: '0 0 20px' }}>
+              Bu işlem Firestore'dan da kaldırır ve geri alınamaz.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={confirmDeletePreset}
+                disabled={deleting}
+                style={{ padding: '8px 20px', fontSize: 13, fontWeight: 700, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.5)', color: '#ef4444', borderRadius: 8, cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}
+              >
+                {deleting ? '...' : 'Evet, Sil'}
+              </button>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting}
+                style={{ padding: '8px 16px', fontSize: 13, background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#475569', borderRadius: 8, cursor: 'pointer' }}
+              >
+                İptal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const DIFFICULTY_LABELS: Record<number, string> = { 1: 'Kolay', 2: 'Orta', 3: 'Zor', 4: 'Çok Zor' };
+const DIFFICULTY_COLORS: Record<number, string> = { 1: '#00ff88', 2: '#fbbf24', 3: '#f97316', 4: '#ef4444' };
 
 // ─── Section Header ───────────────────────────────────────────────────────────
 
@@ -253,6 +358,7 @@ interface RowProps {
   index: number;
   total: number;
   isPreset: boolean;
+  isAdmin?: boolean;
   isMobile: boolean;
   cols: string;
   onPlay: () => void;
@@ -262,7 +368,7 @@ interface RowProps {
   onMoveDown: () => void;
 }
 
-function LevelRow({ level, index, total, isPreset, isMobile, cols, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
+function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, cols, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -297,7 +403,15 @@ function LevelRow({ level, index, total, isPreset, isMobile, cols, onPlay, onEdi
         {level.trailCollision && (
           <span style={{ fontSize: 9, color: '#00c4ff', border: '1px solid rgba(0,196,255,0.35)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>TRAIL</span>
         )}
-        {isPreset && (
+        {isPreset && level.difficulty && (
+          <span style={{ fontSize: 9, color: DIFFICULTY_COLORS[level.difficulty], border: `1px solid ${DIFFICULTY_COLORS[level.difficulty]}40`, borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>
+            {DIFFICULTY_LABELS[level.difficulty]}
+          </span>
+        )}
+        {isPreset && level.isNeedSync && (
+          <span style={{ fontSize: 9, color: '#fbbf24', letterSpacing: '0.04em', flexShrink: 0 }}>↻</span>
+        )}
+        {isPreset && !level.isNeedSync && (
           <span style={{ fontSize: 9, color: '#ffd700', border: '1px solid rgba(255,215,0,0.3)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>PRESET</span>
         )}
       </div>
@@ -324,7 +438,7 @@ function LevelRow({ level, index, total, isPreset, isMobile, cols, onPlay, onEdi
       {/* Actions */}
       <div style={{ display: 'flex', gap: 5 }}>
         <ActionBtn onClick={onPlay} color="#00ff88" label="▶" title="Play" />
-        {!isPreset && (
+        {(!isPreset || isAdmin) && (
           <>
             <ActionBtn onClick={onEdit} color="#00c4ff" label="✎" title="Edit" />
             <ActionBtn onClick={onDelete} color="#ef4444" label="✕" title="Delete" />

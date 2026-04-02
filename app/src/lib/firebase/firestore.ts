@@ -35,6 +35,7 @@ export interface LevelRequest {
   trailCollision?: boolean;
   initialBoxes?: StoredLevel['initialBoxes'];
   conveyorPowerRequired?: StoredLevel['conveyorPowerRequired'];
+  difficulty?: 1 | 2 | 3 | 4;
   // Submission metadata
   submittedBy: string;
   creatorName: string;
@@ -144,6 +145,7 @@ export async function submitLevelRequest(
   levelData: LevelData,
   creatorName: string,
   creatorTag: string | null,
+  difficulty?: 1 | 2 | 3 | 4,
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'levelRequests'), {
     name: levelData.name,
@@ -156,6 +158,7 @@ export async function submitLevelRequest(
     trailCollision: levelData.trailCollision ?? false,
     initialBoxes: levelData.initialBoxes ?? [],
     conveyorPowerRequired: levelData.conveyorPowerRequired ?? [],
+    difficulty: difficulty ?? null,
     submittedBy: uid,
     creatorName,
     creatorTag,
@@ -164,6 +167,31 @@ export async function submitLevelRequest(
     updatedAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+/**
+ * Updates an existing pending level request's content and difficulty.
+ * Only the submitter can do this (enforced by Firestore rules).
+ */
+export async function updateLevelRequest(
+  requestId: string,
+  levelData: LevelData,
+  difficulty?: 1 | 2 | 3 | 4,
+): Promise<void> {
+  await updateDoc(doc(db, 'levelRequests', requestId), {
+    name: levelData.name,
+    width: levelData.width,
+    height: levelData.height,
+    edges: levelData.edges,
+    grid: JSON.stringify(levelData.grid),
+    initialObjects: levelData.initialObjects,
+    targets: levelData.targets,
+    trailCollision: levelData.trailCollision ?? false,
+    initialBoxes: levelData.initialBoxes ?? [],
+    conveyorPowerRequired: levelData.conveyorPowerRequired ?? [],
+    difficulty: difficulty ?? null,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 /**
@@ -198,6 +226,7 @@ export async function getLevelRequests(
       trailCollision: data.trailCollision,
       initialBoxes: data.initialBoxes,
       conveyorPowerRequired: data.conveyorPowerRequired,
+      difficulty: data.difficulty ?? undefined,
       submittedBy: data.submittedBy,
       creatorName: data.creatorName,
       creatorTag: data.creatorTag ?? null,

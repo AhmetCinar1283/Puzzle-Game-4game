@@ -58,10 +58,23 @@ function GameContent() {
       if (isPreset) {
         const { getDB, getNextPresetLevelId } = await import('@/app/src/lib/db');
         const db = getDB();
-        const stored = await db.presetLevels.get(levelId!);
+        let stored = await db.presetLevels.get(levelId!);
 
         if (cancelled) return;
         if (!stored) { setError(true); setLoading(false); return; }
+
+        // Lazy fetch from Firestore if stale or missing full level data
+        if ((stored.isNeedSync || !stored.grid?.length) && stored.firestoreId) {
+          try {
+            const { fetchAndCacheLevel } = await import('@/app/src/lib/firebase/sync');
+            await fetchAndCacheLevel(stored.firestoreId, stored.id!);
+            stored = await db.presetLevels.get(levelId!);
+          } catch (err) {
+            console.warn('[Game] Lazy fetch failed, using cached data:', err);
+          }
+          if (cancelled) return;
+          if (!stored) { setError(true); setLoading(false); return; }
+        }
 
         const levelData = storedToLevelData(stored as StoredLevel & { id: number });
         setLevel(levelData);

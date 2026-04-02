@@ -10,10 +10,14 @@ import {
 import { db } from './config';
 import { getDB } from '../db';
 import type { StoredLevel, StoredPlayedLevel } from '../db';
+import type { LevelOrderEntry } from './admin';
+import type { LevelEdges } from '../../games/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SYNC_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+const META_SYNC_COOLDOWN_MS = 5 * 60 * 1000;  // 5 minutes
+const PLAYED_SYNC_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+const LEVELS_META_SYNC_KEY = 'levelsMeta';
 
 // ─── Dexie syncMeta helpers ───────────────────────────────────────────────────
 
@@ -32,6 +36,14 @@ async function writeLastSync(key: string, ts: number): Promise<void> {
   } catch { /* ignore write failures */ }
 }
 
+// ─── Timestamp helper ─────────────────────────────────────────────────────────
+
+function toMs(v: unknown): number {
+  if (v instanceof Timestamp) return v.toMillis();
+  if (typeof v === 'number') return v;
+  return 0;
+}
+
 // ─── Firestore → Dexie helpers ────────────────────────────────────────────────
 
 /**
@@ -43,11 +55,6 @@ function firestoreDocToStoredLevel(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: Record<string, any>,
 ): Omit<StoredLevel, 'id'> {
-  const toMs = (v: unknown): number => {
-    if (v instanceof Timestamp) return v.toMillis();
-    if (typeof v === 'number') return v;
-    return Date.now();
-  };
   return {
     firestoreId,
     name: data.name,
@@ -61,120 +68,115 @@ function firestoreDocToStoredLevel(
     initialBoxes: data.initialBoxes,
     conveyorPowerRequired: data.conveyorPowerRequired,
     creatorName: data.creatorName ?? undefined,
+    difficulty: data.difficulty ?? undefined,
+    part: typeof data.part === 'number' ? data.part : undefined,
+    isNeedSync: false,
     createdAt: toMs(data.createdAt),
     updatedAt: toMs(data.updatedAt),
   };
 }
 
-// ─── Core sync logic ──────────────────────────────────────────────────────────
+// ─── Metadata sync (levels page) ─────────────────────────────────────────────
 
 /**
- * Full re-sync of a single part: clears existing Dexie preset rows for this
- * part and repopulates them from Firestore in order.
+ * Lightweight sync run on every /levels page open (5-minute cooldown).
+ *
+ * Queries levelParts that changed since last sync, then for each entry in
+ * their order arrays: inserts new metadata-only records or marks changed
+ * records as isNeedSync=true. Does NOT read the levels/ collection.
+ *
+ * @param force — skips the 5-minute cooldown (used by manual ↻ button).
  */
-async function fullSyncPart(partId: string, order: string[]): Promise<void> {
-  if (order.length === 0) return;
+export async function syncLevelsMeta(force = false): Promise<void> {
+  const lastSyncMs = force ? 0 : await readLastSync(LEVELS_META_SYNC_KEY);
+  if (!force && Date.now() - lastSyncMs < META_SYNC_COOLDOWN_MS) return;
 
   const dexie = getDB();
 
-  // Fetch all level docs in parallel
-  const snapshots = await Promise.all(
-    order.map((id) => getDoc(doc(db, 'levels', id))),
-  );
+  // Query only parts that changed since last sync (or all on first run)
+  const partsSnap = lastSyncMs > 0
+    ? await getDocs(
+        query(
+          collection(db, 'levelParts'),
+          where('updatedAt', '>', Timestamp.fromMillis(lastSyncMs)),
+        ),
+      )
+    : await getDocs(collection(db, 'levelParts'));
 
-  // Delete all Dexie rows whose firestoreId was in this part's order
-  await dexie.presetLevels
-    .where('firestoreId')
-    .anyOf(order)
-    .delete();
+  for (const partDoc of partsSnap.docs) {
+    const partData = partDoc.data();
+    const order: (string | LevelOrderEntry)[] = partData.order ?? [];
 
-  const now = Date.now();
-  const toInsert: Omit<StoredLevel, 'id'>[] = snapshots
-    .filter((s) => s.exists())
-    .map((s) => firestoreDocToStoredLevel(s.id, s.data() as Record<string, unknown>));
+    for (const entry of order) {
+      const isLegacy = typeof entry === 'string';
+      const eid = isLegacy ? entry : entry.id;
+      const entryUpdatedAt = isLegacy ? 0 : toMs(entry.updatedAt);
 
-  // Insert sequentially so auto-increment IDs reflect display order
-  for (const level of toInsert) {
-    await dexie.presetLevels.add({ ...level, createdAt: level.createdAt || now });
-  }
-}
+      const existing = await dexie.presetLevels
+        .where('firestoreId')
+        .equals(eid)
+        .first();
 
-/**
- * Partial sync: only update Dexie records for levels that changed after lastSync.
- */
-async function partialSyncPart(partId: string, lastSyncMs: number): Promise<void> {
-  const dexie = getDB();
-  const lastSyncTimestamp = Timestamp.fromMillis(lastSyncMs);
-
-  // Query levels in this part that were updated after lastSync
-  const q = query(
-    collection(db, 'levels'),
-    where('part', '==', Number(partId)),
-    where('updatedAt', '>', lastSyncTimestamp),
-  );
-  const snap = await getDocs(q);
-  if (snap.empty) return;
-
-  for (const d of snap.docs) {
-    const incoming = firestoreDocToStoredLevel(d.id, d.data() as Record<string, unknown>);
-    const existing = await dexie.presetLevels
-      .where('firestoreId')
-      .equals(d.id)
-      .first();
-
-    if (existing?.id !== undefined) {
-      await dexie.presetLevels.update(existing.id, incoming);
-    } else {
-      await dexie.presetLevels.add(incoming);
+      if (!existing) {
+        // New level — insert metadata-only placeholder; game page will lazy-fetch full data
+        const placeholder: Omit<StoredLevel, 'id'> = {
+          firestoreId: eid,
+          name: isLegacy ? '' : entry.name,
+          width: isLegacy ? 0 : entry.width,
+          height: isLegacy ? 0 : entry.height,
+          difficulty: isLegacy ? undefined : entry.difficulty,
+          creatorName: isLegacy ? undefined : entry.creatorName,
+          edges: { top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' } as LevelEdges,
+          grid: [],
+          initialObjects: [],
+          targets: [],
+          isNeedSync: true,
+          createdAt: Date.now(),
+          updatedAt: entryUpdatedAt,
+        };
+        await dexie.presetLevels.add(placeholder);
+      } else {
+        // Existing record — mark as stale if the entry's updatedAt moved forward
+        if (entryUpdatedAt > (existing.updatedAt ?? 0) || isLegacy) {
+          await dexie.presetLevels.update(existing.id!, {
+            name: isLegacy ? existing.name : entry.name,
+            width: isLegacy ? existing.width : entry.width,
+            height: isLegacy ? existing.height : entry.height,
+            difficulty: isLegacy ? existing.difficulty : entry.difficulty,
+            creatorName: isLegacy ? existing.creatorName : entry.creatorName,
+            updatedAt: entryUpdatedAt || existing.updatedAt,
+            isNeedSync: true,
+          });
+        }
+      }
     }
   }
+
+  await writeLastSync(LEVELS_META_SYNC_KEY, Date.now());
 }
 
+// ─── Lazy level fetch (game page) ─────────────────────────────────────────────
+
 /**
- * Syncs a single part from Firestore to Dexie.
- *
- * - Respects SYNC_COOLDOWN_MS; skips if called too soon.
- * - Checks `levelParts/{partId}.updatedAt` first:
- *   - If order/metadata changed → full re-sync of the part
- *   - Otherwise → partial sync (only levels whose updatedAt > lastSync)
+ * Fetches full level data from Firestore and updates the Dexie presetLevels record.
+ * Called by game/page.tsx when a level has isNeedSync=true or missing grid data.
+ * Clears isNeedSync after a successful fetch.
  */
-/**
- * @param force — if true, skips the 24-hour cooldown check (used by manual refresh).
- */
-export async function syncPart(partId: string, force = false): Promise<void> {
-  const metaKey = `part_${partId}`;
-  const lastSyncMs = force ? 0 : await readLastSync(metaKey);
+export async function fetchAndCacheLevel(
+  firestoreId: string,
+  dexieId: number,
+): Promise<void> {
+  const snap = await getDoc(doc(db, 'levels', firestoreId));
+  if (!snap.exists()) return;
 
-  if (!force && Date.now() - lastSyncMs < SYNC_COOLDOWN_MS) return;
+  const data = snap.data() as Record<string, unknown>;
+  const level = firestoreDocToStoredLevel(firestoreId, data);
 
-  const partSnap = await getDoc(doc(db, 'levelParts', partId));
-  if (!partSnap.exists()) return;
-
-  const partData = partSnap.data();
-  const partUpdatedMs =
-    partData.updatedAt instanceof Timestamp
-      ? partData.updatedAt.toMillis()
-      : (partData.updatedAt as number) ?? 0;
-
-  const order: string[] = partData.order ?? [];
-
-  if (force || partUpdatedMs > lastSyncMs) {
-    await fullSyncPart(partId, order);
-  } else {
-    await partialSyncPart(partId, lastSyncMs);
-  }
-
-  await writeLastSync(metaKey, Date.now());
+  const dexie = getDB();
+  await dexie.presetLevels.update(dexieId, level); // includes isNeedSync: false
 }
 
-/**
- * Syncs all parts from Firestore.
- * @param force — if true, skips the 24-hour cooldown (used by manual refresh button).
- */
-export async function syncAllParts(force = false): Promise<void> {
-  const partsSnap = await getDocs(collection(db, 'levelParts'));
-  await Promise.all(partsSnap.docs.map((d) => syncPart(d.id, force)));
-}
+// ─── Played levels sync ───────────────────────────────────────────────────────
 
 /**
  * Syncs the current user's playedLevels from Firestore → Dexie.
@@ -185,15 +187,9 @@ export async function syncPlayedLevels(uid: string, force = false): Promise<void
   const metaKey = 'playedLevels';
   const lastSyncMs = force ? 0 : await readLastSync(metaKey);
 
-  if (!force && Date.now() - lastSyncMs < SYNC_COOLDOWN_MS) return;
+  if (!force && Date.now() - lastSyncMs < PLAYED_SYNC_COOLDOWN_MS) return;
 
   const dexie = getDB();
-
-  const toMs = (v: unknown): number => {
-    if (v instanceof Timestamp) return v.toMillis();
-    if (typeof v === 'number') return v;
-    return Date.now();
-  };
 
   const colRef = collection(db, 'users', uid, 'playedLevels');
   const q = lastSyncMs > 0

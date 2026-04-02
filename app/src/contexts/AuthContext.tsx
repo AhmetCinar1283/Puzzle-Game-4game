@@ -113,7 +113,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch { /* ignore */ }
 
         setUser(firebaseUser);
-        setLoading(false);
 
         const authProvider = resolveAuthProvider(firebaseUser);
         dispatch(
@@ -145,26 +144,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function syncUser() {
       if (!user) return;
-      await createOrUpdateUserDoc(user);
-      const snap = await getDoc(doc(db, 'users', user.uid));
-      if (snap.exists()) {
-        const data = snap.data();
-        const firestoreRole = (data.role as UserRole) ?? 'user';
-        setRole(firestoreRole);
-        dispatch(
-          setFirestoreData({
-            role: firestoreRole,
-            totalScore: data.totalScore ?? 0,
-            completedCount: data.completedCount ?? 0,
-            tag: data.tag ?? null,
-          }),
-        );
+      try {
+        await createOrUpdateUserDoc(user);
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) {
+          const data = snap.data();
+          const firestoreRole = (data.role as UserRole) ?? 'user';
+          setRole(firestoreRole);
+          dispatch(
+            setFirestoreData({
+              role: firestoreRole,
+              totalScore: data.totalScore ?? 0,
+              completedCount: data.completedCount ?? 0,
+              tag: data.tag ?? null,
+            }),
+          );
+        }
+      } catch (err) {
+        console.error('[Auth] Firestore user sync failed:', err);
+      } finally {
+        setLoading(false);
       }
     }
 
-    syncUser().catch((err) =>
-      console.error('[Auth] Firestore user sync failed:', err),
-    );
+    syncUser();
   }, [user, dispatch]);
 
   // 3. Google linking
@@ -193,7 +196,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
-      if (code === 'auth/credential-already-in-use') {
+      if (
+        code === 'auth/credential-already-in-use' ||
+        code === 'auth/email-already-in-use'
+      ) {
         // Google account already registered — sign in to that account instead
         const credential = GoogleAuthProvider.credentialFromError(
           err as Parameters<typeof GoogleAuthProvider.credentialFromError>[0],
