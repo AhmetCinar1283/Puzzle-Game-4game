@@ -1,0 +1,22 @@
+{
+  "id": 1,
+  "name": "The Crossing",
+  "width": 5,
+  "height": 5,
+  "edges": { "top": "wall", "bottom": "wall", "left": "wall", "right": "wall" },
+  "grid": [
+    ["empty",    "empty",    "empty",    "empty",    "target_2"],
+    ["empty",    "obstacle", "empty",    "obstacle", "empty"],
+    ["empty",    "empty",    "direction_toggle", "empty", "empty"],
+    ["empty",    "obstacle", "empty",    "obstacle", "empty"],
+    ["target_1", "empty",    "empty",    "empty",    "empty"]
+  ],
+  "initialObjects": [
+    { "id": 1, "position": { "row": 0, "col": 0 }, "mode": "normal",   "lockOnTarget": true },
+    { "id": 2, "position": { "row": 4, "col": 4 }, "mode": "reversed", "lockOnTarget": true }
+  ],
+  "targets": [
+    { "objectId": 1, "position": { "row": 4, "col": 0 } },
+    { "objectId": 2, "position": { "row": 0, "col": 4 } }
+  ]
+}

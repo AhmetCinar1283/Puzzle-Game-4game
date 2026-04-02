@@ -1,0 +1,24 @@
+{
+  "id": 2,
+  "name": "The Portal Loop",
+  "width": 7,
+  "height": 7,
+  "edges": { "top": "wall", "bottom": "wall", "left": "portal", "right": "portal" },
+  "grid": [
+    ["empty",    "empty",    "empty",    "obstacle", "empty",    "empty",    "empty"],
+    ["empty",    "obstacle", "empty",    "empty",    "empty",    "obstacle", "empty"],
+    ["empty",    "empty",    "forbidden","empty",    "forbidden","empty",    "empty"],
+    ["target_2", "empty",    "empty",    "direction_toggle", "empty", "empty", "target_1"],
+    ["empty",    "empty",    "forbidden","empty",    "forbidden","empty",    "empty"],
+    ["empty",    "obstacle", "empty",    "empty",    "empty",    "obstacle", "empty"],
+    ["empty",    "empty",    "empty",    "obstacle", "empty",    "empty",    "empty"]
+  ],
+  "initialObjects": [
+    { "id": 1, "position": { "row": 0, "col": 0 }, "mode": "normal", "lockOnTarget": true },
+    { "id": 2, "position": { "row": 6, "col": 6 }, "mode": "normal", "lockOnTarget": true }
+  ],
+  "targets": [
+    { "objectId": 1, "position": { "row": 3, "col": 6 } },
+    { "objectId": 2, "position": { "row": 3, "col": 0 } }
+  ]
+}
