@@ -41,10 +41,6 @@ getNextPresetLevelId(currentId)  // → next preset level id, or null
 
 **Lazy singleton:** `getDB()` is called at runtime to avoid server-side instantiation.
 
-### Preset Level Seeding (`app/src/lib/db/seedPresets.ts`)
-
-`seedPresetLevels()` is now a **no-op**. Preset levels come exclusively from Firestore via `syncAllParts()`. `preset-levels.json` is kept in the repo but no longer used for seeding. `PresetSeeder` component remains in `layout.tsx` but does nothing.
-
 ---
 
 ## User-Scoped localStorage — `app/src/lib/userStorage.ts`

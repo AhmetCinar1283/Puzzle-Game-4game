@@ -45,8 +45,7 @@ No test framework is set up yet.
 app/src/
 ├── contexts/        AuthContext.tsx — Firebase Auth provider
 ├── hooks/           useAuth.ts, useFirestoreSync.ts
-├── components/      PresetSeeder (no-op), FirestoreSync, UserBadge, AuthModal
-├── data/            preset-levels.json (no longer used for seeding)
+├── components/      FirestoreSync, UserBadge, AuthModal
 ├── lib/
 │   ├── analytics.ts  GA4 event wrapper (trackLevelStart/Complete/Fail)
 │   ├── firebase/    config.ts, firestore.ts, admin.ts, sync.ts, index.ts

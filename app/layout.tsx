@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
-import PresetSeeder from "./src/components/PresetSeeder";
 import { AuthProvider } from "./src/contexts/AuthContext";
 import FirestoreSync from "./src/components/FirestoreSync";
 import UserBadge from "./src/components/UserBadge";
@@ -148,7 +147,6 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <StoreProvider>
           <AuthProvider>
-            <PresetSeeder />
             <FirestoreSync />
             <UserBadge />
             {children}
