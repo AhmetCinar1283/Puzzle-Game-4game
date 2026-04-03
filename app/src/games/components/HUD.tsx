@@ -1,4 +1,7 @@
+'use client';
+
 import type { GameObjectState } from '../types';
+import { useT } from '@/app/src/contexts/LanguageContext';
 
 interface HUDProps {
   levelName: string;
@@ -15,6 +18,7 @@ const OBJECT_NEON: Record<number, { color: string; label: string; glow: string }
 };
 
 export default function HUD({ levelName, moveCount, objects, onRestart, muted, onToggleMute }: HUDProps) {
+  const t = useT();
   return (
     <div
       style={{
@@ -66,7 +70,7 @@ export default function HUD({ levelName, moveCount, objects, onRestart, muted, o
           );
         })}
         <span style={{ fontSize: 12, color: '#475569' }}>
-          Moves:{' '}
+          {t('hud.moves')}{' '}
           <span style={{ color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
             {moveCount}
           </span>
@@ -76,7 +80,7 @@ export default function HUD({ levelName, moveCount, objects, onRestart, muted, o
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <button
           onClick={onToggleMute}
-          title={muted ? 'Sesi aç' : 'Sesi kapat'}
+          title={muted ? t('hud.unmute') : t('hud.mute')}
           style={{
             fontSize: 15,
             width: 30,
@@ -123,7 +127,7 @@ export default function HUD({ levelName, moveCount, objects, onRestart, muted, o
             (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
           }}
         >
-          RESTART
+          {t('hud.restart')}
         </button>
       </div>
     </div>

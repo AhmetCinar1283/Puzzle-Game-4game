@@ -1,4 +1,5 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import type { RootState } from './index';
 
 export type AuthProvider = 'anonymous' | 'google' | 'email' | null;
 export type UserRole = 'user' | 'moderator' | 'admin';
@@ -73,5 +74,6 @@ const userSlice = createSlice({
   },
 });
 
+export const selectUser = (state: RootState) => state.user
 export const { setAuthUser, setFirestoreData, resetUser } = userSlice.actions;
 export default userSlice.reducer;

@@ -100,7 +100,7 @@ const { getItem, setItem, removeItem } = useUserStorage();
 | `index.ts` | Barrel — re-exports config + firestore |
 | `admin.ts` | Barrel re-export for all admin sub-modules below |
 | `adminTypes.ts` | Shared types: `AdminLevelInput`, `FirestoreLevel`, `LevelPart`, `LevelOrderEntry`, `entryId()` helper |
-| `adminParts.ts` | Part ops: `getAllParts`, `getPart`, `reorderPartLevels` |
+| `adminParts.ts` | Part ops: `getAllParts`, `getPart` |
 | `adminLevels.ts` | Level CRUD: `publishLevel`, `updateFirestoreLevel`, `deleteFirestoreLevel`, `getPartLevels` |
 | `adminRequests.ts` | Request moderation: `approveLevelRequest`, `rejectLevelRequest` |
 
@@ -182,7 +182,6 @@ getLevelRequests(status): Promise<LevelRequest[]>  // admin only
 // adminParts.ts (re-exported via admin.ts)
 getAllParts(): Promise<LevelPart[]>
 getPart(partId): Promise<LevelPart | null>
-reorderPartLevels(partId, newOrder): Promise<void>
 
 // adminLevels.ts (re-exported via admin.ts)
 publishLevel(data, partId, publishedByUid): Promise<string>

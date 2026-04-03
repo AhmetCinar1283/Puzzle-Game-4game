@@ -2,6 +2,7 @@
 
 import type { StoredLevel } from '@/app/src/lib/db';
 import type { FirestoreLevel } from '@/app/src/lib/firebase/admin';
+import { useT } from '@/app/src/contexts/LanguageContext';
 
 interface EditorLeftPanelProps {
   editId: number | null;
@@ -25,6 +26,7 @@ export default function EditorLeftPanel({
   setShowFirestoreLevels, firestoreLevels, firestoreEditId, selectedPartId,
   onLoadLevel, onNewLevel, onLoadFirestoreLevel, isMobile, visible,
 }: EditorLeftPanelProps) {
+  const t = useT();
   return (
     <div style={{
       width: isMobile ? '100%' : 170, flexShrink: 0,
@@ -33,15 +35,15 @@ export default function EditorLeftPanel({
       flexDirection: 'column', overflow: 'hidden',
     }}>
       <div style={{ flexShrink: 0, padding: '10px 12px 6px', borderBottom: '1px solid rgba(30,58,95,0.3)' }}>
-        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#1e3a5f' }}>Saved Levels</span>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#1e3a5f' }}>{t('editor.saved_levels')}</span>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px' }}>
         {levelsLoading ? (
-          <span style={{ fontSize: 11, color: '#1e3a5f' }}>Loading...</span>
+          <span style={{ fontSize: 11, color: '#1e3a5f' }}>{t('common.loading')}</span>
         ) : savedLevels.length === 0 ? (
           <span style={{ fontSize: 11, color: '#1e3a5f', lineHeight: 1.5, display: 'block', padding: '8px 4px' }}>
-            No saved levels yet. Click Save to store your first level.
+            {t('editor.no_saved')}
           </span>
         ) : (
           savedLevels.map((lv, idx) => (
@@ -76,13 +78,13 @@ export default function EditorLeftPanel({
               color: '#fbbf24', borderRadius: 6, cursor: 'pointer',
             }}
           >
-            {showFirestoreLevels ? '▼' : '▶'} Firestore
+            {showFirestoreLevels ? '▼' : '▶'} {t('editor.firestore_toggle')}
           </button>
           {showFirestoreLevels && (
             <div style={{ marginTop: 4 }}>
               {firestoreLevels.length === 0 ? (
                 <span style={{ fontSize: 10, color: '#334155', padding: '4px 2px', display: 'block' }}>
-                  No levels in Part {selectedPartId}
+                  {t('editor.no_fs_levels', { id: selectedPartId })}
                 </span>
               ) : firestoreLevels.map((fl, idx) => (
                 <button
@@ -114,7 +116,7 @@ export default function EditorLeftPanel({
             color: '#00ff88', borderRadius: 7, cursor: 'pointer', letterSpacing: '0.04em',
           }}
         >
-          + New Level
+          {t('common.new_level')}
         </button>
       </div>
     </div>

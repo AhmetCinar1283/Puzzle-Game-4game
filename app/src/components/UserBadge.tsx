@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 import AuthModal from './AuthModal';
+import { useT } from '../contexts/LanguageContext';
 
 /**
  * Fixed top-right button visible on all pages.
@@ -11,6 +12,7 @@ import AuthModal from './AuthModal';
  * Clicking opens AuthModal.
  */
 export default function UserBadge() {
+  const t = useT();
   const { user, isAnonymous, loading } = useAuthContext();
   const [open, setOpen] = useState(false);
 
@@ -24,7 +26,7 @@ export default function UserBadge() {
     <>
       <button
         onClick={() => setOpen(true)}
-        title={signed ? (displayName ?? 'Hesabım') : 'Giriş Yap'}
+        title={signed ? (displayName ?? t('auth.my_account')) : t('auth.sign_in')}
         style={{
           position: 'fixed',
           top: 14,
@@ -58,7 +60,7 @@ export default function UserBadge() {
           el.style.boxShadow = `0 0 14px ${signed ? 'rgba(0,196,255,0.1)' : 'rgba(0,255,136,0.1)'}`;
         }}
       >
-        {signed ? initial : 'Giriş Yap'}
+        {signed ? initial : t('auth.sign_in')}
       </button>
 
       {open && <AuthModal onClose={() => setOpen(false)} />}

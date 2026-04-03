@@ -10,7 +10,7 @@ export interface StoredLevel {
   width: number;
   height: number;
   edges: LevelEdges;
-  grid: CellType[][];
+  grid: CellType[][] | string;
   initialObjects: LevelObjectDef[];
   targets: LevelTargetDef[];
   trailCollision?: boolean;

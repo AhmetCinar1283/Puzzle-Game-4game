@@ -9,8 +9,10 @@ import EditorGrid from './components/EditorGrid';
 import EditorRightPanel from './components/EditorRightPanel';
 import EditorDialogs from './components/EditorDialogs';
 import { useEditorState } from './useEditorState';
+import { useT } from '@/app/src/contexts/LanguageContext';
 
 function EditorInner() {
+  const t = useT();
   const searchParams = useSearchParams();
   const editId = searchParams.get('id') ? Number(searchParams.get('id')) : null;
   const firestoreIdParam = searchParams.get('firestoreId');
@@ -52,25 +54,25 @@ function EditorInner() {
 
       {/* Top bar */}
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 20px', background: 'rgba(3,7,18,0.97)', borderBottom: '1px solid rgba(0,196,255,0.15)' }}>
-        <button onClick={s.handleNewLevel} style={{ background: 'none', border: 'none', color: '#334155', fontSize: 12, cursor: 'pointer', letterSpacing: '0.06em' }}>← Menu</button>
+        <button onClick={() => s.router.push('/')} style={{ background: 'none', border: 'none', color: '#334155', fontSize: 12, cursor: 'pointer', letterSpacing: '0.06em' }}>{t('common.back_menu')}</button>
         <h1 style={{ margin: 0, fontSize: 13, fontWeight: 800, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#00c4ff', textShadow: '0 0 10px rgba(0,196,255,0.5)' }}>
-          Level Editor {editId !== null ? <span style={{ color: '#1e3a5f', fontWeight: 400 }}>· editing #{editId}</span> : '· new'}
+          {t('editor.title')} {editId !== null ? <span style={{ color: '#1e3a5f', fontWeight: 400 }}>{t('editor.editing', { id: editId })}</span> : t('editor.new')}
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <NBtn onClick={() => s.setPasteDialogOpen(true)} color="#94a3b8" style={{ fontSize: 11 }}>Paste JSON</NBtn>
+          <NBtn onClick={() => s.setPasteDialogOpen(true)} color="#94a3b8" style={{ fontSize: 11 }}>{t('editor.paste_json')}</NBtn>
           {!s.isAnonymous && !s.isModerator && (
             <>
               <NBtn onClick={s.handleSaveClick} color="#a78bfa" active style={{ padding: '5px 16px' }}>
-                {s.saveSuccess || (editId !== null ? 'Güncelle' : 'Kaydet')}
+                {s.saveSuccess || (editId !== null ? t('editor.update') : t('editor.save'))}
               </NBtn>
               <NBtn onClick={s.handleSaveAndSubmit} color="#00ff88" style={{ padding: '5px 14px', fontSize: 11 }}>
-                {editId !== null ? 'Güncelle ve Gönder' : 'Kaydet ve Gönder'}
+                {editId !== null ? t('editor.update_submit') : t('editor.save_submit')}
               </NBtn>
             </>
           )}
           {(s.isAnonymous || s.isModerator) && (
             <NBtn onClick={s.handleSaveClick} color="#00ff88" active style={{ padding: '5px 16px' }}>
-              {s.saveSuccess || (editId !== null ? 'Update' : 'Save')}
+              {s.saveSuccess || (editId !== null ? t('editor.update') : t('editor.save'))}
             </NBtn>
           )}
         </div>
@@ -84,7 +86,7 @@ function EditorInner() {
               key={tab} onClick={() => setActiveTab(tab)}
               style={{ flex: 1, padding: '8px 4px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', background: 'none', border: 'none', borderBottom: `2px solid ${activeTab === tab ? '#00c4ff' : 'transparent'}`, color: activeTab === tab ? '#00c4ff' : '#334155', cursor: 'pointer', transition: 'all 0.15s' }}
             >
-              {tab === 'levels' ? '☰ Levels' : tab === 'grid' ? '⊞ Grid' : '⚙ Settings'}
+              {tab === 'levels' ? t('editor.tab_levels') : tab === 'grid' ? t('editor.tab_grid') : t('editor.tab_settings')}
             </button>
           ))}
         </div>

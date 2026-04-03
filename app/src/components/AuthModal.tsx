@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
+import { useT } from '../contexts/LanguageContext';
 
 interface Props {
   onClose: () => void;
@@ -22,21 +23,22 @@ function GoogleIcon() {
 
 // ─── Error messages ───────────────────────────────────────────────────────────
 
-function toMessage(err: unknown): string {
+function toMessageKey(err: unknown): string {
   const code = (err as { code?: string }).code ?? '';
-  if (code === 'auth/invalid-email') return 'Geçersiz e-posta adresi.';
-  if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') return 'E-posta veya şifre hatalı.';
-  if (code === 'auth/user-not-found') return 'Bu e-posta ile kayıtlı kullanıcı bulunamadı.';
-  if (code === 'auth/email-already-in-use') return 'Bu e-posta zaten kullanımda. Giriş Yap sekmesini deneyin.';
-  if (code === 'auth/weak-password') return 'Şifre en az 6 karakter olmalıdır.';
+  if (code === 'auth/invalid-email') return 'auth.err_invalid_email';
+  if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') return 'auth.err_wrong_password';
+  if (code === 'auth/user-not-found') return 'auth.err_user_not_found';
+  if (code === 'auth/email-already-in-use') return 'auth.err_email_in_use';
+  if (code === 'auth/weak-password') return 'auth.err_weak_password';
   if (code === 'auth/popup-closed-by-user') return '';
-  if (code === 'auth/provider-already-linked') return 'Bu hesap zaten bağlı.';
-  return 'Bir hata oluştu. Lütfen tekrar deneyin.';
+  if (code === 'auth/provider-already-linked') return 'auth.err_already_linked';
+  return 'auth.err_generic';
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AuthModal({ onClose }: Props) {
+  const t = useT();
   const { user, isAnonymous, linkWithGoogle, linkWithEmail, signOut } = useAuthContext();
 
   const [tab, setTab] = useState<'signin' | 'register'>('signin');
@@ -52,8 +54,8 @@ export default function AuthModal({ onClose }: Props) {
       await fn();
       onClose();
     } catch (err) {
-      const msg = toMessage(err);
-      if (msg) setError(msg);
+      const key = toMessageKey(err);
+      if (key) setError(t(key));
     } finally {
       setBusy(false);
     }
@@ -70,21 +72,21 @@ export default function AuthModal({ onClose }: Props) {
 
   // ── Signed-in view ──────────────────────────────────────────────────────────
   if (!isAnonymous) {
-    const name = user?.displayName ?? user?.email ?? 'Kullanıcı';
+    const name = user?.displayName ?? user?.email ?? t('auth.sign_in');
     const provider = user?.providerData?.[0]?.providerId ?? '';
-    const providerLabel = provider === 'google.com' ? 'Google' : provider === 'password' ? 'E-posta' : '';
+    const providerLabel = provider === 'google.com' ? 'Google' : provider === 'password' ? t('auth.email') : '';
 
     return (
       <Backdrop onClose={onClose}>
-        <h2 style={headingStyle}>Hesabım</h2>
+        <h2 style={headingStyle}>{t('auth.my_account')}</h2>
         <p style={{ color: '#9ca3af', fontSize: 13, margin: '4px 0 6px' }}>{name}</p>
         {providerLabel && (
           <p style={{ color: '#374151', fontSize: 11, margin: '0 0 24px', letterSpacing: '0.06em' }}>
-            {providerLabel} ile giriş yapıldı
+            {t('auth.signed_in_with', { provider: providerLabel })}
           </p>
         )}
         <button onClick={handleSignOut} disabled={busy} style={dangerBtn}>
-          {busy ? '...' : 'Çıkış Yap'}
+          {busy ? '...' : t('auth.sign_out')}
         </button>
         {error && <p style={errorStyle}>{error}</p>}
       </Backdrop>
@@ -94,39 +96,39 @@ export default function AuthModal({ onClose }: Props) {
   // ── Sign-in view ─────────────────────────────────────────────────────────────
   return (
     <Backdrop onClose={onClose}>
-      <h2 style={headingStyle}>Hesap Oluştur</h2>
+      <h2 style={headingStyle}>{t('auth.create_account')}</h2>
       <p style={{ color: '#4b5563', fontSize: 12, margin: '4px 0 20px', lineHeight: 1.6 }}>
-        İlerlemenizi kaydedin ve tüm cihazlarınızdan erişin.
+        {t('auth.save_progress')}
       </p>
 
       {/* Google */}
       <button onClick={handleGoogle} disabled={busy} style={googleBtn}>
         <GoogleIcon />
-        Google ile Devam Et
+        {t('auth.continue_google')}
       </button>
 
       {/* Divider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0' }}>
         <div style={{ flex: 1, height: 1, background: '#1f2937' }} />
-        <span style={{ color: '#374151', fontSize: 11 }}>veya e-posta ile</span>
+        <span style={{ color: '#374151', fontSize: 11 }}>{t('auth.or_email')}</span>
         <div style={{ flex: 1, height: 1, background: '#1f2937' }} />
       </div>
 
       {/* Tab toggle */}
       <div style={{ display: 'flex', gap: 3, marginBottom: 14, background: '#0d1420', borderRadius: 8, padding: 3 }}>
-        {(['signin', 'register'] as const).map((t) => (
+        {(['signin', 'register'] as const).map((tabKey) => (
           <button
-            key={t}
-            onClick={() => { setTab(t); setError(''); }}
+            key={tabKey}
+            onClick={() => { setTab(tabKey); setError(''); }}
             style={{
               flex: 1, padding: '6px 0', borderRadius: 6, border: 'none',
               fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              background: tab === t ? '#00ff8814' : 'transparent',
-              color: tab === t ? '#00ff88' : '#4b5563',
+              background: tab === tabKey ? '#00ff8814' : 'transparent',
+              color: tab === tabKey ? '#00ff88' : '#4b5563',
               transition: 'all 0.15s',
             }}
           >
-            {t === 'signin' ? 'Giriş Yap' : 'Kayıt Ol'}
+            {tabKey === 'signin' ? t('auth.tab_signin') : t('auth.tab_register')}
           </button>
         ))}
       </div>
@@ -135,7 +137,7 @@ export default function AuthModal({ onClose }: Props) {
       <form onSubmit={handleEmailSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <input
           type="email"
-          placeholder="E-posta"
+          placeholder={t('auth.email')}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -143,7 +145,7 @@ export default function AuthModal({ onClose }: Props) {
         />
         <input
           type="password"
-          placeholder="Şifre"
+          placeholder={t('auth.password')}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -152,19 +154,17 @@ export default function AuthModal({ onClose }: Props) {
         />
         {error && <p style={errorStyle}>{error}</p>}
         <button type="submit" disabled={busy || !email || !password} style={{ ...primaryBtn, marginTop: 4 }}>
-          {busy ? '...' : tab === 'signin' ? 'Giriş Yap' : 'Kayıt Ol'}
+          {busy ? '...' : tab === 'signin' ? t('auth.tab_signin') : t('auth.tab_register')}
         </button>
       </form>
 
       <p style={{ color: '#374151', fontSize: 11, marginTop: 16, lineHeight: 1.5 }}>
-        {tab === 'signin'
-          ? 'Hesabınız yok mu? '
-          : 'Zaten hesabınız var mı? '}
+        {tab === 'signin' ? t('auth.no_account') : t('auth.have_account')}{' '}
         <button
           onClick={() => { setTab(tab === 'signin' ? 'register' : 'signin'); setError(''); }}
           style={{ background: 'none', border: 'none', color: '#00ff8888', cursor: 'pointer', fontSize: 11, padding: 0 }}
         >
-          {tab === 'signin' ? 'Kayıt olun' : 'Giriş yapın'}
+          {tab === 'signin' ? t('auth.sign_up_link') : t('auth.sign_in_link')}
         </button>
       </p>
     </Backdrop>

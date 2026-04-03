@@ -82,6 +82,9 @@ export interface LevelData {
   initialBoxes?: BoxDef[];
   /** Conveyor cells that require adjacent power to activate. */
   conveyorPowerRequired?: Position[];
+
+  difficulty?: 1 | 2 | 3 | 4;
+  creatorName?: string
 }
 
 export interface GameObjectState {

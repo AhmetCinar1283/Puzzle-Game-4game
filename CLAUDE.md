@@ -55,7 +55,7 @@ app/src/
 │   │   ├── index.ts            Barrel re-export
 │   │   ├── admin.ts            Barrel re-export for all admin sub-modules
 │   │   ├── adminTypes.ts       Shared admin types: AdminLevelInput, FirestoreLevel, LevelPart, LevelOrderEntry
-│   │   ├── adminParts.ts       Part ops: getAllParts, getPart, reorderPartLevels
+│   │   ├── adminParts.ts       Part ops: getAllParts, getPart
 │   │   ├── adminLevels.ts      Level CRUD: publishLevel, updateFirestoreLevel, deleteFirestoreLevel, getPartLevels
 │   │   └── adminRequests.ts    Request moderation: approveLevelRequest, rejectLevelRequest
 │   └── db/

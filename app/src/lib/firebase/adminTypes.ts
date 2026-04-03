@@ -32,7 +32,7 @@ export interface LevelPart {
   partId: string;
   name: string;
   unlockRequirement: number;
-  order: LevelOrderEntry[];  // was string[] — now embeds metadata per level
+  order: Record<string, LevelOrderEntry>;  // was LevelOrderEntry[] — now changed
   updatedAt: number;
 }
 

@@ -1,4 +1,7 @@
+'use client';
+
 import { motion, AnimatePresence } from 'framer-motion';
+import { useT } from '@/app/src/contexts/LanguageContext';
 
 interface WinOverlayProps {
   moveCount: number;
@@ -7,6 +10,7 @@ interface WinOverlayProps {
 }
 
 export default function WinOverlay({ moveCount, onRestart, onNextLevel }: WinOverlayProps) {
+  const t = useT();
   return (
     <AnimatePresence>
       <motion.div
@@ -54,11 +58,10 @@ export default function WinOverlay({ moveCount, onRestart, onNextLevel }: WinOve
               margin: 0,
             }}
           >
-            Level Complete
+            {t('win.title')}
           </h2>
           <p style={{ color: '#475569', fontSize: 13, margin: 0 }}>
-            Solved in{' '}
-            <span style={{ color: '#94a3b8', fontWeight: 600 }}>{moveCount}</span> moves
+            {t('win.solved_in', { n: moveCount })}
           </p>
           <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
             <button
@@ -74,7 +77,7 @@ export default function WinOverlay({ moveCount, onRestart, onNextLevel }: WinOve
                 letterSpacing: '0.04em',
               }}
             >
-              RESTART
+              {t('win.restart')}
             </button>
             {onNextLevel && (
               <button
@@ -92,7 +95,7 @@ export default function WinOverlay({ moveCount, onRestart, onNextLevel }: WinOve
                   boxShadow: '0 0 12px rgba(0,255,136,0.15)',
                 }}
               >
-                NEXT LEVEL →
+                {t('win.next_level')}
               </button>
             )}
           </div>

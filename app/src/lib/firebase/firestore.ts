@@ -143,9 +143,9 @@ export async function savePlayedLevel(
 export async function submitLevelRequest(
   uid: string,
   levelData: LevelData,
-  creatorName: string,
   creatorTag: string | null,
   difficulty?: 1 | 2 | 3 | 4,
+  creatorName?: string,
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'levelRequests'), {
     name: levelData.name,
@@ -158,9 +158,9 @@ export async function submitLevelRequest(
     trailCollision: levelData.trailCollision ?? false,
     initialBoxes: levelData.initialBoxes ?? [],
     conveyorPowerRequired: levelData.conveyorPowerRequired ?? [],
-    difficulty: difficulty ?? null,
+    ...(difficulty && { difficulty }),
     submittedBy: uid,
-    creatorName,
+    ...(creatorName && { creatorName }),
     creatorTag,
     status: 'pending',
     submittedAt: serverTimestamp(),

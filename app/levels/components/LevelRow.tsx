@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import type { StoredLevel } from '@/app/src/lib/db';
+import { useT } from '@/app/src/contexts/LanguageContext';
 
 type LevelEntry = StoredLevel & { id: number };
 
-const DIFFICULTY_LABELS: Record<number, string> = { 1: 'Kolay', 2: 'Orta', 3: 'Zor', 4: 'Çok Zor' };
 const DIFFICULTY_COLORS: Record<number, string> = { 1: '#00ff88', 2: '#fbbf24', 3: '#f97316', 4: '#ef4444' };
 
 interface RowProps {
@@ -24,6 +24,7 @@ interface RowProps {
 }
 
 export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, cols, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
+  const t = useT();
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -54,7 +55,7 @@ export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, col
         )}
         {isPreset && level.difficulty && (
           <span style={{ fontSize: 9, color: DIFFICULTY_COLORS[level.difficulty], border: `1px solid ${DIFFICULTY_COLORS[level.difficulty]}40`, borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>
-            {DIFFICULTY_LABELS[level.difficulty]}
+            {t(`difficulty.${level.difficulty}`)}
           </span>
         )}
         {isPreset && level.isNeedSync && (
@@ -83,11 +84,11 @@ export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, col
       )}
 
       <div style={{ display: 'flex', gap: 5 }}>
-        <ActionBtn onClick={onPlay} color="#00ff88" label="▶" title="Play" />
+        <ActionBtn onClick={onPlay} color="#00ff88" label="▶" title={t('list.play')} />
         {(!isPreset || isAdmin) && (
           <>
-            <ActionBtn onClick={onEdit} color="#00c4ff" label="✎" title="Edit" />
-            <ActionBtn onClick={onDelete} color="#ef4444" label="✕" title="Delete" />
+            <ActionBtn onClick={onEdit} color="#00c4ff" label="✎" title={t('list.edit')} />
+            <ActionBtn onClick={onDelete} color="#ef4444" label="✕" title={t('list.delete')} />
           </>
         )}
       </div>

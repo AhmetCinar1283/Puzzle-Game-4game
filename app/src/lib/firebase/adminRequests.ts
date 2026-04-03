@@ -39,11 +39,11 @@ export async function approveLevelRequest(
     trailCollision: req.trailCollision ?? false,
     initialBoxes: req.initialBoxes ?? [],
     conveyorPowerRequired: req.conveyorPowerRequired ?? [],
-    difficulty: req.difficulty ?? null,
+    ...(req.difficulty && { difficulty: req.difficulty }),
     part: Number(partId),
     publishedBy: approvedBy,
     createdBy: req.submittedBy,
-    creatorName: req.creatorName,
+    ...(req.creatorName && { creatorName: req.creatorName }),
     creatorTag: req.creatorTag,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -55,23 +55,23 @@ export async function approveLevelRequest(
     name: req.name,
     width: req.width,
     height: req.height,
-    difficulty: req.difficulty ?? undefined,
-    creatorName: req.creatorName ?? undefined,
+    ...(req.difficulty && { difficulty: req.difficulty }),
+    ...(req.creatorName && { creatorName: req.creatorName }),
     updatedAt: serverTimestamp(),
   };
 
   const partRef = doc(db, 'levelParts', partId);
   const partSnap = await getDoc(partRef);
-  const currentOrder: (string | LevelOrderEntry)[] = partSnap.exists()
-    ? (partSnap.data().order as (string | LevelOrderEntry)[]) ?? []
-    : [];
+  const currentOrder: Record<string, LevelOrderEntry> = partSnap.exists()
+    ? (partSnap.data().order as Record<string, LevelOrderEntry>) ?? {}
+    : {};
   if (partSnap.exists()) {
-    batch.update(partRef, { order: [...currentOrder, entry], updatedAt: serverTimestamp() });
+    batch.update(partRef, { order: { ...currentOrder, [entry.id]: entry }, updatedAt: serverTimestamp() });
   } else {
     batch.set(partRef, {
       name: `Part ${partId}`,
       unlockRequirement: 0,
-      order: [entry],
+      order: { [entry.id]: entry },
       updatedAt: serverTimestamp(),
     });
   }

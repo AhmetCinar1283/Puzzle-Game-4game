@@ -1,31 +1,23 @@
+'use client';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LostReason } from '../types';
+import { useT } from '@/app/src/contexts/LanguageContext';
 
 interface LostOverlayProps {
   onRestart: () => void;
   reason?: LostReason;
 }
 
-const REASON_CONFIG: Record<LostReason, { icon: string; title: string; message: string }> = {
-  forbidden: {
-    icon: '⚠',
-    title: 'Forbidden Zone',
-    message: 'You stepped on a forbidden cell.',
-  },
-  lava_edge: {
-    icon: '☠',
-    title: 'Edge of Doom',
-    message: 'You fell off the lava edge.',
-  },
-  trail: {
-    icon: '✗',
-    title: 'Trail Crossed',
-    message: "You crossed the opponent's trail.",
-  },
+const REASON_KEYS: Record<LostReason, { icon: string; titleKey: string; msgKey: string }> = {
+  forbidden: { icon: '⚠', titleKey: 'lost.forbidden_title', msgKey: 'lost.forbidden_msg' },
+  lava_edge: { icon: '☠', titleKey: 'lost.lava_title', msgKey: 'lost.lava_msg' },
+  trail: { icon: '✗', titleKey: 'lost.trail_title', msgKey: 'lost.trail_msg' },
 };
 
 export default function LostOverlay({ onRestart, reason }: LostOverlayProps) {
-  const cfg = reason ? REASON_CONFIG[reason] : REASON_CONFIG.forbidden;
+  const t = useT();
+  const cfg = REASON_KEYS[reason ?? 'forbidden'];
 
   return (
     <AnimatePresence>
@@ -82,9 +74,9 @@ export default function LostOverlay({ onRestart, reason }: LostOverlayProps) {
               margin: 0,
             }}
           >
-            {cfg.title}
+            {t(cfg.titleKey)}
           </h2>
-          <p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>{cfg.message}</p>
+          <p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>{t(cfg.msgKey)}</p>
           <button
             onClick={onRestart}
             style={{
@@ -101,7 +93,7 @@ export default function LostOverlay({ onRestart, reason }: LostOverlayProps) {
               boxShadow: '0 0 12px rgba(239,68,68,0.12)',
             }}
           >
-            TRY AGAIN
+            {t('lost.try_again')}
           </button>
         </motion.div>
       </motion.div>

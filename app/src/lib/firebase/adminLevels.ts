@@ -25,6 +25,11 @@ export async function publishLevel(
 ): Promise<string> {
   const batch = writeBatch(db);
 
+  console.log('data, partId, publishedBy')
+  console.log(data)
+  console.log(partId)
+  console.log(publishedBy)
+
   // 1. Create the level document
   const levelRef = doc(collection(db, 'levels'));
   batch.set(levelRef, {
@@ -41,21 +46,21 @@ export async function publishLevel(
     name: data.name,
     width: data.width,
     height: data.height,
-    difficulty: data.difficulty ?? undefined,
-    creatorName: data.creatorName ?? undefined,
+    ...(data.difficulty && { difficulty: data.difficulty }),
+    ...(data.creatorName && { creatorName: data.creatorName }),
     updatedAt: serverTimestamp(),
   };
 
   // 3. Append to part order
   const partRef = doc(db, 'levelParts', partId);
   const partSnap = await getDoc(partRef);
-  const currentOrder: (string | LevelOrderEntry)[] = partSnap.exists()
-    ? (partSnap.data().order as (string | LevelOrderEntry)[]) ?? []
-    : [];
+  const currentOrder: Record<string, LevelOrderEntry> = partSnap.exists()
+    ? (partSnap.data().order as Record<string, LevelOrderEntry>) ?? {}
+    : {};
 
   if (partSnap.exists()) {
     batch.update(partRef, {
-      order: [...currentOrder, entry],
+      order: { ...currentOrder, [entry.id]: entry },
       updatedAt: serverTimestamp(),
     });
   } else {
@@ -63,7 +68,7 @@ export async function publishLevel(
     batch.set(partRef, {
       name: `Part ${partId}`,
       unlockRequirement: 0,
-      order: [entry],
+      order: { [entry.id]: entry },
       updatedAt: serverTimestamp(),
     });
   }
@@ -82,6 +87,7 @@ export async function updateFirestoreLevel(
   data: AdminLevelInput,
   publishedBy: string,
   partId: string,
+  changePublishedBy: boolean = false
 ): Promise<void> {
   const batch = writeBatch(db);
 
@@ -98,19 +104,20 @@ export async function updateFirestoreLevel(
   const partRef = doc(db, 'levelParts', partId);
   const partSnap = await getDoc(partRef);
   if (partSnap.exists()) {
-    const currentOrder = partSnap.data().order as (string | LevelOrderEntry)[];
-    const updatedOrder = currentOrder.map((e) => {
-      if (entryId(e) !== firestoreId) return e;
-      return {
+    const currentOrder = partSnap.data().order as Record<string, LevelOrderEntry>
+    const newOrderEntries = Object.entries(currentOrder).map(([k, e]) => {
+      if (entryId(e) !== firestoreId) return [k, e];
+      return [k, {
         id: firestoreId,
         name: data.name,
         width: data.width,
         height: data.height,
-        difficulty: data.difficulty ?? undefined,
-        creatorName: data.creatorName ?? undefined,
+        ...(data.difficulty && { difficulty: data.difficulty }),
+        ...(data.creatorName && { creatorName: data.creatorName }),
         updatedAt: serverTimestamp(),
-      };
+      }];
     });
+    const updatedOrder = Object.fromEntries(newOrderEntries)
     batch.update(partRef, {
       order: updatedOrder,
       updatedAt: serverTimestamp(),
@@ -134,8 +141,8 @@ export async function deleteFirestoreLevel(
   const partRef = doc(db, 'levelParts', partId);
   const partSnap = await getDoc(partRef);
   if (partSnap.exists()) {
-    const order = (partSnap.data().order as (string | LevelOrderEntry)[])
-      .filter((e) => entryId(e) !== firestoreId);
+    const order = (Object.entries(partSnap.data().order) as [string, LevelOrderEntry][])
+      .filter(([k, e]) => e.id !== firestoreId);
     batch.update(partRef, { order, updatedAt: serverTimestamp() });
   }
 
@@ -148,10 +155,10 @@ export async function deleteFirestoreLevel(
  */
 export async function getPartLevels(partId: string): Promise<FirestoreLevel[]> {
   const part = await getPart(partId);
-  if (!part || part.order.length === 0) return [];
+  if (!part || Object.values(part.order).length === 0) return [];
 
   const levelDocs = await Promise.all(
-    part.order.map((e) => getDoc(doc(db, 'levels', entryId(e)))),
+    Object.keys(part.order).map((k) => getDoc(doc(db, 'levels', k))),
   );
 
   return levelDocs

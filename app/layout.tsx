@@ -3,8 +3,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "./src/contexts/AuthContext";
+import { LanguageProvider } from "./src/contexts/LanguageContext";
 import FirestoreSync from "./src/components/FirestoreSync";
 import UserBadge from "./src/components/UserBadge";
+import LanguageSwitcher from "./src/components/LanguageSwitcher";
 import StoreProvider from "./src/store/StoreProvider";
 
 const geistSans = Geist({
@@ -145,13 +147,16 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <StoreProvider>
-          <AuthProvider>
-            <FirestoreSync />
-            <UserBadge />
-            {children}
-          </AuthProvider>
-        </StoreProvider>
+        <LanguageProvider>
+          <StoreProvider>
+            <AuthProvider>
+              <FirestoreSync />
+              <UserBadge />
+              <LanguageSwitcher />
+              {children}
+            </AuthProvider>
+          </StoreProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

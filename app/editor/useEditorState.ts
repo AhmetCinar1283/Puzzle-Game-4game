@@ -19,6 +19,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const router = useRouter();
   const { user, isAnonymous, isModerator } = useAuth();
   const userTag = useSelector((state: RootState) => state.user.tag);
+  const creatorName = userTag ?? user?.displayName ?? user?.email ?? 'Unknown';
 
   // Level data
   const [levelName, setLevelName] = useState('My Level');
@@ -172,7 +173,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     const validBoxes = boxes.filter((b) => b.row !== null && b.col !== null);
     return {
       level: {
-        id: editId ?? 0, name: levelName || 'Unnamed Level', width, height, edges, grid,
+        id: editId ?? 0, name: levelName || 'Unnamed Level', width, height, edges, grid, difficulty, creatorName,
         initialObjects: validObjs.map((o) => ({ id: o.id, position: { row: o.row!, col: o.col! }, mode: o.mode, lockOnTarget: o.lockOnTarget })),
         targets,
         ...(trailCollision ? { trailCollision: true } : {}),
@@ -221,7 +222,6 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     const { level, error } = generateLevelData();
     if (error || !level) { setSubmitError(error ?? 'Level geçersiz.'); return; }
     setSubmitError('');
-    const creatorName = userTag ?? user.displayName ?? user.email ?? 'Unknown';
     try {
       if (savedRequestId) {
         const { updateLevelRequest } = await import('@/app/src/lib/firebase/firestore');
@@ -229,7 +229,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         setSubmitStatus('Güncellendi!');
       } else {
         const { submitLevelRequest } = await import('@/app/src/lib/firebase/firestore');
-        const reqId = await submitLevelRequest(user.uid, level, creatorName, userTag, difficulty);
+        const reqId = await submitLevelRequest(user.uid, level, userTag, difficulty, creatorName);
         setSavedRequestId(reqId);
         const targetId = savedIdForSubmitRef.current ?? (editId ?? null);
         if (targetId !== null) {
@@ -298,7 +298,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setWidth(fl.width); setHeight(fl.height);
     setPendingW(fl.width); setPendingH(fl.height);
     setEdges(fl.edges as typeof edges);
-    setGrid(fl.grid as CellType[][]);
+    setGrid(typeof fl.grid == 'string' ? JSON.parse(fl.grid) : fl.grid as CellType[][]);
     setTrailCollision(!!fl.trailCollision);
     const objs = [...DEFAULT_OBJS.map((o) => ({ ...o }))];
     fl.initialObjects.forEach((obj) => {
@@ -317,7 +317,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     if (error || !level) { setTestError(error); return; }
     const payload = { ...level, part: Number(selectedPartId) };
     const { publishLevel, updateFirestoreLevel } = await import('@/app/src/lib/firebase/admin');
-    if (firestoreEditId) {
+    if (firestoreEditId) { 
       await updateFirestoreLevel(firestoreEditId, payload, user.uid, selectedPartId);
     } else {
       setFirestoreEditId(await publishLevel(payload, selectedPartId, user.uid));
@@ -378,7 +378,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     savedRequestId, edges, setEdges, grid, objects, setObjects,
     boxes, setBoxes, activePlacingBoxId, setActivePlacingBoxId, conveyorPowerRequired, setConveyorPowerRequired,
     // Tool
-    activeTool, setActiveTool,
+    activeTool, setActiveTool, router,
     // Saved levels
     savedLevels, levelsLoading,
     // UI

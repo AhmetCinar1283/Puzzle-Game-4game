@@ -6,6 +6,7 @@ import type { LevelData } from '@/app/src/games/types';
 import type { StoredLevel } from '@/app/src/lib/db';
 import { useUserStorage } from '@/app/src/lib/userStorage';
 import GameShell from '@/app/src/games/components/GameShell';
+import { useT } from '@/app/src/contexts/LanguageContext';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,6 +29,7 @@ function storedToLevelData(stored: StoredLevel & { id: number }): LevelData {
 // ─── Inner component (needs useSearchParams → must be in Suspense) ────────────
 
 function GameContent() {
+  const t = useT();
   const searchParams = useSearchParams();
   const router = useRouter();
   const idParam = searchParams.get('id');
@@ -141,7 +143,7 @@ function GameContent() {
           zIndex: 30,
         }}
       >
-        ← Levels
+        {t('game.back')}
       </button>
 
       <GameShell
@@ -157,6 +159,7 @@ function GameContent() {
 // ─── Loading / Error ──────────────────────────────────────────────────────────
 
 function LoadingScreen() {
+  const t = useT();
   return (
     <main
       style={{
@@ -167,12 +170,13 @@ function LoadingScreen() {
         justifyContent: 'center',
       }}
     >
-      <span style={{ color: '#1e3a5f', fontSize: 12, letterSpacing: '0.1em' }}>LOADING...</span>
+      <span style={{ color: '#1e3a5f', fontSize: 12, letterSpacing: '0.1em' }}>{t('common.loading')}</span>
     </main>
   );
 }
 
 function ErrorScreen({ onBack }: { onBack: () => void }) {
+  const t = useT();
   return (
     <main
       style={{
@@ -185,7 +189,7 @@ function ErrorScreen({ onBack }: { onBack: () => void }) {
         gap: 16,
       }}
     >
-      <span style={{ color: '#ef4444', fontSize: 14 }}>Level not found.</span>
+      <span style={{ color: '#ef4444', fontSize: 14 }}>{t('game.not_found')}</span>
       <button
         onClick={onBack}
         style={{
@@ -198,7 +202,7 @@ function ErrorScreen({ onBack }: { onBack: () => void }) {
           fontSize: 12,
         }}
       >
-        ← Back to Levels
+        {t('game.back_to_levels')}
       </button>
     </main>
   );

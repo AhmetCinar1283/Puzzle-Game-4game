@@ -3,6 +3,9 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useUserStorage } from '@/app/src/lib/userStorage';
+import { useSelector } from 'react-redux';
+import { selectUser } from './src/store/userSlice';
+import { useT } from './src/contexts/LanguageContext';
 
 const NEON_TYPES = [
   { color: '#00ff88', glow: '0 0 6px #00ff88, 0 0 18px rgba(0,255,136,0.3)' },
@@ -29,10 +32,12 @@ type Particle = {
   borderRadius: number;
 };
 
-const NAV_LOWER = [
-  { href: '/levels', label: '☰ Levels', color: '#ffd700', sub: 'Browse & reorder levels' },
-  { href: '/editor', label: '✦ Editor', color: '#00c4ff', sub: 'Create & edit levels' },
-];
+function useNavLower(t: ReturnType<typeof useT>) {
+  return [
+    { href: '/levels', label: t('home.levels'), color: '#ffd700', sub: t('home.levels_sub') },
+    { href: '/editor', label: t('home.editor'), color: '#00c4ff', sub: t('home.editor_sub') },
+  ];
+}
 
 function NavButton({ label, sub, color, onClick }: { label: string; sub: string; color: string; onClick: () => void }) {
   return (
@@ -75,10 +80,13 @@ function NavButton({ label, sub, color, onClick }: { label: string; sub: string;
 }
 
 export default function Home() {
+  const t = useT();
   const router = useRouter();
   const { getItem: storageGet } = useUserStorage();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
+  const user = useSelector(selectUser);
+  const NAV_LOWER = useNavLower(t);
 
   // Generate particles with window dimensions (client only)
   useEffect(() => {
@@ -214,8 +222,8 @@ export default function Home() {
         {/* Nav buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', width: '100%', maxWidth: 260 }}>
           <NavButton
-            label="▶ Play"
-            sub="Continue last level"
+            label={t('home.play')}
+            sub={t('home.play_sub')}
             color="#00ff88"
             onClick={handlePlayClick}
           />
@@ -228,6 +236,12 @@ export default function Home() {
               onClick={() => router.push(href)}
             />
           ))}
+          {user.role == 'admin' && (<NavButton
+            label={t('home.admin')}
+            sub={t('home.admin_sub')}
+            color="#00ff88"
+            onClick={() => { router.push('/admin') }}
+          />)}
         </div>
 
         {/* How To Play — semantic content for SEO */}
@@ -254,28 +268,27 @@ export default function Home() {
               marginTop: 0,
             }}
           >
-            How to Play
+            {t('home.how_to_play')}
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px' }}>
             {[
-              { icon: '↑↓←→', text: 'Arrow keys or D-pad to move' },
-              { icon: '⊕', text: 'Land both objects on targets to win' },
-              { icon: '❄', text: 'Ice — slide until hitting a wall' },
-              { icon: '⟳', text: 'Direction toggle — reverses your controls' },
-              { icon: '◎', text: 'Teleporters move you across the grid' },
-              { icon: '▶', text: 'Conveyors push you automatically' },
-              { icon: '⚡', text: 'Power nodes electrify your trail' },
-              { icon: '✦', text: 'Build your own levels in the editor' },
-            ].map(({ icon, text }) => (
-              <div key={text} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              { icon: '↑↓←→', key: 'home.tip_move' },
+              { icon: '⊕', key: 'home.tip_win' },
+              { icon: '❄', key: 'home.tip_ice' },
+              { icon: '⟳', key: 'home.tip_toggle' },
+              { icon: '◎', key: 'home.tip_teleporter' },
+              { icon: '▶', key: 'home.tip_conveyor' },
+              { icon: '⚡', key: 'home.tip_power' },
+              { icon: '✦', key: 'home.tip_editor' },
+            ].map(({ icon, key }) => (
+              <div key={key} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                 <span style={{ color: '#00ff8833', flexShrink: 0, width: 18 }}>{icon}</span>
-                <span>{text}</span>
+                <span>{t(key)}</span>
               </div>
             ))}
           </div>
           <p style={{ marginTop: 16, marginBottom: 0, color: '#374151', fontSize: 11 }}>
-            Syncron is a free browser puzzle game. No download, no login required.
-            Play directly at{' '}
+            {t('home.seo')}{' '}
             <a
               href="https://syncron.polyvoclub.com"
               style={{ color: '#00ff8844', textDecoration: 'none' }}

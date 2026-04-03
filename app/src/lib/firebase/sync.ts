@@ -105,9 +105,9 @@ export async function syncLevelsMeta(force = false): Promise<void> {
 
   for (const partDoc of partsSnap.docs) {
     const partData = partDoc.data();
-    const order: (string | LevelOrderEntry)[] = partData.order ?? [];
+    const order: Record<string, LevelOrderEntry> = partData.order ?? {};
 
-    for (const entry of order) {
+    for (const entry of Object.values(order)) {
       const isLegacy = typeof entry === 'string';
       const eid = isLegacy ? entry : entry.id;
       const entryUpdatedAt = isLegacy ? 0 : toMs(entry.updatedAt);
