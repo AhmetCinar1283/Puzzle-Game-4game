@@ -105,25 +105,25 @@ export default function Home() {
 
   // Menu music (loop, low volume)
   useEffect(() => {
-    const audio = new Audio('/sounds/menu.mp3');
-    audio.loop = true;
-    audio.volume = 0.18;
-    audioRef.current = audio;
+    // const audio = new Audio('/sounds/menu.mp3');
+    // audio.loop = true;
+    // audio.volume = 0.18;
+    // audioRef.current = audio;
 
-    audio.play().catch(() => {
-      // Autoplay blocked — unlock on first interaction
-      const unlock = () => {
-        audio.play().catch(() => {});
-      };
-      window.addEventListener('click', unlock, { once: true });
-      window.addEventListener('keydown', unlock, { once: true });
-      window.addEventListener('touchstart', unlock, { once: true });
-    });
+    // audio.play().catch(() => {
+    //   // Autoplay blocked — unlock on first interaction
+    //   const unlock = () => {
+    //     audio.play().catch(() => {});
+    //   };
+    //   window.addEventListener('click', unlock, { once: true });
+    //   window.addEventListener('keydown', unlock, { once: true });
+    //   window.addEventListener('touchstart', unlock, { once: true });
+    // });
 
-    return () => {
-      audio.pause();
-      audio.src = '';
-    };
+    // return () => {
+    //   audio.pause();
+    //   audio.src = '';
+    // };
   }, []);
 
   function handlePlayClick() {

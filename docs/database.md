@@ -2,7 +2,7 @@
 
 ## Dexie (IndexedDB) — `app/src/lib/db/`
 
-### Schema (version 6)
+### Schema (version 8)
 
 | Table | Key | Purpose |
 |---|---|---|
@@ -16,7 +16,19 @@ Version 2: added `initialBoxes`, `conveyorPowerRequired` fields.
 Version 3: added `presetLevels` table.
 Version 4: added `firestoreId` index on `presetLevels`.
 Version 5: added `playedLevels` and `syncMeta` tables.
-Version 6: added `creatorName?: string` to `StoredLevel` (attribution for community-submitted levels).
+Version 6: added `creatorName?: string` to `StoredLevel`.
+Version 7: added `difficulty`, `part`, `requestId` fields.
+Version 8: added `isNeedSync` field for lazy Firestore fetch.
+
+### File Structure (`app/src/lib/db/`)
+
+| File | Purpose |
+|---|---|
+| `schema.ts` | Dexie class definition (v1–v8), all types (`StoredLevel`, `LevelOrderRecord`, etc.), `getDB()` singleton |
+| `levelOrderOps.ts` | `levelOrder` table: `getOrderedLevels`, `getNextLevelId`, `reorderLevels` |
+| `levelsOps.ts` | `levels` table: `saveLevelAtPosition`, `updateStoredLevel`, `deleteStoredLevel`, `setLevelRequestId`, `localClear` |
+| `presetLevelsOps.ts` | `presetLevels` table: `getPresetLevels`, `getNextPresetLevelId` |
+| `index.ts` | Barrel re-export — same public API as before |
 
 ### User Data Isolation
 
@@ -26,20 +38,27 @@ When `onAuthStateChanged` fires with a **different UID** than the one stored in 
 
 Inserting a level at any position only updates the one `levelOrder` record — no other level records are modified. Order is O(1) to change regardless of level count.
 
-### Key Helpers (`app/src/lib/db/index.ts`)
+### Key Helpers (import from `app/src/lib/db`)
 
 ```typescript
+// levelOrderOps.ts
 getOrderedLevels()               // → StoredLevel[] in display order
 getNextLevelId(currentId)        // → next level's DB id, or null
+reorderLevels(newOrder)          // replaces the order array
+
+// levelsOps.ts
 saveLevelAtPosition(data, pos?)  // → new level id (0-based pos, undefined = append)
 updateStoredLevel(id, data)      // updates a level in-place (keeps order)
 deleteStoredLevel(id)            // removes from table + order array
-reorderLevels(newOrder)          // replaces the order array
+setLevelRequestId(id, requestId) // patches requestId field only
+localClear()                     // clears all tables + localStorage (dev utility)
+
+// presetLevelsOps.ts
 getPresetLevels()                // → all preset levels ordered by id
 getNextPresetLevelId(currentId)  // → next preset level id, or null
 ```
 
-**Lazy singleton:** `getDB()` is called at runtime to avoid server-side instantiation.
+**Lazy singleton:** `getDB()` (from `schema.ts`) is called at runtime to avoid server-side instantiation.
 
 ---
 
@@ -77,9 +96,13 @@ const { getItem, setItem, removeItem } = useUserStorage();
 |---|---|
 | `config.ts` | Firebase app init, exports `auth`, `db`, `storage`, `functions` |
 | `firestore.ts` | End-user helpers: `createOrUpdateUserDoc`, `savePlayedLevel`, `submitLevelRequest`, `getLevelRequests` |
-| `admin.ts` | Admin helpers: `publishLevel`, `updateFirestoreLevel`, `deleteFirestoreLevel`, `approveLevelRequest`, `rejectLevelRequest`, `getAllParts`, `getPartLevels` |
 | `sync.ts` | Firestore → Dexie sync: `syncAllParts(force?)`, `syncPart(id, force?)`, `syncPlayedLevels(uid, force?)` |
 | `index.ts` | Barrel — re-exports config + firestore |
+| `admin.ts` | Barrel re-export for all admin sub-modules below |
+| `adminTypes.ts` | Shared types: `AdminLevelInput`, `FirestoreLevel`, `LevelPart`, `LevelOrderEntry`, `entryId()` helper |
+| `adminParts.ts` | Part ops: `getAllParts`, `getPart`, `reorderPartLevels` |
+| `adminLevels.ts` | Level CRUD: `publishLevel`, `updateFirestoreLevel`, `deleteFirestoreLevel`, `getPartLevels` |
+| `adminRequests.ts` | Request moderation: `approveLevelRequest`, `rejectLevelRequest` |
 
 ### Firestore Data Model
 
@@ -156,14 +179,20 @@ savePlayedLevel(uid, levelId, { score, timeSpent }): Promise<void>
 submitLevelRequest(uid, levelData, creatorName, creatorTag): Promise<string>
 getLevelRequests(status): Promise<LevelRequest[]>  // admin only
 
-// admin.ts
+// adminParts.ts (re-exported via admin.ts)
+getAllParts(): Promise<LevelPart[]>
+getPart(partId): Promise<LevelPart | null>
+reorderPartLevels(partId, newOrder): Promise<void>
+
+// adminLevels.ts (re-exported via admin.ts)
 publishLevel(data, partId, publishedByUid): Promise<string>
-updateFirestoreLevel(firestoreId, data, publishedByUid): Promise<void>
+updateFirestoreLevel(firestoreId, data, publishedByUid, partId): Promise<void>
 deleteFirestoreLevel(firestoreId, partId): Promise<void>
+getPartLevels(partId): Promise<FirestoreLevel[]>
+
+// adminRequests.ts (re-exported via admin.ts)
 approveLevelRequest(requestId, partId, req, approvedByUid): Promise<void>
 rejectLevelRequest(requestId, note?): Promise<void>
-getAllParts(): Promise<LevelPart[]>
-getPartLevels(partId): Promise<FirestoreLevel[]>
 ```
 
 ### Adding a Level via Admin

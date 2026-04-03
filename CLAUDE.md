@@ -48,12 +48,34 @@ app/src/
 ├── components/      FirestoreSync, UserBadge, AuthModal
 ├── lib/
 │   ├── analytics.ts  GA4 event wrapper (trackLevelStart/Complete/Fail)
-│   ├── firebase/    config.ts, firestore.ts, admin.ts, sync.ts, index.ts
-│   └── db/          index.ts (Dexie v6), seedPresets.ts (no-op)
+│   ├── firebase/
+│   │   ├── config.ts           Firebase app init + exports (auth, db, storage)
+│   │   ├── firestore.ts        End-user ops: createOrUpdateUserDoc, savePlayedLevel, submitLevelRequest, getLevelRequests
+│   │   ├── sync.ts             Firestore → Dexie sync engine
+│   │   ├── index.ts            Barrel re-export
+│   │   ├── admin.ts            Barrel re-export for all admin sub-modules
+│   │   ├── adminTypes.ts       Shared admin types: AdminLevelInput, FirestoreLevel, LevelPart, LevelOrderEntry
+│   │   ├── adminParts.ts       Part ops: getAllParts, getPart, reorderPartLevels
+│   │   ├── adminLevels.ts      Level CRUD: publishLevel, updateFirestoreLevel, deleteFirestoreLevel, getPartLevels
+│   │   └── adminRequests.ts    Request moderation: approveLevelRequest, rejectLevelRequest
+│   └── db/
+│       ├── schema.ts           Dexie class (v1-v8), types (StoredLevel etc.), getDB()
+│       ├── levelOrderOps.ts    levelOrder table: getOrderedLevels, getNextLevelId, reorderLevels
+│       ├── levelsOps.ts        levels table: saveLevelAtPosition, updateStoredLevel, deleteStoredLevel, setLevelRequestId
+│       ├── presetLevelsOps.ts  presetLevels table: getPresetLevels, getNextPresetLevelId
+│       └── index.ts            Barrel re-export (same public API as before)
 └── games/
     ├── components/  GameShell, GameBoard, GameCell, GameObject, GameBoxObject, HUD, WinOverlay, LostOverlay
     ├── hooks/       useGameEngine, useSoundManager
-    ├── logic/       movement, positionUtils, powerSystem, iceSlide, teleporter, boxPhysics, gameReducer
+    ├── logic/
+    │   ├── movement.ts         processMoveStep — main 16-step pipeline (imports from movementHelpers)
+    │   ├── movementHelpers.ts  Pure helpers: resolveDirection, resolveEdgePosition, checkWinCondition, applyMoveToObject, computePlayerDesiredPosition, etc.
+    │   ├── boxPhysics.ts       computeBoxChainPush, processConveyors
+    │   ├── powerSystem.ts      computePoweredCells (BFS)
+    │   ├── iceSlide.ts         resolveIceSlide
+    │   ├── teleporter.ts       applyEntityTeleport
+    │   ├── positionUtils.ts    posKey, DELTA, conveyor/teleporter cell helpers
+    │   └── gameReducer.ts      initialStateFromLevel
     └── types/       index.ts
 ```
 
