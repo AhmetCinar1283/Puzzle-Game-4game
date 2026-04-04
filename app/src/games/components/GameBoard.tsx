@@ -24,6 +24,8 @@ interface GameBoardProps {
   poweredCells: Set<string>;
   cellSize?: number;
   moveAnimTypes?: Record<number, MoveAnimType>;
+  /** Waypoint paths from engine — key format: "player:1", "box:2" */
+  animationPaths?: Record<string, Position[]>;
 }
 
 function edgeBorderStyle(behavior: EdgeBehavior): { color: string; glow: string } {
@@ -65,6 +67,7 @@ export default function GameBoard({
   poweredCells,
   cellSize,
   moveAnimTypes,
+  animationPaths,
 }: GameBoardProps) {
   const cs = cellSize ?? CELL_SIZE;
   const boardWidth = level.width * cs;
@@ -194,6 +197,7 @@ export default function GameBoard({
               box={box}
               cellSize={cs}
               isPowered={poweredCells.has(posKey(box.position))}
+              path={animationPaths?.[`box:${box.id}`]}
             />
           ))}
 
@@ -204,6 +208,7 @@ export default function GameBoard({
               object={obj}
               cellSize={cs}
               animType={moveAnimTypes?.[obj.id] ?? 'normal'}
+              path={animationPaths?.[`player:${obj.id}`]}
             />
           ))}
         </div>

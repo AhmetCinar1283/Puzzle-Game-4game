@@ -39,7 +39,7 @@ export async function approveLevelRequest(
     trailCollision: req.trailCollision ?? false,
     initialBoxes: req.initialBoxes ?? [],
     conveyorPowerRequired: req.conveyorPowerRequired ?? [],
-    ...(req.difficulty && { difficulty: req.difficulty }),
+    ...(req.difficulty != undefined && { difficulty: req.difficulty }),
     part: Number(partId),
     publishedBy: approvedBy,
     createdBy: req.submittedBy,
@@ -49,24 +49,35 @@ export async function approveLevelRequest(
     updatedAt: serverTimestamp(),
   });
 
-  // 2. Build order entry and append to part
-  const entry: Omit<LevelOrderEntry, 'updatedAt'> & { updatedAt: ReturnType<typeof serverTimestamp> } = {
-    id: levelRef.id,
-    name: req.name,
-    width: req.width,
-    height: req.height,
-    ...(req.difficulty && { difficulty: req.difficulty }),
-    ...(req.creatorName && { creatorName: req.creatorName }),
-    updatedAt: serverTimestamp(),
-  };
-
+  // 2. Determine position for the new entry
   const partRef = doc(db, 'levelParts', partId);
   const partSnap = await getDoc(partRef);
   const currentOrder: Record<string, LevelOrderEntry> = partSnap.exists()
     ? (partSnap.data().order as Record<string, LevelOrderEntry>) ?? {}
     : {};
+  const maxPos = Object.values(currentOrder).reduce(
+    (m, e) => Math.max(m, e.position ?? 0),
+    -1,
+  );
+
+  // 3. Build order entry
+  const entry: Omit<LevelOrderEntry, 'updatedAt'> & { updatedAt: ReturnType<typeof serverTimestamp>; position: number } = {
+    id: levelRef.id,
+    name: req.name,
+    width: req.width,
+    height: req.height,
+    position: maxPos + 1,
+    ...(req.difficulty != undefined && { difficulty: req.difficulty }),
+    ...(req.creatorName && { creatorName: req.creatorName }),
+    updatedAt: serverTimestamp(),
+  };
+
   if (partSnap.exists()) {
-    batch.update(partRef, { order: { ...currentOrder, [entry.id]: entry }, updatedAt: serverTimestamp() });
+    // Field-path update — concurrent-safe: only this level's key is written
+    batch.update(partRef, {
+      [`order.${entry.id}`]: entry,
+      updatedAt: serverTimestamp(),
+    });
   } else {
     batch.set(partRef, {
       name: `Part ${partId}`,

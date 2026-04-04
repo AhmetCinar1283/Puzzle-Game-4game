@@ -106,6 +106,8 @@ export interface GameState {
   trail: Record<number, Position[]>;
   lostReason?: LostReason;
   moveAnimTypes?: Record<number, MoveAnimType>;
+  /** Per-entity ordered waypoints for smooth multi-step animation. Key: "player:1", "box:2". */
+  animationPaths?: Record<string, Position[]>;
 }
 
 export type GameAction =

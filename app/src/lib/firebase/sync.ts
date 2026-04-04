@@ -69,7 +69,8 @@ function firestoreDocToStoredLevel(
     conveyorPowerRequired: data.conveyorPowerRequired,
     creatorName: data.creatorName ?? undefined,
     difficulty: data.difficulty ?? undefined,
-    part: typeof data.part === 'number' ? data.part : undefined,
+    position: data.position,
+    part: data.part,
     isNeedSync: false,
     createdAt: toMs(data.createdAt),
     updatedAt: toMs(data.updatedAt),
@@ -117,6 +118,8 @@ export async function syncLevelsMeta(force = false): Promise<void> {
         .equals(eid)
         .first();
 
+      const partNumber = partDoc.id;
+
       if (!existing) {
         // New level — insert metadata-only placeholder; game page will lazy-fetch full data
         const placeholder: Omit<StoredLevel, 'id'> = {
@@ -126,6 +129,7 @@ export async function syncLevelsMeta(force = false): Promise<void> {
           height: isLegacy ? 0 : entry.height,
           difficulty: isLegacy ? undefined : entry.difficulty,
           creatorName: isLegacy ? undefined : entry.creatorName,
+          part: partNumber,
           edges: { top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' } as LevelEdges,
           grid: [],
           initialObjects: [],
@@ -133,6 +137,7 @@ export async function syncLevelsMeta(force = false): Promise<void> {
           isNeedSync: true,
           createdAt: Date.now(),
           updatedAt: entryUpdatedAt,
+          position: entry.position
         };
         await dexie.presetLevels.add(placeholder);
       } else {
@@ -144,9 +149,13 @@ export async function syncLevelsMeta(force = false): Promise<void> {
             height: isLegacy ? existing.height : entry.height,
             difficulty: isLegacy ? existing.difficulty : entry.difficulty,
             creatorName: isLegacy ? existing.creatorName : entry.creatorName,
+            part: partNumber,
             updatedAt: entryUpdatedAt || existing.updatedAt,
             isNeedSync: true,
           });
+        } else if (existing.part !== partNumber) {
+          // Part field missing or wrong — patch it without marking stale
+          await dexie.presetLevels.update(existing.id!, { part: partNumber });
         }
       }
     }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { localClear, type StoredLevel } from '@/app/src/lib/db';
+import { localClear, type StoredLevel, type StoredPlayedLevel } from '@/app/src/lib/db';
 import { useAuth } from '@/app/src/hooks/useAuth';
 import { SectionHeader, LevelTable } from './components/LevelTable';
 import { LevelRow } from './components/LevelRow';
@@ -21,6 +21,9 @@ export default function LevelsPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<LevelEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [parts, setParts] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedPartId, setSelectedPartId] = useState<string>('');
+  const [playedMap, setPlayedMap] = useState<Map<string, StoredPlayedLevel>>(new Map());
 
   useEffect(() => {
     function check() { setIsMobile(window.innerWidth < 600); }
@@ -30,14 +33,32 @@ export default function LevelsPage() {
   }, []);
 
   const reload = useCallback(async () => {
-    const { getOrderedLevels, getPresetLevels } = await import('@/app/src/lib/db');
+    const { getOrderedLevels, getPresetLevels, getDB } = await import('@/app/src/lib/db');
     const [presetData, userData] = await Promise.all([getPresetLevels(), getOrderedLevels()]);
-    setPresets(presetData as LevelEntry[]);
+    setPresets(presetData.sort((a, b) => a.position - b.position) as LevelEntry[]);
     setUserLevels(userData as LevelEntry[]);
+
+    const db = getDB();
+    const playedData = await db.playedLevels.toArray();
+    setPlayedMap(new Map(playedData.map((p) => [p.levelId, p])));
+
     setLoading(false);
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Load part names from Firestore
+  useEffect(() => {
+    import('@/app/src/lib/firebase/adminParts').then(({ getAllParts }) => {
+      getAllParts()
+        .then((fetchedParts) => {
+          const mapped = fetchedParts.map((p) => ({ id: p.partId, name: p.name }));
+          setParts(mapped);
+          setSelectedPartId((prev) => prev || (mapped[0]?.id ?? ''));
+        })
+        .catch((err) => console.warn('[Parts]', err));
+    });
+  }, []);
 
   useEffect(() => {
     import('@/app/src/lib/firebase/sync').then(({ syncLevelsMeta }) => {
@@ -45,7 +66,7 @@ export default function LevelsPage() {
         console.warn('[Sync] Meta sync failed:', err),
       );
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -86,8 +107,8 @@ export default function LevelsPage() {
     setDeleting(true);
     try {
       const { deleteFirestoreLevel, getAllParts } = await import('@/app/src/lib/firebase/admin');
-      const parts = await getAllParts();
-      const part = parts.find((p) =>
+      const allParts = await getAllParts();
+      const part = allParts.find((p) =>
         Object.values(p.order).some((e) => (typeof e === 'string' ? e : e.id) === deleteConfirm.firestoreId),
       );
       if (!part) {
@@ -111,6 +132,11 @@ export default function LevelsPage() {
     ? [t('list.col_num'), t('list.col_name'), t('list.col_actions')]
     : [t('list.col_num'), t('list.col_name'), t('list.col_size'), t('list.col_order'), t('list.col_actions')];
 
+  // Filter presets to selected part
+  const filteredPresets = selectedPartId
+    ? presets.filter((lv) => String(lv.part) === selectedPartId)
+    : presets;
+
   return (
     <div style={{ minHeight: '100dvh', background: '#030712', color: '#e2e8f0', display: 'flex', flexDirection: 'column' }}>
 
@@ -122,7 +148,7 @@ export default function LevelsPage() {
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
-            onClick={localClear} disabled={syncing} title="Firestore'dan güncelle"
+            onClick={() => { localClear().then(() => { reload() }) }} disabled={syncing} title="Firestore'dan güncelle"
             style={{ fontSize: 14, padding: '5px 10px', background: 'rgba(255,50,50,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: syncing ? '#1e3a5f' : '#475569', borderRadius: 7, cursor: syncing ? 'not-allowed' : 'pointer', transition: 'color 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <span style={{ display: 'inline-block', animation: syncing ? 'spin 1s linear infinite' : 'none' }}>Del</span>
@@ -152,15 +178,42 @@ export default function LevelsPage() {
             {presets.length > 0 && (
               <section>
                 <SectionHeader label={t('levels.campaign')} color="#ffd700" />
+
+                {/* Part tabs */}
+                {parts.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                    {parts.map((p) => {
+                      const isActive = selectedPartId === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => setSelectedPartId(p.id)}
+                          style={{
+                            fontSize: 11, padding: '4px 12px', borderRadius: 6,
+                            background: isActive ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.02)',
+                            border: `1px solid ${isActive ? 'rgba(255,215,0,0.45)' : 'rgba(30,58,95,0.4)'}`,
+                            color: isActive ? '#ffd700' : '#475569',
+                            cursor: 'pointer', fontWeight: isActive ? 700 : 400,
+                            letterSpacing: '0.06em', transition: 'all 0.12s',
+                          }}
+                        >
+                          {p.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <LevelTable cols={cols} headers={headers}>
-                  {presets.map((lv, idx) => (
+                  {filteredPresets.map((lv, idx) => (
                     <LevelRow
-                      key={lv.id} level={lv} index={idx} total={presets.length}
+                      key={lv.id} level={lv} index={idx} total={filteredPresets.length}
                       isPreset isAdmin={isModerator} isMobile={isMobile} cols={cols}
+                      playedLevel={lv.firestoreId ? playedMap.get(lv.firestoreId) : undefined}
                       onPlay={() => router.push(`/game?id=${lv.id}&source=preset`)}
                       onEdit={() => lv.firestoreId ? router.push(`/editor?firestoreId=${lv.firestoreId}`) : undefined}
                       onDelete={() => handleDeletePreset(lv)}
-                      onMoveUp={() => {}} onMoveDown={() => {}}
+                      onMoveUp={() => { }} onMoveDown={() => { }}
                     />
                   ))}
                 </LevelTable>

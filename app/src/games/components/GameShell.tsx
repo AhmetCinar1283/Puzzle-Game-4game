@@ -165,6 +165,7 @@ export default function GameShell({ level, onNextLevel, source }: GameShellProps
             poweredCells={poweredCells}
             cellSize={cellSize}
             moveAnimTypes={state.moveAnimTypes}
+            animationPaths={state.animationPaths}
           />
           {state.phase === 'won' && (
             <WinOverlay

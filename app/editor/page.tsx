@@ -130,6 +130,7 @@ function EditorInner() {
           firestoreEditId={s.firestoreEditId} setFirestoreEditId={s.setFirestoreEditId}
           publishStatus={s.publishStatus} onPublish={s.doPublish}
           isMobile={isMobile} visible={activeTab === 'settings'}
+          
         />
       </div>
 

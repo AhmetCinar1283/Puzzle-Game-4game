@@ -103,7 +103,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setEdges(stored.edges as typeof edges);
     setGrid(stored.grid as CellType[][]);
     setTrailCollision(!!stored.trailCollision);
-    setDifficulty((stored.difficulty ?? 2) as 1 | 2 | 3 | 4);
+    setDifficulty((stored.difficulty != undefined ? stored.difficulty : 2) as 1 | 2 | 3 | 4);
     setSavedRequestId(stored.requestId ?? null);
     const objs = [...DEFAULT_OBJS.map((o) => ({ ...o }))];
     stored.initialObjects.forEach((obj) => {
@@ -190,6 +190,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     trailCollision: level.trailCollision, initialBoxes: level.initialBoxes,
     conveyorPowerRequired: level.conveyorPowerRequired, difficulty,
     ...(savedRequestId ? { requestId: savedRequestId } : {}),
+    position: savedLevels.length // burada en sona ekler sadece bunu düzelteceğiz fakat diğer değişkenleri de uyumlu hale getirmemiz gerekeceği için şu ertelemeyi uygun gördük
   }), [difficulty, savedRequestId]);
 
   const doSave = useCallback(async (posInput?: string) => {
@@ -315,9 +316,12 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     if (!user || !isModerator) return;
     const { level, error } = generateLevelData();
     if (error || !level) { setTestError(error); return; }
-    const payload = { ...level, part: Number(selectedPartId) };
+    const payload = { ...level, part: selectedPartId,
+      position: savedLevels.length, // Bu en sona ekler leveli fakat ileride ayarlanabilir olmalı
+      difficulty,
+     };
     const { publishLevel, updateFirestoreLevel } = await import('@/app/src/lib/firebase/admin');
-    if (firestoreEditId) { 
+    if (firestoreEditId) {
       await updateFirestoreLevel(firestoreEditId, payload, user.uid, selectedPartId);
     } else {
       setFirestoreEditId(await publishLevel(payload, selectedPartId, user.uid));

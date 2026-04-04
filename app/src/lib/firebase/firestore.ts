@@ -158,7 +158,7 @@ export async function submitLevelRequest(
     trailCollision: levelData.trailCollision ?? false,
     initialBoxes: levelData.initialBoxes ?? [],
     conveyorPowerRequired: levelData.conveyorPowerRequired ?? [],
-    ...(difficulty && { difficulty }),
+    ...(difficulty != undefined && { difficulty }),
     submittedBy: uid,
     ...(creatorName && { creatorName }),
     creatorTag,

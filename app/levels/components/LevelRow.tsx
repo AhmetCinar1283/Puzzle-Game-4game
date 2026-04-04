@@ -1,12 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import type { StoredLevel } from '@/app/src/lib/db';
+import type { StoredLevel, StoredPlayedLevel } from '@/app/src/lib/db';
 import { useT } from '@/app/src/contexts/LanguageContext';
 
 type LevelEntry = StoredLevel & { id: number };
 
 const DIFFICULTY_COLORS: Record<number, string> = { 1: '#00ff88', 2: '#fbbf24', 3: '#f97316', 4: '#ef4444' };
+
+function formatTime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
 
 interface RowProps {
   level: LevelEntry;
@@ -16,6 +21,7 @@ interface RowProps {
   isAdmin?: boolean;
   isMobile: boolean;
   cols: string;
+  playedLevel?: StoredPlayedLevel;
   onPlay: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -23,7 +29,7 @@ interface RowProps {
   onMoveDown: () => void;
 }
 
-export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, cols, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
+export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, cols, playedLevel, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
   const t = useT();
   const [hovered, setHovered] = useState(false);
 
@@ -44,16 +50,25 @@ export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, col
       </span>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{level.name}</span>
           {isPreset && level.creatorName && (
             <span style={{ fontSize: 9, color: '#475569', display: 'block', marginTop: 1 }}>by {level.creatorName}</span>
           )}
+          {playedLevel && (
+            <span style={{ fontSize: 9, color: '#334155', display: 'block', marginTop: 1 }}>
+              {playedLevel.moveCount != null ? `${playedLevel.moveCount} hamle · ` : ''}{formatTime(playedLevel.timeSpent)}
+              {playedLevel.score > 0 ? ` · ${playedLevel.score}p` : ''}
+            </span>
+          )}
         </div>
+        {playedLevel && (
+          <span style={{ fontSize: 9, color: '#00ff88', border: '1px solid rgba(0,255,136,0.35)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>✓</span>
+        )}
         {level.trailCollision && (
           <span style={{ fontSize: 9, color: '#00c4ff', border: '1px solid rgba(0,196,255,0.35)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>TRAIL</span>
         )}
-        {isPreset && level.difficulty && (
+        {isPreset && level.difficulty != undefined && (
           <span style={{ fontSize: 9, color: DIFFICULTY_COLORS[level.difficulty], border: `1px solid ${DIFFICULTY_COLORS[level.difficulty]}40`, borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>
             {t(`difficulty.${level.difficulty}`)}
           </span>

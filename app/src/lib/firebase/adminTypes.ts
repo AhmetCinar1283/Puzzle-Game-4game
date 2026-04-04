@@ -4,7 +4,7 @@ import type { StoredLevel } from '../db';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type AdminLevelInput = Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt' | 'firestoreId' | 'isNeedSync'> & {
-  part: number;
+  part: string;
 };
 
 export interface FirestoreLevel extends AdminLevelInput {
@@ -26,6 +26,8 @@ export interface LevelOrderEntry {
   difficulty?: 1 | 2 | 3 | 4;
   creatorName?: string;
   updatedAt: Timestamp | number;
+  /** Display order within the part — integer, 0-based. Sort ascending. */
+  position: number;
 }
 
 export interface LevelPart {

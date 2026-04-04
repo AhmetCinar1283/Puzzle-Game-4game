@@ -18,10 +18,11 @@ export interface StoredLevel {
   conveyorPowerRequired?: Position[];
   creatorName?: string;  // Attribution for community-submitted levels
   difficulty?: 1 | 2 | 3 | 4;  // 1=Kolay, 2=Orta, 3=Zor, 4=Çok Zor
-  part?: number;          // Firestore part number (preset levels only)
+  part?: string;          // Firestore part id (preset levels only)
   requestId?: string;     // Firestore levelRequests doc ID (tracks pending submission)
   isNeedSync?: boolean;   // true = fetch fresh full data from Firestore before playing
   createdAt: number;
+  position: number;
   updatedAt: number;
 }
 
@@ -41,6 +42,8 @@ export interface StoredPlayedLevel {
   timeSpent: number;   // seconds
   completedAt: number; // ms
   updatedAt: number;   // ms
+  moveCount?: number;  // number of moves used to solve (future field)
+  moves?: string[];    // ordered move directions, e.g. ['up', 'right', ...] (future field)
 }
 
 /** Per-collection sync metadata — replaces localStorage-based cooldown tracking. */
