@@ -15,8 +15,8 @@
 		"nodejs_compat"
 	],
 	"vars": {
-		"FIREBASE_PROJECT_ID": "senin-proje-id",
-		"FIREBASE_API_KEY": "senin-api-key",
+		"FIREBASE_PROJECT_ID": "syncron-1923",
+		"FIREBASE_API_KEY": "AIzaSyAjiRbyBEiJhZoa04G9ptzImGnBXl2OF4M",
 		"ALLOWED_ORIGIN": "http://localhost:3000"
 	}
 	/**
