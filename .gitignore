@@ -56,7 +56,7 @@ electron/
 # /firebaseFunctions
 /firebase.json
 # /firestore.rules
-/firestore.indexes.json
+# /firestore.indexes.json
 /.claude
 /.agent
 /.continue

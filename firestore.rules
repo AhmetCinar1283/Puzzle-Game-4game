@@ -23,21 +23,18 @@ rules_version = '2';
       // - First level of a part (no prevLevelId): requires totalScore >= unlockRequirement.
       // - Subsequent levels: requires the previous level to be in playedLevels.
       function canReadLevel() {
-        if (isModerator()) return true;
-        if (!isSignedIn()) return false;
-
         let d = resource.data;
+        let isFirstLevel = !('prevLevelId' in d) || d.prevLevelId == null;
 
-        if (!('prevLevelId' in d) || d.prevLevelId == null) {
-          // First level in part — check totalScore >= unlockRequirement
-          let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-          let partData = get(/databases/$(database)/documents/levelParts/$(d.part)).data;
-          return userData.totalScore >= partData.unlockRequirement;
-        }
+        return isModerator() || (
+          isSignedIn() && (
+            isFirstLevel
+              // İlk seviyeyse puan kontrolü yap (Ternary'nin DOĞRU durumu)
+              ? (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.totalScore >= get(/databases/$(database)/documents/levelParts/$(d.part)).data.unlockRequirement)
 
-        // Not first — check if previous level was completed
-        return exists(
-          /databases/$(database)/documents/users/$(request.auth.uid)/playedLevels/$(d.prevLevelId)
+              // Sonraki seviyeyse oynanma durumu kontrolü yap (Ternary'nin YANLIŞ durumu)
+              : exists(/databases/$(database)/documents/users/$(request.auth.uid)/playedLevels/$(d.prevLevelId))
+          )
         );
       }
 
