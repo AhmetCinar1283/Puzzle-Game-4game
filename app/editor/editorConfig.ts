@@ -2,7 +2,7 @@ import type { CellType, EdgeBehavior, MovementMode } from '@/app/src/games/types
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-export type ToolType = CellType | 'place_obj1' | 'place_obj2' | 'place_box' | 'erase';
+export type ToolType = CellType | 'place_obj1' | 'place_obj2' | 'place_box' | 'erase' | 'select';
 
 export interface ObjConfig {
   id: number;

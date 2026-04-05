@@ -42,8 +42,9 @@ export interface StoredPlayedLevel {
   timeSpent: number;   // seconds
   completedAt: number; // ms
   updatedAt: number;   // ms
-  moveCount?: number;  // number of moves used to solve (future field)
-  moves?: string[];    // ordered move directions, e.g. ['up', 'right', ...] (future field)
+  moveCount?: number;  // best move count achieved
+  moves?: string[];    // ordered move directions, e.g. ['up', 'right', ...]
+  stars?: 1 | 2 | 3;  // best star rating achieved (1–3)
 }
 
 /** Per-collection sync metadata — replaces localStorage-based cooldown tracking. */
@@ -96,6 +97,14 @@ export class KnowAndConquerDB extends Dexie {
     });
     // Version 8: isNeedSync field for lazy Firestore fetch (optional, no destructive migration needed)
     this.version(8).stores({
+      levels: '++id',
+      levelOrder: 'id',
+      presetLevels: '++id, firestoreId',
+      syncMeta: 'collection',
+      playedLevels: 'levelId, updatedAt',
+    });
+    // Version 9: stars field added to StoredPlayedLevel (optional, no destructive migration needed)
+    this.version(9).stores({
       levels: '++id',
       levelOrder: 'id',
       presetLevels: '++id, firestoreId',

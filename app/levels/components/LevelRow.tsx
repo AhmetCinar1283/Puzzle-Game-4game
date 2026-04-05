@@ -22,6 +22,7 @@ interface RowProps {
   isMobile: boolean;
   cols: string;
   playedLevel?: StoredPlayedLevel;
+  isLocked?: boolean;
   onPlay: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -29,9 +30,20 @@ interface RowProps {
   onMoveDown: () => void;
 }
 
-export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, cols, playedLevel, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
+function StarDisplay({ stars }: { stars: 1 | 2 | 3 }) {
+  return (
+    <span style={{ fontSize: 11, flexShrink: 0, letterSpacing: 1 }}>
+      {[1, 2, 3].map((n) => (
+        <span key={n} style={{ color: n <= stars ? '#ffd700' : '#1e3a5f' }}>★</span>
+      ))}
+    </span>
+  );
+}
+
+export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, cols, playedLevel, isLocked, onPlay, onEdit, onDelete, onMoveUp, onMoveDown }: RowProps) {
   const t = useT();
   const [hovered, setHovered] = useState(false);
+  const locked = isLocked ?? false;
 
   return (
     <div
@@ -40,9 +52,10 @@ export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, col
       style={{
         display: 'grid', gridTemplateColumns: cols, gap: 8, alignItems: 'center',
         padding: '10px 12px',
-        background: hovered ? 'rgba(0,255,136,0.04)' : 'rgba(255,255,255,0.02)',
-        border: `1px solid ${hovered ? 'rgba(0,255,136,0.2)' : 'rgba(30,58,95,0.3)'}`,
+        background: hovered && !locked ? 'rgba(0,255,136,0.04)' : 'rgba(255,255,255,0.02)',
+        border: `1px solid ${hovered && !locked ? 'rgba(0,255,136,0.2)' : 'rgba(30,58,95,0.3)'}`,
         borderRadius: 8, transition: 'all 0.15s',
+        opacity: locked ? 0.5 : 1,
       }}
     >
       <span style={{ fontSize: 13, color: '#1e3a5f', fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>
@@ -62,9 +75,15 @@ export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, col
             </span>
           )}
         </div>
-        {playedLevel && (
-          <span style={{ fontSize: 9, color: '#00ff88', border: '1px solid rgba(0,255,136,0.35)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>✓</span>
-        )}
+        {locked
+          ? <span style={{ fontSize: 9, color: '#475569', border: '1px solid rgba(71,85,105,0.4)', borderRadius: 3, padding: '1px 4px', flexShrink: 0 }}>🔒</span>
+          : playedLevel
+            ? <>
+                <span style={{ fontSize: 9, color: '#00ff88', border: '1px solid rgba(0,255,136,0.35)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>✓</span>
+                {playedLevel.stars != null && <StarDisplay stars={playedLevel.stars} />}
+              </>
+            : null
+        }
         {level.trailCollision && (
           <span style={{ fontSize: 9, color: '#00c4ff', border: '1px solid rgba(0,196,255,0.35)', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.06em', flexShrink: 0 }}>TRAIL</span>
         )}
@@ -99,7 +118,12 @@ export function LevelRow({ level, index, total, isPreset, isAdmin, isMobile, col
       )}
 
       <div style={{ display: 'flex', gap: 5 }}>
-        <ActionBtn onClick={onPlay} color="#00ff88" label="▶" title={t('list.play')} />
+        <ActionBtn
+          onClick={locked ? () => {} : onPlay}
+          color={locked ? '#334155' : '#00ff88'}
+          label={locked ? '🔒' : '▶'}
+          title={locked ? 'Locked' : t('list.play')}
+        />
         {(!isPreset || isAdmin) && (
           <>
             <ActionBtn onClick={onEdit} color="#00c4ff" label="✎" title={t('list.edit')} />

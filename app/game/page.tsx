@@ -13,6 +13,7 @@ import { useT } from '@/app/src/contexts/LanguageContext';
 function storedToLevelData(stored: StoredLevel & { id: number }): LevelData {
   return {
     id: stored.id,
+    firestoreId: stored.firestoreId,
     name: stored.name,
     width: stored.width,
     height: stored.height,

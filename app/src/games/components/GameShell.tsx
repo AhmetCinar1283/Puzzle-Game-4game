@@ -10,6 +10,7 @@ import HUD from './HUD';
 import WinOverlay from './WinOverlay';
 import LostOverlay from './LostOverlay';
 import { trackLevelStart, trackLevelComplete, trackLevelFail } from '../../lib/analytics';
+import { useAuthContext } from '../../contexts/AuthContext';
 
 interface GameShellProps {
   level: LevelData;
@@ -19,9 +20,24 @@ interface GameShellProps {
   source?: 'preset' | 'user';
 }
 
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL;
+const MOVES_LIMIT = 500;
+
+interface WorkerResult {
+  stars: 1 | 2 | 3;
+  scoreDelta: number;
+  isFirstCompletion: boolean;
+  isNewBestSolution: boolean;
+}
+
 export default function GameShell({ level, onNextLevel, source }: GameShellProps) {
-  const { state, restart, move } = useGameEngine(level);
+  const { state, restart, move, movesHistoryRef } = useGameEngine(level);
   const { play, muted, toggleMute } = useSoundManager();
+  const { user } = useAuthContext();
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  const [workerResult, setWorkerResult] = useState<WorkerResult | null>(null);
 
   // ── Analytics: level start ────────────────────────────────────────────────
   const startTimeRef = useRef(Date.now());
@@ -43,6 +59,51 @@ export default function GameShell({ level, onNextLevel, source }: GameShellProps
       play('win');
       const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000);
       trackLevelComplete(state.level.id, state.level.name, state.moveCount, timeSpent);
+
+      // Report completion to worker for verified scoring
+      if (WORKER_URL && state.level.firestoreId && userRef.current) {
+        const firestoreId = state.level.firestoreId;
+        const moves = [...movesHistoryRef.current];
+        void (async () => {
+          try {
+            if (moves.length === 0 || moves.length > MOVES_LIMIT) return;
+            const token = await userRef.current!.getIdToken();
+            const res = await fetch(`${WORKER_URL}/complete-level`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ levelId: firestoreId, moves, timeSpent }),
+            });
+            if (!res.ok) return;
+
+            const data = await res.json() as { success: boolean } & WorkerResult;
+            if (!data.success) return;
+
+            // Update Dexie immediately so levels page shows correct stars
+            const { getDB } = await import('@/app/src/lib/db');
+            const db = getDB();
+            const existing = await db.playedLevels.get(firestoreId);
+            await db.playedLevels.put({
+              levelId: firestoreId,
+              score: data.stars,
+              timeSpent,
+              completedAt: existing?.completedAt ?? Date.now(),
+              updatedAt: Date.now(),
+              stars: data.stars,
+              moveCount: moves.length,
+            });
+
+            setWorkerResult({
+              stars: data.stars,
+              scoreDelta: data.scoreDelta,
+              isFirstCompletion: data.isFirstCompletion,
+              isNewBestSolution: data.isNewBestSolution,
+            });
+          } catch {
+            // Non-critical — scoring is best-effort
+          }
+        })();
+      }
+
       return;
     }
     if (state.phase === 'lost' && prev.phase !== 'lost') {
@@ -172,6 +233,7 @@ export default function GameShell({ level, onNextLevel, source }: GameShellProps
               moveCount={state.moveCount}
               onRestart={restart}
               onNextLevel={onNextLevel}
+              workerResult={workerResult}
             />
           )}
           {state.phase === 'lost' && (

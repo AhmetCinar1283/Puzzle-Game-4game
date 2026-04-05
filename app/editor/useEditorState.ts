@@ -38,9 +38,35 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const [activePlacingBoxId, setActivePlacingBoxId] = useState<number | null>(null);
   const [conveyorPowerRequired, setConveyorPowerRequired] = useState<Position[]>([]);
 
-  // Tool
-  const [activeTool, setActiveTool] = useState<ToolType>('obstacle');
+  // Tool — wrap setActiveTool to track previous tool for restoring after box placement
+  const [activeTool, _setActiveTool] = useState<ToolType>('obstacle');
+  const prevToolRef = useRef<ToolType>('obstacle');
+  const setActiveTool = useCallback((t: ToolType) => {
+    _setActiveTool((prev) => {
+      if (prev !== 'place_box' && prev !== 'place_obj1' && prev !== 'place_obj2') {
+        prevToolRef.current = prev;
+      }
+      return t;
+    });
+  }, []);
   const paintMode = useRef<'paint' | 'erase'>('paint');
+
+  // Undo history — stores grid snapshots (max 40)
+  const historyRef = useRef<CellType[][][]>([]);
+  const [historyLen, setHistoryLen] = useState(0);
+
+  const pushGridHistory = useCallback(() => {
+    historyRef.current = [...historyRef.current.slice(-39), grid.map((r) => [...r])];
+    setHistoryLen(historyRef.current.length);
+  }, [grid]);
+
+  const undo = useCallback(() => {
+    if (historyRef.current.length === 0) return;
+    const prev = historyRef.current[historyRef.current.length - 1];
+    historyRef.current = historyRef.current.slice(0, -1);
+    setHistoryLen(historyRef.current.length);
+    setGrid(prev);
+  }, []);
 
   // Saved levels
   const [savedLevels, setSavedLevels] = useState<(StoredLevel & { id: number })[]>([]);
@@ -51,15 +77,12 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const [testError, setTestError] = useState<string | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savePosition, setSavePosition] = useState('');
-  const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
-  const [pasteText, setPasteText] = useState('');
-  const [pasteError, setPasteError] = useState('');
-  const [copied, setCopied] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState('');
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [submitNote, setSubmitNote] = useState('');
   const [submitStatus, setSubmitStatus] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   // Admin / Firestore
   const [parts, setParts] = useState<LevelPart[]>([]);
@@ -130,12 +153,19 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   }, [pendingW, pendingH]);
 
   const paintCell = useCallback((r: number, c: number, isDrag: boolean) => {
+    if (!isDrag) pushGridHistory();
     if (activeTool === 'place_obj1') { setObjects((os) => os.map((o) => o.id === 1 ? { ...o, row: r, col: c } : o)); return; }
     if (activeTool === 'place_obj2') { setObjects((os) => os.map((o) => o.id === 2 ? { ...o, row: r, col: c } : o)); return; }
     if (activeTool === 'place_box' && activePlacingBoxId !== null) {
       setBoxes((bs) => bs.map((b) => b.id === activePlacingBoxId ? { ...b, row: r, col: c } : b));
-      setActivePlacingBoxId(null); return;
+      setActivePlacingBoxId(null);
+      setActiveTool(prevToolRef.current);
+      return;
     }
+    // BUG FIX: if still in place_box mode but no box to place, do nothing
+    if (activeTool === 'place_box') return;
+    // 'select' tool paints nothing
+    if (activeTool === 'select') return;
     const cellType: CellType = activeTool === 'erase' ? 'empty' : (activeTool as CellType);
     setGrid((g) => {
       const next = g.map((row) => [...row]);
@@ -153,7 +183,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       next[r][c] = cellType;
       return next;
     });
-  }, [activeTool, activePlacingBoxId]);
+  }, [activeTool, activePlacingBoxId, setActiveTool]);
 
   const generateLevelData = useCallback((): { level: LevelData | null; error: string | null } => {
     const targets: { objectId: number; position: { row: number; col: number } }[] = [];
@@ -190,8 +220,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     trailCollision: level.trailCollision, initialBoxes: level.initialBoxes,
     conveyorPowerRequired: level.conveyorPowerRequired, difficulty,
     ...(savedRequestId ? { requestId: savedRequestId } : {}),
-    position: savedLevels.length // burada en sona ekler sadece bunu düzelteceğiz fakat diğer değişkenleri de uyumlu hale getirmemiz gerekeceği için şu ertelemeyi uygun gördük
-  }), [difficulty, savedRequestId]);
+    position: savedLevels.length
+  }), [difficulty, savedRequestId, savedLevels.length]);
 
   const doSave = useCallback(async (posInput?: string) => {
     const { level, error } = generateLevelData();
@@ -267,11 +297,25 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setSubmitError(''); setSubmitDialogOpen(true);
   }, [user, isAnonymous, editId, generateLevelData, buildPayload, reloadLevels, router]);
 
-  const handlePaste = useCallback(() => {
-    setPasteError('');
+  /** Saves current level JSON to localStorage clipboard */
+  const handleCopyBoard = useCallback(() => {
+    const { level } = generateLevelData();
+    if (!level) return;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('editorClipboard', JSON.stringify(level));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [generateLevelData]);
+
+  /** Loads level JSON from localStorage clipboard. Returns error string or null on success. */
+  const handlePasteBoard = useCallback((): string | null => {
+    if (typeof window === 'undefined') return 'Unavailable';
+    const raw = localStorage.getItem('editorClipboard');
+    if (!raw) return 'Pano boş.';
     try {
-      const parsed = JSON.parse(pasteText) as Partial<LevelData>;
-      if (!parsed.grid || !parsed.width || !parsed.height) throw new Error('Invalid format');
+      const parsed = JSON.parse(raw) as Partial<LevelData>;
+      if (!parsed.grid || !parsed.width || !parsed.height) return 'Geçersiz format.';
       setLevelName(parsed.name ?? 'Pasted Level');
       setWidth(parsed.width); setHeight(parsed.height);
       setPendingW(parsed.width); setPendingH(parsed.height);
@@ -287,11 +331,11 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         if (idx >= 0) objs[idx] = { id: obj.id, row: obj.position.row, col: obj.position.col, mode: obj.mode, lockOnTarget: obj.lockOnTarget };
       });
       setObjects(objs);
-      setPasteDialogOpen(false); setPasteText('');
+      return null;
     } catch {
-      setPasteError('Invalid JSON. Make sure it matches LevelData format.');
+      return 'Geçersiz JSON.';
     }
-  }, [pasteText]);
+  }, []);
 
   const loadFirestoreLevel = useCallback((fl: FirestoreLevel) => {
     setFirestoreEditId(fl.firestoreId);
@@ -316,10 +360,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     if (!user || !isModerator) return;
     const { level, error } = generateLevelData();
     if (error || !level) { setTestError(error); return; }
-    const payload = { ...level, part: selectedPartId,
-      position: savedLevels.length, // Bu en sona ekler leveli fakat ileride ayarlanabilir olmalı
-      difficulty,
-     };
+    const payload = { ...level, part: selectedPartId, position: savedLevels.length, difficulty };
     const { publishLevel, updateFirestoreLevel } = await import('@/app/src/lib/firebase/admin');
     if (firestoreEditId) {
       await updateFirestoreLevel(firestoreEditId, payload, user.uid, selectedPartId);
@@ -332,7 +373,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       setFirestoreLevels(await getPartLevels(selectedPartId));
     }
     setTimeout(() => setPublishStatus(''), 2000);
-  }, [user, isModerator, generateLevelData, selectedPartId, firestoreEditId, showFirestoreLevels]);
+  }, [user, isModerator, generateLevelData, selectedPartId, firestoreEditId, showFirestoreLevels, savedLevels.length, difficulty]);
 
   useEffect(() => {
     if (!firestoreIdParam || !isModerator) return;
@@ -367,20 +408,16 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setTestError(null); setTestLevel(level);
   }, [generateLevelData]);
 
-  const handleCopy = useCallback((jsonString: string) => {
-    navigator.clipboard.writeText(jsonString).then(() => {
-      setCopied(true); setTimeout(() => setCopied(false), 2000);
-    });
-  }, []);
-
   return {
     // Auth
     user, isAnonymous, isModerator, userTag,
     // Level data
-    levelName, setLevelName, width, height, pendingW, setPendingW, pendingH, setPendingH,
+    levelName, setLevelName, width, setWidth, height, setHeight,
+    pendingW, setPendingW, pendingH, setPendingH,
     trailCollision, setTrailCollision, difficulty, setDifficulty,
-    savedRequestId, edges, setEdges, grid, objects, setObjects,
-    boxes, setBoxes, activePlacingBoxId, setActivePlacingBoxId, conveyorPowerRequired, setConveyorPowerRequired,
+    savedRequestId, edges, setEdges, grid, setGrid, objects, setObjects,
+    boxes, setBoxes, activePlacingBoxId, setActivePlacingBoxId,
+    conveyorPowerRequired, setConveyorPowerRequired,
     // Tool
     activeTool, setActiveTool, router,
     // Saved levels
@@ -388,17 +425,19 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     // UI
     testLevel, setTestLevel, testError,
     saveDialogOpen, setSaveDialogOpen, savePosition, setSavePosition,
-    pasteDialogOpen, setPasteDialogOpen, pasteText, setPasteText, pasteError,
-    copied, saveSuccess,
+    saveSuccess, copied,
     submitDialogOpen, setSubmitDialogOpen, submitNote, setSubmitNote, submitStatus, submitError,
     // Admin
     parts, selectedPartId, setSelectedPartId, firestoreLevels,
     showFirestoreLevels, setShowFirestoreLevels, publishStatus, firestoreEditId, setFirestoreEditId,
+    // Undo
+    undo, canUndo: historyLen > 0, pushGridHistory,
     // Handlers
     applyResize, paintCell, generateLevelData,
     doSave, handleSaveClick,
     handleSubmitLevel, handleSaveAndSubmit,
-    handlePaste, loadFirestoreLevel, doPublish,
-    handleLoadLevel, handleNewLevel, handleTest, handleCopy,
+    handleCopyBoard, handlePasteBoard,
+    loadFirestoreLevel, doPublish,
+    handleLoadLevel, handleNewLevel, handleTest,
   };
 }

@@ -208,13 +208,16 @@ export async function syncPlayedLevels(uid: string, force = false): Promise<void
   const snap = await getDocs(q);
 
   for (const d of snap.docs) {
-    const data = d.data();
+    const raw = d.data();
+    const rawStars = raw.stars;
     const record: StoredPlayedLevel = {
       levelId: d.id,
-      score: data.score ?? 0,
-      timeSpent: data.timeSpent ?? 0,
-      completedAt: toMs(data.completedAt),
-      updatedAt: toMs(data.updatedAt),
+      score: raw.score ?? 0,
+      timeSpent: raw.timeSpent ?? 0,
+      completedAt: toMs(raw.completedAt),
+      updatedAt: toMs(raw.updatedAt),
+      stars: (rawStars === 1 || rawStars === 2 || rawStars === 3) ? rawStars : undefined,
+      moveCount: typeof raw.moveCount === 'number' ? raw.moveCount : undefined,
     };
     await dexie.playedLevels.put(record);
   }

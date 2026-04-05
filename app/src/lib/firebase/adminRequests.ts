@@ -26,8 +26,27 @@ export async function approveLevelRequest(
 ): Promise<void> {
   const batch = writeBatch(db);
 
-  // 1. Create the level document with attribution
+  // 1. Create the level document ref (prevLevelId computed below after reading part)
   const levelRef = doc(collection(db, 'levels'));
+
+  // 2. Determine position for the new entry
+  const partRef = doc(db, 'levelParts', partId);
+  const partSnap = await getDoc(partRef);
+  const currentOrder: Record<string, LevelOrderEntry> = partSnap.exists()
+    ? (partSnap.data().order as Record<string, LevelOrderEntry>) ?? {}
+    : {};
+  const maxPos = Object.values(currentOrder).reduce(
+    (m, e) => Math.max(m, e.position ?? 0),
+    -1,
+  );
+
+  // Find the current last-position level (becomes prevLevelId for the approved level)
+  const prevEntry = Object.values(currentOrder).find(
+    (e) => (e.position ?? -1) === maxPos,
+  );
+  const prevLevelId: string | null = prevEntry?.id ?? null;
+
+  // 1a. Now create the level document with prevLevelId
   batch.set(levelRef, {
     name: req.name,
     width: req.width,
@@ -45,20 +64,10 @@ export async function approveLevelRequest(
     createdBy: req.submittedBy,
     ...(req.creatorName && { creatorName: req.creatorName }),
     creatorTag: req.creatorTag,
+    prevLevelId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-
-  // 2. Determine position for the new entry
-  const partRef = doc(db, 'levelParts', partId);
-  const partSnap = await getDoc(partRef);
-  const currentOrder: Record<string, LevelOrderEntry> = partSnap.exists()
-    ? (partSnap.data().order as Record<string, LevelOrderEntry>) ?? {}
-    : {};
-  const maxPos = Object.values(currentOrder).reduce(
-    (m, e) => Math.max(m, e.position ?? 0),
-    -1,
-  );
 
   // 3. Build order entry
   const entry: Omit<LevelOrderEntry, 'updatedAt'> & { updatedAt: ReturnType<typeof serverTimestamp>; position: number } = {

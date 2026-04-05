@@ -48,15 +48,17 @@ android/local.properties
 
 # electron build output
 dist-electron/
+electron/
 
 
 # Benim eklediklerim
 
-/firebaseFunctions
+# /firebaseFunctions
 /firebase.json
-/firestore.rules
+# /firestore.rules
 /firestore.indexes.json
 /.claude
 /.agent
 /.continue
 /android
+/syncron-worker/.dev.vars

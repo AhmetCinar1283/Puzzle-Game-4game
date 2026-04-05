@@ -69,6 +69,8 @@ export interface BoxState {
 
 export interface LevelData {
   id: number;
+  /** Firestore document ID — set for preset levels, undefined for user-created levels. */
+  firestoreId?: string;
   name: string;
   width: number;
   height: number;

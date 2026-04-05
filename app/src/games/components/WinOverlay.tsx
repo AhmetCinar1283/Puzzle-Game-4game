@@ -3,13 +3,21 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useT } from '@/app/src/contexts/LanguageContext';
 
+interface WorkerResult {
+  stars: 1 | 2 | 3;
+  scoreDelta: number;
+  isFirstCompletion: boolean;
+  isNewBestSolution: boolean;
+}
+
 interface WinOverlayProps {
   moveCount: number;
   onRestart: () => void;
   onNextLevel?: () => void;
+  workerResult?: WorkerResult | null;
 }
 
-export default function WinOverlay({ moveCount, onRestart, onNextLevel }: WinOverlayProps) {
+export default function WinOverlay({ moveCount, onRestart, onNextLevel, workerResult }: WinOverlayProps) {
   const t = useT();
   return (
     <AnimatePresence>
@@ -63,6 +71,37 @@ export default function WinOverlay({ moveCount, onRestart, onNextLevel }: WinOve
           <p style={{ color: '#475569', fontSize: 13, margin: 0 }}>
             {t('win.solved_in', { n: moveCount })}
           </p>
+
+          {/* Stars — grey while worker is responding, gold once data arrives */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <div style={{ fontSize: 32, letterSpacing: 6 }}>
+              {workerResult != null
+                ? [1, 2, 3].map((n) => (
+                    <span
+                      key={n}
+                      style={{
+                        color: n <= workerResult.stars ? '#ffd700' : '#1e3a5f',
+                        textShadow: n <= workerResult.stars ? '0 0 8px rgba(255,215,0,0.5)' : 'none',
+                      }}
+                    >★</span>
+                  ))
+                : [1, 2, 3].map((n) => (
+                    <span key={n} style={{ color: '#1e3a5f' }}>★</span>
+                  ))
+              }
+            </div>
+            {workerResult?.scoreDelta != null && workerResult.scoreDelta > 0 && (
+              <p style={{ color: '#ffd700', fontSize: 11, margin: 0, letterSpacing: '0.06em' }}>
+                +{workerResult.scoreDelta} PTS
+              </p>
+            )}
+            {workerResult?.isNewBestSolution && (
+              <p style={{ color: '#00c4ff', fontSize: 10, margin: 0, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                New Best
+              </p>
+            )}
+          </div>
+
           <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
             <button
               onClick={onRestart}

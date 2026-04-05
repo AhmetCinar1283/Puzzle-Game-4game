@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { localClear, type StoredLevel, type StoredPlayedLevel } from '@/app/src/lib/db';
 import { useAuth } from '@/app/src/hooks/useAuth';
 import { SectionHeader, LevelTable } from './components/LevelTable';
 import { LevelRow } from './components/LevelRow';
 import { useT } from '@/app/src/contexts/LanguageContext';
+import { useAppSelector } from '@/app/src/store/hooks';
+import { selectUser } from '@/app/src/store/userSlice';
+import type { LevelPart } from '@/app/src/lib/firebase/adminTypes';
 
 type LevelEntry = StoredLevel & { id: number };
 
@@ -14,6 +17,7 @@ export default function LevelsPage() {
   const t = useT();
   const router = useRouter();
   const { isModerator } = useAuth();
+  const { totalScore } = useAppSelector(selectUser);
   const [presets, setPresets] = useState<LevelEntry[]>([]);
   const [userLevels, setUserLevels] = useState<LevelEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +28,7 @@ export default function LevelsPage() {
   const [parts, setParts] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedPartId, setSelectedPartId] = useState<string>('');
   const [playedMap, setPlayedMap] = useState<Map<string, StoredPlayedLevel>>(new Map());
+  const [partsMap, setPartsMap] = useState<Map<string, LevelPart>>(new Map());
 
   useEffect(() => {
     function check() { setIsMobile(window.innerWidth < 600); }
@@ -47,7 +52,7 @@ export default function LevelsPage() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Load part names from Firestore
+  // Load part names and full part data from Firestore (for lock computation)
   useEffect(() => {
     import('@/app/src/lib/firebase/adminParts').then(({ getAllParts }) => {
       getAllParts()
@@ -55,6 +60,9 @@ export default function LevelsPage() {
           const mapped = fetchedParts.map((p) => ({ id: p.partId, name: p.name }));
           setParts(mapped);
           setSelectedPartId((prev) => prev || (mapped[0]?.id ?? ''));
+          const m = new Map<string, LevelPart>();
+          fetchedParts.forEach((p) => m.set(p.partId, p));
+          setPartsMap(m);
         })
         .catch((err) => console.warn('[Parts]', err));
     });
@@ -137,6 +145,31 @@ export default function LevelsPage() {
     ? presets.filter((lv) => String(lv.part) === selectedPartId)
     : presets;
 
+  // Compute which levels are locked based on progression + totalScore
+  const lockedSet = useMemo((): Set<string> => {
+    if (isModerator) return new Set(); // admins/mods see everything unlocked
+    const locked = new Set<string>();
+    if (!selectedPartId) return locked;
+
+    const part = partsMap.get(selectedPartId);
+    if (!part) return locked;
+
+    const sorted = Object.values(part.order)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+    for (let i = 0; i < sorted.length; i++) {
+      const fid = typeof sorted[i] === 'string' ? (sorted[i] as unknown as string) : sorted[i].id;
+      if (i === 0) {
+        if (totalScore < (part.unlockRequirement ?? 0)) locked.add(fid);
+      } else {
+        const prevEntry = sorted[i - 1];
+        const prevFid = typeof prevEntry === 'string' ? (prevEntry as unknown as string) : prevEntry.id;
+        if (!playedMap.has(prevFid)) locked.add(fid);
+      }
+    }
+    return locked;
+  }, [selectedPartId, partsMap, playedMap, totalScore, isModerator]);
+
   return (
     <div style={{ minHeight: '100dvh', background: '#030712', color: '#e2e8f0', display: 'flex', flexDirection: 'column' }}>
 
@@ -205,17 +238,24 @@ export default function LevelsPage() {
                 )}
 
                 <LevelTable cols={cols} headers={headers}>
-                  {filteredPresets.map((lv, idx) => (
-                    <LevelRow
-                      key={lv.id} level={lv} index={idx} total={filteredPresets.length}
-                      isPreset isAdmin={isModerator} isMobile={isMobile} cols={cols}
-                      playedLevel={lv.firestoreId ? playedMap.get(lv.firestoreId) : undefined}
-                      onPlay={() => router.push(`/game?id=${lv.id}&source=preset`)}
-                      onEdit={() => lv.firestoreId ? router.push(`/editor?firestoreId=${lv.firestoreId}`) : undefined}
-                      onDelete={() => handleDeletePreset(lv)}
-                      onMoveUp={() => { }} onMoveDown={() => { }}
-                    />
-                  ))}
+                  {filteredPresets.map((lv, idx) => {
+                    const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
+                    return (
+                      <LevelRow
+                        key={lv.id} level={lv} index={idx} total={filteredPresets.length}
+                        isPreset isAdmin={isModerator} isMobile={isMobile} cols={cols}
+                        playedLevel={lv.firestoreId ? playedMap.get(lv.firestoreId) : undefined}
+                        isLocked={isLocked}
+                        onPlay={() => {
+                          if (isLocked) return;
+                          router.push(`/game?id=${lv.id}&source=preset`);
+                        }}
+                        onEdit={() => lv.firestoreId ? router.push(`/editor?firestoreId=${lv.firestoreId}`) : undefined}
+                        onDelete={() => handleDeletePreset(lv)}
+                        onMoveUp={() => { }} onMoveDown={() => { }}
+                      />
+                    );
+                  })}
                 </LevelTable>
               </section>
             )}

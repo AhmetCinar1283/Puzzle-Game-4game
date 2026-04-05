@@ -4,6 +4,7 @@ import {
   getDoc,
   getDocs,
   serverTimestamp,
+  updateDoc,
   writeBatch,
   deleteField,
 } from 'firebase/firestore';
@@ -29,15 +30,8 @@ export async function publishLevel(
 ): Promise<string> {
   const batch = writeBatch(db);
 
-  // 1. Create the level document
+  // 1. Create the level document ref (set after computing prevLevelId below)
   const levelRef = doc(collection(db, 'levels'));
-  batch.set(levelRef, {
-    ...data,
-    grid: JSON.stringify(data.grid),
-    publishedBy,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
 
   // 2. Determine position (max existing + 1)
   const partRef = doc(db, 'levelParts', partId);
@@ -49,6 +43,22 @@ export async function publishLevel(
     (m, e) => Math.max(m, e.position ?? 0),
     -1,
   );
+
+  // Find the current last-position level (becomes prevLevelId for the new level)
+  const prevEntry = Object.values(currentOrder).find(
+    (e) => (e.position ?? -1) === maxPos,
+  );
+  const prevLevelId: string | null = prevEntry?.id ?? null;
+
+  // 1a. Set prevLevelId on the new level document
+  batch.set(levelRef, {
+    ...data,
+    grid: JSON.stringify(data.grid),
+    publishedBy,
+    prevLevelId,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
 
   // 3. Build the order entry
   const entry: Omit<LevelOrderEntry, 'updatedAt'> & { updatedAt: ReturnType<typeof serverTimestamp> } = {
@@ -122,6 +132,8 @@ export async function updateFirestoreLevel(
 
 /**
  * Deletes a level from Firestore and removes its entry from the part's order map.
+ * Also repairs the prevLevelId chain: the successor level (if any) gets its
+ * prevLevelId patched to point to the deleted level's predecessor.
  *
  * Uses deleteField() on the specific order key — no stale-read risk.
  */
@@ -129,16 +141,53 @@ export async function deleteFirestoreLevel(
   firestoreId: string,
   partId: string,
 ): Promise<void> {
+  // Read the deleted level's own prevLevelId and the part order before deleting
+  const [deletedLevelSnap, partSnap] = await Promise.all([
+    getDoc(doc(db, 'levels', firestoreId)),
+    partId ? getDoc(doc(db, 'levelParts', partId)) : Promise.resolve(null),
+  ]);
+
+  const deletedPrevLevelId: string | null = deletedLevelSnap.exists()
+    ? (deletedLevelSnap.data().prevLevelId as string | null) ?? null
+    : null;
+
+  // Find the successor (the level whose prevLevelId was firestoreId)
+  // by finding the order entry with position === deleted level's position + 1
+  let successorFirestoreId: string | null = null;
+  if (partSnap && partSnap.exists()) {
+    const order: Record<string, LevelOrderEntry> = partSnap.data().order ?? {};
+    const deletedEntry = order[firestoreId];
+    const deletedPos = deletedEntry?.position ?? -1;
+    const successorEntry = Object.values(order).find(
+      (e) => e.id !== firestoreId && (e.position ?? -1) === deletedPos + 1,
+    );
+    successorFirestoreId = successorEntry?.id ?? null;
+  }
+
   const batch = writeBatch(db);
 
   batch.delete(doc(db, 'levels', firestoreId));
 
-  batch.update(doc(db, 'levelParts', partId), {
-    [`order.${firestoreId}`]: deleteField(),
-    updatedAt: serverTimestamp(),
-  });
+  if (partId) {
+    batch.update(doc(db, 'levelParts', partId), {
+      [`order.${firestoreId}`]: deleteField(),
+      updatedAt: serverTimestamp(),
+    });
+  }
 
   await batch.commit();
+
+  // Patch successor's prevLevelId to point to deleted level's predecessor (non-fatal)
+  if (successorFirestoreId !== null) {
+    try {
+      await updateDoc(doc(db, 'levels', successorFirestoreId), {
+        prevLevelId: deletedPrevLevelId,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.error('[deleteFirestoreLevel] Failed to patch successor prevLevelId:', e);
+    }
+  }
 }
 
 /**

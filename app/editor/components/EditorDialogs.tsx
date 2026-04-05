@@ -27,25 +27,16 @@ interface EditorDialogsProps {
   user: User | null;
   userTag: string | null;
   onSubmit: () => void;
-  // Paste dialog
-  pasteDialogOpen: boolean;
-  onPasteClose: () => void;
-  pasteText: string;
-  setPasteText: (v: string) => void;
-  pasteError: string;
-  onPaste: () => void;
 }
 
 export default function EditorDialogs({
   saveDialogOpen, onSaveClose, savePosition, setSavePosition, savedLevels, onSave,
   submitDialogOpen, onSubmitClose, submitNote, setSubmitNote,
   submitError, submitStatus, savedRequestId, levelName, difficulty, user, userTag, onSubmit,
-  pasteDialogOpen, onPasteClose, pasteText, setPasteText, pasteError, onPaste,
 }: EditorDialogsProps) {
   const t = useT();
   return (
     <>
-      {/* Save position dialog */}
       {saveDialogOpen && (
         <Modal onClose={onSaveClose}>
           <h3 style={{ margin: '0 0 12px', fontSize: 14, color: '#00ff88', textShadow: '0 0 8px rgba(0,255,136,0.5)', letterSpacing: '0.06em' }}>{t('editor.dialog_save_title')}</h3>
@@ -66,7 +57,6 @@ export default function EditorDialogs({
         </Modal>
       )}
 
-      {/* Submit level dialog */}
       {submitDialogOpen && (
         <Modal onClose={onSubmitClose}>
           <h3 style={{ margin: '0 0 12px', fontSize: 14, color: '#a78bfa', letterSpacing: '0.06em', textShadow: '0 0 8px rgba(167,139,250,0.5)' }}>
@@ -106,25 +96,6 @@ export default function EditorDialogs({
           <p style={{ fontSize: 10, color: '#1e3a5f', margin: '10px 0 0', lineHeight: 1.5 }}>
             {savedRequestId ? t('editor.dialog_request_update_note') : t('editor.dialog_submit_note')}
           </p>
-        </Modal>
-      )}
-
-      {/* Paste JSON dialog */}
-      {pasteDialogOpen && (
-        <Modal onClose={onPasteClose}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 14, color: '#00c4ff', letterSpacing: '0.06em' }}>{t('editor.dialog_paste_title')}</h3>
-          <p style={{ fontSize: 11, color: '#334155', margin: '0 0 10px' }}>{t('editor.dialog_paste_instruction')}</p>
-          {pasteError && <p style={{ fontSize: 11, color: '#ef4444', marginBottom: 8 }}>{pasteError}</p>}
-          <textarea
-            value={pasteText} onChange={(e) => setPasteText(e.target.value)}
-            placeholder='{ "id": 1, "name": "...", ... }'
-            style={{ width: 360, height: 200, background: '#060d1a', border: '1px solid rgba(30,58,95,0.5)', color: '#94a3b8', fontFamily: 'monospace', fontSize: 11, borderRadius: 6, padding: 10, outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
-            autoFocus
-          />
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <NBtn onClick={onPaste} color="#00c4ff" style={{ padding: '7px 20px', fontSize: 12 }}>{t('editor.dialog_paste_load')}</NBtn>
-            <NBtn onClick={onPasteClose} style={{ padding: '7px 16px', fontSize: 12 }}>{t('common.cancel')}</NBtn>
-          </div>
         </Modal>
       )}
     </>
