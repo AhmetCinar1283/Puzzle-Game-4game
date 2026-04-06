@@ -10,24 +10,41 @@ interface SolutionEntry {
   solvedAt: number;
 }
 
+export interface SolutionStats {
+  /** Shortest move count in the list; null if no solutions yet. */
+  bestMoveCount: number | null;
+  /**
+   * Worst (longest) move count among the current top-N entries.
+   * null if fewer than TOP_N solutions exist (room for any newcomer).
+   */
+  worstTopMoveCount: number | null;
+  /** How many solutions are currently stored (0 – TOP_N). */
+  topCount: number;
+}
+
 /**
- * Returns the best (shortest) move count across all existing solutions for a level.
- * Returns null if no solutions exist yet (first ever solver).
+ * Read solution stats for a level (best, worst-in-top, count).
+ * Replaces the old getBestMoveCount — call once, use all three values.
  */
-export async function getBestMoveCount(
+export async function getSolutionStats(
   projectId: string,
   firestoreId: string,
   accessToken: string,
-): Promise<number | null> {
+): Promise<SolutionStats> {
   const path = `levels/${firestoreId}/infos/solutions`;
   const doc = await fsGet(projectId, path, accessToken);
-  if (!doc) return null;
+  if (!doc) return { bestMoveCount: null, worstTopMoveCount: null, topCount: 0 };
 
   const existing: SolutionEntry[] =
     (fromDoc(doc).solutions as SolutionEntry[] | undefined) ?? [];
-  if (existing.length === 0) return null;
+  if (existing.length === 0) return { bestMoveCount: null, worstTopMoveCount: null, topCount: 0 };
 
-  return Math.min(...existing.map((e) => e.moveCount));
+  const sorted = [...existing].sort((a, b) => a.moveCount - b.moveCount);
+  return {
+    bestMoveCount: sorted[0].moveCount,
+    worstTopMoveCount: existing.length >= TOP_N ? sorted[sorted.length - 1].moveCount : null,
+    topCount: existing.length,
+  };
 }
 
 /**
@@ -43,8 +60,8 @@ export function computeStars(moveCount: number, bestMoveCount: number | null): S
 }
 
 /**
- * Update the top-3 shortest solutions for a level.
- * Returns true if the submitted solution made it into the top-3.
+ * Update the top-N shortest solutions for a level.
+ * Only writes if the new solution is strictly better than the uid's existing entry.
  */
 export async function updateSolutions(
   projectId: string,
@@ -52,13 +69,18 @@ export async function updateSolutions(
   uid: string,
   moves: string[],
   accessToken: string,
-): Promise<boolean> {
+): Promise<void> {
   const path = `levels/${firestoreId}/infos/solutions`;
   const doc = await fsGet(projectId, path, accessToken);
 
   const existing: SolutionEntry[] = doc
     ? ((fromDoc(doc).solutions as SolutionEntry[] | undefined) ?? [])
     : [];
+
+  const existingEntry = existing.find((e) => e.uid === uid);
+
+  // Only update if this submission is strictly better (fewer moves)
+  if (existingEntry && moves.length >= existingEntry.moveCount) return;
 
   const newEntry: SolutionEntry = {
     moves,
@@ -67,14 +89,12 @@ export async function updateSolutions(
     solvedAt: Date.now(),
   };
 
-  // Each uid keeps only their best result; sort by moveCount then solvedAt
+  // Replace this uid's old entry with the new (better) one; keep top-N shortest
   const withoutThisUid = existing.filter((e) => e.uid !== uid);
   const combined = [...withoutThisUid, newEntry].sort(
     (a, b) => a.moveCount - b.moveCount || a.solvedAt - b.solvedAt,
   );
   const top = combined.slice(0, TOP_N);
-  const isInTop = top.some((e) => e.uid === uid);
 
   await fsSet(projectId, path, { solutions: top }, accessToken);
-  return isInTop;
 }

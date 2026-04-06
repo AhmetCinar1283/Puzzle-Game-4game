@@ -17,9 +17,11 @@ export type StarCount = 1 | 2 | 3;
 export interface CompleteLevelResponse {
   success: boolean;
   isFirstCompletion: boolean;
-  isNewBestSolution: boolean;
-  stars: StarCount;      // stars earned THIS submission (1, 2, or 3)
-  scoreDelta: number;    // points actually added to totalScore (0 if no improvement)
+  isNewBestSolution: boolean; // strictly better than previous global best (or first ever)
+  isBestSolution: boolean;    // tied the current global best move count
+  isGoodSolution: boolean;    // made it into top-3 (but not best/new-best)
+  stars: StarCount;
+  scoreDelta: number;
 }
 
 export const MOVES_LIMIT = 500;

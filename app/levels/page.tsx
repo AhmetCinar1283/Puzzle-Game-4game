@@ -29,6 +29,7 @@ export default function LevelsPage() {
   const [selectedPartId, setSelectedPartId] = useState<string>('');
   const [playedMap, setPlayedMap] = useState<Map<string, StoredPlayedLevel>>(new Map());
   const [partsMap, setPartsMap] = useState<Map<string, LevelPart>>(new Map());
+  const { user } = useAuth()
 
   useEffect(() => {
     function check() { setIsMobile(window.innerWidth < 600); }
@@ -78,10 +79,12 @@ export default function LevelsPage() {
   }, []);
 
   const handleRefresh = useCallback(async () => {
+    if (!user?.uid) return null;
     setSyncing(true);
     try {
-      const { syncLevelsMeta } = await import('@/app/src/lib/firebase/sync');
+      const { syncLevelsMeta, syncPlayedLevels } = await import('@/app/src/lib/firebase/sync');
       await syncLevelsMeta(true);
+      await syncPlayedLevels(user.uid, true)
     } catch (err) {
       console.warn('[Sync] Refresh failed:', err);
     }

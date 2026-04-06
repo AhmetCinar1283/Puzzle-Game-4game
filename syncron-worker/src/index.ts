@@ -4,7 +4,7 @@ import { verifyIdToken } from './auth';
 import { getAdminAccessToken } from './serviceAccount';
 import { fsGet, fsCommit, parseLevelDoc, docPath, nowTimestamp, fromDoc } from './firestore';
 import { verifyMoves } from './gameVerify';
-import { getBestMoveCount, computeStars, updateSolutions } from './solutions';
+import { getSolutionStats, computeStars, updateSolutions } from './solutions';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -93,10 +93,11 @@ async function handleCompleteLevel(
 
   // ── 6. Parallel reads: existing played record + best solution move count ───
   const playedPath = `users/${uid}/playedLevels/${levelId}`;
-  const [existingPlayed, bestMoveCount] = await Promise.all([
+  const [existingPlayed, solutionStats] = await Promise.all([
     fsGet(projectId, playedPath, adminToken),
-    getBestMoveCount(projectId, levelId, adminToken),
+    getSolutionStats(projectId, levelId, adminToken),
   ]);
+  const { bestMoveCount, worstTopMoveCount, topCount } = solutionStats;
 
   // ── 7. Compute stars and score delta ──────────────────────────────────────
   const isFirstCompletion = existingPlayed === null;
@@ -165,9 +166,18 @@ async function handleCompleteLevel(
   }
 
   // ── 9. Update top-3 solutions (non-fatal) ────────────────────────────────
-  let isNewBestSolution = false;
+  // bestMoveCount was read before the batch write → reflects state before this submission
+  const isNewBestSolution = bestMoveCount === null || moves.length < bestMoveCount;
+  const isBestSolution    = bestMoveCount !== null && moves.length === bestMoveCount;
+  // "Good": makes it into top-N without tying/beating the best
+  //   · worstTopMoveCount === null → fewer than TOP_N entries exist → any solution qualifies
+  //   · otherwise → must be ≤ worst entry in the current top-N
+  const isGoodSolution    = !isNewBestSolution && !isBestSolution && (
+    worstTopMoveCount === null || moves.length <= worstTopMoveCount
+  );
+
   try {
-    isNewBestSolution = await updateSolutions(projectId, levelId, uid, moves, adminToken);
+    await updateSolutions(projectId, levelId, uid, moves, adminToken);
   } catch (e) {
     console.error('Solutions update error:', e);
   }
@@ -177,6 +187,8 @@ async function handleCompleteLevel(
     success: true,
     isFirstCompletion,
     isNewBestSolution,
+    isBestSolution,
+    isGoodSolution,
     stars: bestStars as 1 | 2 | 3,
     scoreDelta,
   };

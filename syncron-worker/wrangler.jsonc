@@ -17,7 +17,7 @@
 	"vars": {
 		"FIREBASE_PROJECT_ID": "syncron-1923",
 		"FIREBASE_API_KEY": "AIzaSyAjiRbyBEiJhZoa04G9ptzImGnBXl2OF4M",
-		"ALLOWED_ORIGIN": "http://localhost:3000"
+		"ALLOWED_ORIGIN": "http://localhost:3000",
 	}
 	/**
 	 * Smart Placement

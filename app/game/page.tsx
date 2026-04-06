@@ -18,7 +18,7 @@ function storedToLevelData(stored: StoredLevel & { id: number }): LevelData {
     width: stored.width,
     height: stored.height,
     edges: stored.edges,
-    grid: stored.grid,
+    grid: typeof stored.grid == 'string' ? JSON.parse(stored.grid) : stored.grid,
     initialObjects: stored.initialObjects,
     targets: stored.targets,
     trailCollision: stored.trailCollision,

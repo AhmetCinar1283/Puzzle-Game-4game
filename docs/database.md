@@ -2,7 +2,7 @@
 
 ## Dexie (IndexedDB) — `app/src/lib/db/`
 
-### Schema (version 8)
+### Schema (version 9)
 
 | Table | Key | Purpose |
 |---|---|---|
@@ -19,6 +19,7 @@ Version 5: added `playedLevels` and `syncMeta` tables.
 Version 6: added `creatorName?: string` to `StoredLevel`.
 Version 7: added `difficulty`, `part`, `requestId` fields.
 Version 8: added `isNeedSync` field for lazy Firestore fetch.
+Version 9: added `stars?: 1 | 2 | 3` to `StoredPlayedLevel`.
 
 ### File Structure (`app/src/lib/db/`)
 
@@ -109,21 +110,27 @@ const { getItem, setItem, removeItem } = useUserStorage();
 ```
 users/{uid}
   ├── uid, authProvider, createdAt
-  ├── totalScore, completedCount
+  ├── totalScore, completedCount        ← written by Worker only (rules enforce this)
   ├── role: 'user' | 'moderator' | 'admin'
   ├── email?, displayName?, tag?
-  └── playedLevels/{levelId}
-        ├── score, timeSpent, completedAt, updatedAt
+  └── playedLevels/{levelId}            ← written by Worker only (allow write: if false)
+        ├── stars: 1 | 2 | 3            ← best-ever star rating
+        ├── score: 1 | 2 | 3            ← mirrors stars
+        ├── moveCount: number            ← best-ever move count
+        ├── timeSpent, completedAt, updatedAt
 
 levels/{levelId}                    ← admin/approved community write only
   ├── [level data fields]
   ├── grid: string                  ← JSON.stringify(CellType[][])
   ├── part: number
+  ├── prevLevelId: string | null    ← previous level's firestoreId (null = first in part)
   ├── publishedBy: uid
   ├── createdBy?: uid               ← set when approved from a community request
   ├── creatorName?: string
   ├── creatorTag?: string | null
   └── createdAt, updatedAt
+  └── infos/solutions               ← top-3 global solutions, Worker-only write
+        └── solutions: [{ uid, moves[], moveCount, solvedAt }]
 
 levelParts/{partId}                 ← admin write only
   ├── name, unlockRequirement

@@ -59,7 +59,7 @@ app/src/
 │   │   ├── adminLevels.ts      Level CRUD: publishLevel, updateFirestoreLevel, deleteFirestoreLevel, getPartLevels
 │   │   └── adminRequests.ts    Request moderation: approveLevelRequest, rejectLevelRequest
 │   └── db/
-│       ├── schema.ts           Dexie class (v1-v8), types (StoredLevel etc.), getDB()
+│       ├── schema.ts           Dexie class (v1-v9), types (StoredLevel, StoredPlayedLevel w/ stars), getDB()
 │       ├── levelOrderOps.ts    levelOrder table: getOrderedLevels, getNextLevelId, reorderLevels
 │       ├── levelsOps.ts        levels table: saveLevelAtPosition, updateStoredLevel, deleteStoredLevel, setLevelRequestId
 │       ├── presetLevelsOps.ts  presetLevels table: getPresetLevels, getNextPresetLevelId
@@ -89,3 +89,4 @@ app/src/
 @docs/auth.md
 @docs/analytics.md
 @docs/backlog.md
+@docs/scoring.md

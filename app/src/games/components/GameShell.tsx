@@ -28,6 +28,8 @@ interface WorkerResult {
   scoreDelta: number;
   isFirstCompletion: boolean;
   isNewBestSolution: boolean;
+  isBestSolution: boolean;
+  isGoodSolution: boolean;
 }
 
 export default function GameShell({ level, onNextLevel, source }: GameShellProps) {
@@ -73,9 +75,13 @@ export default function GameShell({ level, onNextLevel, source }: GameShellProps
               headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({ levelId: firestoreId, moves, timeSpent }),
             });
-            if (!res.ok) return;
+            if (!res.ok) {
+              console.error('[Worker] HTTP error:', res.status, await res.text());
+              return;
+            }
 
             const data = await res.json() as { success: boolean } & WorkerResult;
+            console.log('[Worker] Response:', data);
             if (!data.success) return;
 
             // Update Dexie immediately so levels page shows correct stars
@@ -97,9 +103,11 @@ export default function GameShell({ level, onNextLevel, source }: GameShellProps
               scoreDelta: data.scoreDelta,
               isFirstCompletion: data.isFirstCompletion,
               isNewBestSolution: data.isNewBestSolution,
+              isBestSolution: data.isBestSolution,
+              isGoodSolution: data.isGoodSolution,
             });
-          } catch {
-            // Non-critical — scoring is best-effort
+          } catch (e) {
+            console.error('[Worker] Fetch error:', e);
           }
         })();
       }
