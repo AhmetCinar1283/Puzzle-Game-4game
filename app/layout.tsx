@@ -6,7 +6,6 @@ import { AuthProvider } from "./src/contexts/AuthContext";
 import { LanguageProvider } from "./src/contexts/LanguageContext";
 import FirestoreSync from "./src/components/FirestoreSync";
 import UserBadge from "./src/components/UserBadge";
-import LanguageSwitcher from "./src/components/LanguageSwitcher";
 import StoreProvider from "./src/store/StoreProvider";
 
 const geistSans = Geist({
@@ -152,7 +151,6 @@ export default function RootLayout({
             <AuthProvider>
               <FirestoreSync />
               <UserBadge />
-              <LanguageSwitcher />
               {children}
             </AuthProvider>
           </StoreProvider>

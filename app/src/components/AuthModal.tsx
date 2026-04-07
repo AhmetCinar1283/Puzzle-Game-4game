@@ -1,8 +1,12 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
+import { httpsCallable } from 'firebase/functions';
+import { doc, getDoc } from 'firebase/firestore';
 import { useAuthContext } from '../contexts/AuthContext';
-import { useT } from '../contexts/LanguageContext';
+import { useT, useLanguage } from '../contexts/LanguageContext';
+import { LANGS, type Lang } from '../lib/i18n';
+import { functions, db } from '../lib/firebase/config';
 
 interface Props {
   onClose: () => void;
@@ -35,10 +39,21 @@ function toMessageKey(err: unknown): string {
   return 'auth.err_generic';
 }
 
+// ─── Tag data shape ───────────────────────────────────────────────────────────
+
+interface TagData {
+  tag?: string;
+  tagChangeCount: number;
+  tagChangedAt: Date | null;
+}
+
+const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AuthModal({ onClose }: Props) {
   const t = useT();
+  const { lang, setLang } = useLanguage();
   const { user, isAnonymous, linkWithGoogle, linkWithEmail, signOut } = useAuthContext();
 
   const [tab, setTab] = useState<'signin' | 'register'>('signin');
@@ -46,6 +61,27 @@ export default function AuthModal({ onClose }: Props) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  // Tag state (signed-in view only)
+  const [tagData, setTagData] = useState<TagData | null>(null);
+  const [tagInput, setTagInput] = useState('');
+  const [tagBusy, setTagBusy] = useState(false);
+  const [tagError, setTagError] = useState('');
+  const [tagSuccess, setTagSuccess] = useState(false);
+
+  useEffect(() => {
+    if (isAnonymous || !user) return;
+    getDoc(doc(db, 'users', user.uid)).then((snap) => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setTagData({
+          tag: d.tag,
+          tagChangeCount: d.tagChangeCount ?? 0,
+          tagChangedAt: d.tagChangedAt?.toDate() ?? null,
+        });
+      }
+    });
+  }, [isAnonymous, user]);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -70,21 +106,113 @@ export default function AuthModal({ onClose }: Props) {
 
   const handleSignOut = () => run(signOut);
 
+  const handleTagSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!tagInput.trim()) return;
+    setTagBusy(true);
+    setTagError('');
+    setTagSuccess(false);
+    try {
+      const fn = httpsCallable<{ tag: string }, { tag: string }>(functions, 'requestNewTag');
+      const result = await fn({ tag: tagInput.trim() });
+      const newTag = result.data.tag;
+      setTagData((prev) =>
+        prev
+          ? { ...prev, tag: newTag, tagChangeCount: prev.tagChangeCount + 1, tagChangedAt: new Date() }
+          : prev,
+      );
+      setTagInput('');
+      setTagSuccess(true);
+    } catch (err) {
+      const msg = (err as { message?: string }).message ?? '';
+      if (msg === 'TAG_INVALID_CHARS') setTagError(t('auth.err_tag_chars'));
+      else if (msg.startsWith('TAG_LENGTH')) setTagError(t('auth.err_tag_length'));
+      else if (msg === 'TAG_TAKEN') setTagError(t('auth.err_tag_taken'));
+      else if (msg.startsWith('TAG_COOLDOWN')) {
+        const days = msg.split(':')[1] ?? '14';
+        setTagError(t('auth.err_tag_cooldown', { n: days }));
+      } else if (msg === 'TAG_MAX_CHANGES') setTagError(t('auth.err_tag_max'));
+      else setTagError(t('auth.err_generic'));
+    } finally {
+      setTagBusy(false);
+    }
+  };
+
   // ── Signed-in view ──────────────────────────────────────────────────────────
   if (!isAnonymous) {
     const name = user?.displayName ?? user?.email ?? t('auth.sign_in');
     const provider = user?.providerData?.[0]?.providerId ?? '';
     const providerLabel = provider === 'google.com' ? 'Google' : provider === 'password' ? t('auth.email') : '';
 
+    const now = Date.now();
+    const lastChangeMs = tagData?.tagChangedAt?.getTime() ?? 0;
+    const msRemaining = lastChangeMs + TWO_WEEKS_MS - now;
+    const daysRemaining = tagData?.tagChangedAt ? Math.max(0, Math.ceil(msRemaining / (24 * 60 * 60 * 1000))) : 0;
+    const changesLeft = Math.max(0, 5 - (tagData?.tagChangeCount ?? 0));
+    const canChange = changesLeft > 0 && daysRemaining === 0;
+
     return (
       <Backdrop onClose={onClose}>
         <h2 style={headingStyle}>{t('auth.my_account')}</h2>
         <p style={{ color: '#9ca3af', fontSize: 13, margin: '4px 0 6px' }}>{name}</p>
         {providerLabel && (
-          <p style={{ color: '#374151', fontSize: 11, margin: '0 0 24px', letterSpacing: '0.06em' }}>
+          <p style={{ color: '#374151', fontSize: 11, margin: '0 0 16px', letterSpacing: '0.06em' }}>
             {t('auth.signed_in_with', { provider: providerLabel })}
           </p>
         )}
+
+        {/* Tag section */}
+        <div style={{ borderTop: '1px solid #0d1420', paddingTop: 14, marginBottom: 14 }}>
+          <p style={{ color: '#4b5563', fontSize: 10, letterSpacing: '0.1em', fontWeight: 700, margin: '0 0 8px' }}>
+            {t('auth.tag_section')}
+          </p>
+          {tagData === null ? (
+            <p style={{ color: '#374151', fontSize: 12, margin: 0 }}>...</p>
+          ) : (
+            <>
+              {tagData.tag ? (
+                <p style={{ color: '#00ff88', fontSize: 22, fontWeight: 800, letterSpacing: '0.12em', margin: '0 0 6px', textShadow: '0 0 14px rgba(0,255,136,0.4)' }}>
+                  #{tagData.tag}
+                </p>
+              ) : (
+                <p style={{ color: '#374151', fontSize: 12, margin: '0 0 6px' }}>{t('auth.tag_no_tag')}</p>
+              )}
+              <p style={{ color: '#4b5563', fontSize: 11, margin: '0 0 4px' }}>
+                {changesLeft > 0 ? t('auth.tag_changes_remaining', { n: changesLeft }) : t('auth.tag_max_reached')}
+              </p>
+              {tagData.tagChangedAt && daysRemaining > 0 && (
+                <p style={{ color: '#374151', fontSize: 11, margin: '0 0 4px' }}>
+                  {t('auth.tag_cooldown', { n: daysRemaining })}
+                </p>
+              )}
+              {canChange && (
+                <form onSubmit={handleTagSubmit} style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <input
+                    type="text"
+                    placeholder={t('auth.tag_placeholder')}
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value.toUpperCase())}
+                    maxLength={10}
+                    style={{ ...inputStyle, flex: 1, fontSize: 12, padding: '8px 10px' }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={tagBusy || !tagInput.trim()}
+                    style={{ ...primaryBtn, width: 'auto', padding: '8px 14px', fontSize: 12, flexShrink: 0 }}
+                  >
+                    {tagBusy ? '...' : t('auth.tag_save')}
+                  </button>
+                </form>
+              )}
+              {tagError && <p style={{ ...errorStyle, marginTop: 4 }}>{tagError}</p>}
+              {tagSuccess && (
+                <p style={{ color: '#00ff88', fontSize: 12, margin: '4px 0 0' }}>{t('auth.tag_updated')}</p>
+              )}
+            </>
+          )}
+        </div>
+
+        <LangSection lang={lang} setLang={setLang} label={t('auth.language')} />
         <button onClick={handleSignOut} disabled={busy} style={dangerBtn}>
           {busy ? '...' : t('auth.sign_out')}
         </button>
@@ -167,7 +295,45 @@ export default function AuthModal({ onClose }: Props) {
           {tab === 'signin' ? t('auth.sign_up_link') : t('auth.sign_in_link')}
         </button>
       </p>
+
+      <div style={{ borderTop: '1px solid #0d1420', marginTop: 20, paddingTop: 16 }}>
+        <LangSection lang={lang} setLang={setLang} label={t('auth.language')} />
+      </div>
     </Backdrop>
+  );
+}
+
+// ─── Language section ─────────────────────────────────────────────────────────
+
+function LangSection({ lang, setLang, label }: { lang: Lang; setLang: (l: Lang) => void; label: string }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <p style={{ color: '#4b5563', fontSize: 10, letterSpacing: '0.1em', fontWeight: 700, margin: '0 0 8px' }}>
+        {label}
+      </p>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {LANGS.map(({ code, label: lbl }) => (
+          <button
+            key={code}
+            onClick={() => setLang(code)}
+            style={{
+              padding: '5px 14px',
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.1em',
+              background: lang === code ? 'rgba(0,255,136,0.1)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${lang === code ? 'rgba(0,255,136,0.4)' : '#1f2937'}`,
+              color: lang === code ? '#00ff88' : '#374151',
+              borderRadius: 6,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            {lbl}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

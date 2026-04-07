@@ -138,11 +138,6 @@ export default function LevelsPage() {
     setDeleteConfirm(null);
   }, [deleteConfirm, reload]);
 
-  const cols = isMobile ? '28px 1fr 90px' : '36px 1fr 80px 80px 120px';
-  const headers = isMobile
-    ? [t('list.col_num'), t('list.col_name'), t('list.col_actions')]
-    : [t('list.col_num'), t('list.col_name'), t('list.col_size'), t('list.col_order'), t('list.col_actions')];
-
   // Filter presets to selected part
   const filteredPresets = selectedPartId
     ? presets.filter((lv) => String(lv.part) === selectedPartId)
@@ -240,13 +235,13 @@ export default function LevelsPage() {
                   </div>
                 )}
 
-                <LevelTable cols={cols} headers={headers}>
+                <LevelTable>
                   {filteredPresets.map((lv, idx) => {
                     const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
                     return (
                       <LevelRow
                         key={lv.id} level={lv} index={idx} total={filteredPresets.length}
-                        isPreset isAdmin={isModerator} isMobile={isMobile} cols={cols}
+                        isPreset isAdmin={isModerator} isMobile={isMobile} cols=""
                         playedLevel={lv.firestoreId ? playedMap.get(lv.firestoreId) : undefined}
                         isLocked={isLocked}
                         onPlay={() => {
@@ -276,11 +271,11 @@ export default function LevelsPage() {
                   </button>
                 </div>
               ) : (
-                <LevelTable cols={cols} headers={headers}>
+                <LevelTable>
                   {userLevels.map((lv, idx) => (
                     <LevelRow
                       key={lv.id} level={lv} index={idx} total={userLevels.length}
-                      isPreset={false} isMobile={isMobile} cols={cols}
+                      isPreset={false} isMobile={isMobile} cols=""
                       onPlay={() => router.push(`/game?id=${lv.id}`)}
                       onEdit={() => router.push(`/editor?id=${lv.id}`)}
                       onDelete={() => handleDelete(lv.id)}

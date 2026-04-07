@@ -64,7 +64,15 @@ Fixed `position: fixed` button at top-right of every page (mounted in `app/layou
 ### `AuthModal` (`app/src/components/AuthModal.tsx`)
 Opened by `UserBadge`. Two views:
 - **Anonymous:** Google button + email/password form with Giriş Yap / Kayıt Ol tabs
-- **Signed in:** account info + sign-out button
+- **Signed in:** account info + **tag management section** + language selector + sign-out button
+
+#### Tag Management (signed-in view)
+On mount, fetches `users/{uid}` from Firestore to read `tag`, `tagChangeCount`, `tagChangedAt`.
+- Shows current tag as `#TAGNAME` (neon green)
+- Shows remaining changes (`5 - tagChangeCount`)
+- Shows cooldown days if `tagChangedAt` is set and < 2 weeks ago
+- Shows input form only when `changesLeft > 0 && daysRemaining === 0`
+- Calls `requestNewTag` Cloud Function with `{ tag }` and parses error codes: `TAG_INVALID_CHARS`, `TAG_LENGTH:min:max`, `TAG_TAKEN`, `TAG_COOLDOWN:N`, `TAG_MAX_CHANGES`
 
 ---
 
@@ -78,7 +86,9 @@ users/{uid}
   ├── totalScore: number
   ├── completedCount: number                            ← incremented on first level completion
   ├── role: 'user' | 'moderator' | 'admin'             ← set manually in Firebase Console
-  ├── tag?: string                                      ← custom display tag (Cloud Function only)
+  ├── tag?: string                                      ← display tag — written by Cloud Functions only
+  ├── tagChangeCount?: number                           ← manual change count (max 5, auto-assign doesn't count)
+  ├── tagChangedAt?: Timestamp                          ← last manual change time (cooldown: 2 weeks)
   ├── email?: string
   └── displayName?: string
 ```
@@ -116,6 +126,50 @@ match /levelRequests/{id} {
   allow delete: if isOwner(resource.data.submittedBy) && resource.data.status == 'pending';
 }
 ```
+
+---
+
+## Tag System (`functions/src/index.ts`)
+
+Tags are short identifiers shown as `#TAGNAME`. Written exclusively by Cloud Functions — client cannot write `tags/` or `tag` field directly.
+
+### Auto-assignment (Cloud Functions)
+- `onUserCreated` — fires when `users/{uid}` doc is first created; skips anonymous users
+- `onUserUpgraded` — fires when `authProvider` changes from `anonymous` → real; assigns tag if missing
+- Both call `assignUniqueTag(uid)` which generates a random 6-char tag and retries up to 20× on collision
+
+### Manual Change (`requestNewTag` callable)
+Client calls: `httpsCallable(functions, 'requestNewTag')({ tag: 'MYTAG' })`
+
+**Validation constants:**
+- `VALID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'` (no I, O, 0, 1)
+- Length: 3–10 characters
+- Max 5 manual changes per account
+- Cooldown: 2 weeks between changes (no cooldown on first manual change)
+
+**Error messages returned in `HttpsError.message`:**
+| Message | Meaning |
+|---|---|
+| `TAG_REQUIRED` | No tag provided |
+| `TAG_LENGTH:3:10` | Wrong length |
+| `TAG_INVALID_CHARS` | Invalid character |
+| `TAG_MAX_CHANGES` | 5/5 used |
+| `TAG_COOLDOWN:N` | N days remaining |
+| `TAG_TAKEN` | Tag already owned by another user |
+
+**Success:** updates `users/{uid}.tag`, `tagChangeCount` (increment), `tagChangedAt` (serverTimestamp). Releases old tag from `tags/` collection. If requested tag equals current tag → no-op, no count consumed.
+
+**`tags/{tag}` collection:** `{ uid, assignedAt }` — uniqueness registry, written by Cloud Functions only (locked to client via Firestore rules).
+
+---
+
+## Language Detection (`app/src/contexts/LanguageContext.tsx`)
+
+`getInitialLang()` priority:
+1. `localStorage('lang')` — user's saved preference
+2. `navigator.language` — browser language (first open only); `tr` if starts with `'tr'`, otherwise `en`
+
+When user manually changes language via `LangSection`, it's saved to `localStorage('lang')`.
 
 ---
 

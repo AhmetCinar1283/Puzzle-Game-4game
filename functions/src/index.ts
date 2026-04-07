@@ -6,21 +6,26 @@ const db = admin.firestore();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+const VALID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 0, O, 1, I çıkarıldı
+const MIN_TAG_LEN = 3;
+const MAX_TAG_LEN = 10;
+const MAX_TAG_CHANGES = 5;
+const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+
 function randomTag(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Karışıklık olmasın diye 0, O, 1, I harflerini çıkardım
     let result = '';
-    for (let i = 0; i < 4; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i <= 5; i++) {
+        result += VALID_CHARS.charAt(Math.floor(Math.random() * VALID_CHARS.length));
     }
     return result;
 }
 
 /**
- * Atomically picks a unique 4-digit tag and writes it to:
+ * Atomically picks a unique 5-digit tag and writes it to:
  *   - tags/{tag}  → { uid, assignedAt }  (registry for uniqueness checks)
  *   - users/{uid} → { tag }
  *
- * Retries up to 20 times on collision (extremely rare at 10 000 slots).
+ * Retries up to 20 times on collision (extremely rare at 32^5 slots).
  */
 async function assignUniqueTag(uid: string): Promise<string> {
     const MAX_ATTEMPTS = 20;
@@ -97,7 +102,9 @@ export const onUserUpgraded = functions.firestore.onDocumentUpdated(
     },
 );
 
-// ─── Callable: request a new tag (reassignment) ───────────────────────────────
+// ─── Callable: set a custom tag ───────────────────────────────────────────────
+// Client sends { tag: "MYTAG" }. Validates chars/length, checks rate limits,
+// checks uniqueness, then atomically assigns.
 
 export const requestNewTag = functions.https.onCall(
     { region: 'europe-west3' },
@@ -107,7 +114,30 @@ export const requestNewTag = functions.https.onCall(
             throw new functions.https.HttpsError('unauthenticated', 'Must be signed in.');
         }
 
-        const userSnap = await db.collection('users').doc(uid).get();
+        const raw: string | undefined = request.data?.tag;
+        if (!raw) {
+            throw new functions.https.HttpsError('invalid-argument', 'TAG_REQUIRED');
+        }
+
+        const tag = raw.trim().toUpperCase();
+
+        // Length check
+        if (tag.length < MIN_TAG_LEN || tag.length > MAX_TAG_LEN) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                `TAG_LENGTH:${MIN_TAG_LEN}:${MAX_TAG_LEN}`,
+            );
+        }
+
+        // Character check
+        for (const ch of tag) {
+            if (!VALID_CHARS.includes(ch)) {
+                throw new functions.https.HttpsError('invalid-argument', 'TAG_INVALID_CHARS');
+            }
+        }
+
+        const userRef = db.collection('users').doc(uid);
+        const userSnap = await userRef.get();
         if (!userSnap.exists) {
             throw new functions.https.HttpsError('not-found', 'User document not found.');
         }
@@ -120,13 +150,56 @@ export const requestNewTag = functions.https.onCall(
             );
         }
 
-        // Release old tag slot so it can be reused
-        const oldTag: string | undefined = userData.tag;
-        if (oldTag) {
-            await db.collection('tags').doc(oldTag).delete();
+        // No-op: user already has this tag
+        if (userData.tag === tag) return { tag };
+
+        // Change count limit
+        const changeCount: number = userData.tagChangeCount ?? 0;
+        if (changeCount >= MAX_TAG_CHANGES) {
+            throw new functions.https.HttpsError('resource-exhausted', 'TAG_MAX_CHANGES');
         }
 
-        const newTag = await assignUniqueTag(uid);
-        return { tag: newTag };
+        // Cooldown: only applies after at least one manual change
+        const tagChangedAt = userData.tagChangedAt;
+        if (tagChangedAt) {
+            const msSinceLast = Date.now() - tagChangedAt.toMillis();
+            if (msSinceLast < TWO_WEEKS_MS) {
+                const daysRemaining = Math.ceil((TWO_WEEKS_MS - msSinceLast) / (24 * 60 * 60 * 1000));
+                throw new functions.https.HttpsError(
+                    'failed-precondition',
+                    `TAG_COOLDOWN:${daysRemaining}`,
+                );
+            }
+        }
+
+        const tagRef = db.collection('tags').doc(tag);
+
+        // Atomically verify uniqueness + assign
+        try {
+            await db.runTransaction(async (tx) => {
+                const snap = await tx.get(tagRef);
+                if (snap.exists && snap.data()?.uid !== uid) throw new Error('TAG_TAKEN');
+
+                const oldTag: string | undefined = userData.tag;
+                if (oldTag && oldTag !== tag) {
+                    tx.delete(db.collection('tags').doc(oldTag));
+                }
+
+                tx.set(tagRef, { uid, assignedAt: admin.firestore.FieldValue.serverTimestamp() });
+                tx.update(userRef, {
+                    tag,
+                    tagChangeCount: admin.firestore.FieldValue.increment(1),
+                    tagChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+            });
+        } catch (err: unknown) {
+            if ((err as Error).message === 'TAG_TAKEN') {
+                throw new functions.https.HttpsError('already-exists', 'TAG_TAKEN');
+            }
+            throw err;
+        }
+
+        functions.logger.info(`[requestNewTag] Tag ${tag} assigned to ${uid}`);
+        return { tag };
     },
 );

@@ -6,10 +6,10 @@ const en: Record<string, string> = {
   'common.new_level': '+ New Level',
 
   // Difficulty
-  'difficulty.1': 'Easy',
-  'difficulty.2': 'Medium',
-  'difficulty.3': 'Hard',
-  'difficulty.4': 'Very Hard',
+  'difficulty.1': 'Novice',
+  'difficulty.2': 'Journeyman',
+  'difficulty.3': 'Master',
+  'difficulty.4': 'Grandmaster',
 
   // Time ago (admin)
   'time.just_now': 'just now',
@@ -155,6 +155,7 @@ const en: Record<string, string> = {
   'admin.rejected_toast': '"{name}" rejected.',
 
   // Auth
+  'auth.language': 'LANGUAGE',
   'auth.sign_in': 'Sign In',
   'auth.my_account': 'My Account',
   'auth.signed_in_with': 'Signed in with {provider}',
@@ -178,6 +179,19 @@ const en: Record<string, string> = {
   'auth.err_weak_password': 'Password must be at least 6 characters.',
   'auth.err_already_linked': 'This account is already linked.',
   'auth.err_generic': 'An error occurred. Please try again.',
+  'auth.tag_section': 'YOUR TAG',
+  'auth.tag_no_tag': 'No tag assigned yet',
+  'auth.tag_changes_remaining': '{n} of 5 changes remaining',
+  'auth.tag_max_reached': 'Max tag changes reached (5/5)',
+  'auth.tag_cooldown': 'Next change available in {n} days',
+  'auth.tag_placeholder': 'New tag (3–10 chars, A-Z 2-9)',
+  'auth.tag_save': 'Set Tag',
+  'auth.tag_updated': 'Tag updated!',
+  'auth.err_tag_length': 'Tag must be 3–10 characters.',
+  'auth.err_tag_chars': 'Only letters A-Z and digits 2-9 (no I, O, 0, 1).',
+  'auth.err_tag_taken': 'This tag is already taken.',
+  'auth.err_tag_cooldown': 'Wait {n} more day(s) before changing your tag.',
+  'auth.err_tag_max': "You've used all 5 tag changes.",
 
   // HUD
   'hud.moves': 'Moves:',

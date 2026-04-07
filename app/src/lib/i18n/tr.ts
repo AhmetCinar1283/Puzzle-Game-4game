@@ -6,10 +6,10 @@ const tr: Record<string, string> = {
   'common.new_level': '+ Yeni Level',
 
   // Difficulty
-  'difficulty.1': 'Kolay',
-  'difficulty.2': 'Orta',
-  'difficulty.3': 'Zor',
-  'difficulty.4': 'Çok Zor',
+  'difficulty.1': 'Çaylak',
+  'difficulty.2': 'Kalfa',
+  'difficulty.3': 'Usta',
+  'difficulty.4': 'Üstat',
 
   // Time ago (admin)
   'time.just_now': 'az önce',
@@ -155,6 +155,7 @@ const tr: Record<string, string> = {
   'admin.rejected_toast': '"{name}" reddedildi.',
 
   // Auth
+  'auth.language': 'DİL',
   'auth.sign_in': 'Giriş Yap',
   'auth.my_account': 'Hesabım',
   'auth.signed_in_with': '{provider} ile giriş yapıldı',
@@ -178,6 +179,19 @@ const tr: Record<string, string> = {
   'auth.err_weak_password': 'Şifre en az 6 karakter olmalıdır.',
   'auth.err_already_linked': 'Bu hesap zaten bağlı.',
   'auth.err_generic': 'Bir hata oluştu. Lütfen tekrar deneyin.',
+  'auth.tag_section': 'TAGIN',
+  'auth.tag_no_tag': 'Henüz tag atanmadı',
+  'auth.tag_changes_remaining': "5'ten {n} değişiklik hakkı kaldı",
+  'auth.tag_max_reached': 'Maksimum değişiklik kullanıldı (5/5)',
+  'auth.tag_cooldown': '{n} gün sonra değiştirebilirsin',
+  'auth.tag_placeholder': 'Yeni tag (3–10 karakter, A-Z 2-9)',
+  'auth.tag_save': 'Tagi Ayarla',
+  'auth.tag_updated': 'Tag güncellendi!',
+  'auth.err_tag_length': 'Tag 3–10 karakter olmalıdır.',
+  'auth.err_tag_chars': 'Yalnızca A-Z harfleri ve 2-9 rakamları (I, O, 0, 1 yok).',
+  'auth.err_tag_taken': 'Bu tag zaten alınmış.',
+  'auth.err_tag_cooldown': 'Tagini değiştirmek için {n} gün daha bekle.',
+  'auth.err_tag_max': "5 değişiklik hakkının tamamını kullandın.",
 
   // HUD
   'hud.moves': 'Hamle:',

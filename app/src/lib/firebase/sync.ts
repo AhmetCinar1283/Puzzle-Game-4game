@@ -152,10 +152,14 @@ export async function syncLevelsMeta(force = false): Promise<void> {
             part: partNumber,
             updatedAt: entryUpdatedAt || existing.updatedAt,
             isNeedSync: true,
+            position: isLegacy ? existing.position : entry.position,
           });
-        } else if (existing.part !== partNumber) {
-          // Part field missing or wrong — patch it without marking stale
-          await dexie.presetLevels.update(existing.id!, { part: partNumber });
+        } else if (existing.part !== partNumber || (!isLegacy && entry.position !== existing.position)) {
+          // Part field or position missing/wrong — patch without marking stale
+          await dexie.presetLevels.update(existing.id!, {
+            part: partNumber,
+            position: isLegacy ? existing.position : entry.position,
+          });
         }
       }
     }
