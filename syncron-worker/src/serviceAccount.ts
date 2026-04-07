@@ -14,7 +14,7 @@ function base64urlEncode(data: Uint8Array): string {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-function pemToUint8Array(pem: string): Uint8Array {
+function pemToUint8Array(pem: string): Uint8Array<ArrayBuffer> {
   const base64 = pem
     .replace(/-----BEGIN PRIVATE KEY-----/, '')
     .replace(/-----END PRIVATE KEY-----/, '')
