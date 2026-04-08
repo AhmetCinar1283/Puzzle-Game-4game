@@ -71,4 +71,11 @@ export interface BehaviorResult {
    * (e.g. adding to poweredPlayers, setting lostReason, flipping mode).
    */
   sideEffect?: (tick: TickState) => void;
+  /**
+   * Teleporter-only: if exit is occupied by a pushable box, the tick loop will
+   * attempt pushChainImmediately on this entity before applying the teleport.
+   * If the push fails, the teleport is cancelled (sideEffect is NOT added so
+   * the cycle guard is not set).
+   */
+  exitBoxToPush?: TickEntity;
 }

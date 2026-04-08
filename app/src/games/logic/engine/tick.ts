@@ -49,7 +49,7 @@ export function processMoveStep(state: GameState, direction: Direction): GameSta
 
   // 4. Run the iterative tick loop
   if (!tick.lostReason) {
-    runTickLoop(tick);
+    runTickLoop(tick, sortedPlayerIds);
   }
 
   // 5. Project back to public GameState
@@ -296,7 +296,7 @@ function activateConveyors(tick: TickState): void {
   }
 }
 
-function runTickLoop(tick: TickState): void {
+function runTickLoop(tick: TickState, sortedPlayerIds: number[]): void {
   for (let t = 0; t < MAX_TICK; t++) {
     if (tick.lostReason) break;
 
@@ -309,9 +309,19 @@ function runTickLoop(tick: TickState): void {
     const toRemove = new Set<TickEntity>();
     const pendingSideEffects: Array<(tick: TickState) => void> = [];
 
-    // Process players first (by id), then boxes (by id) — stable ordering
+    // Tick 0: process players in dependency-resolved order (from resolvePlayerOrder)
+    // so that a player who must vacate a cell is processed before the one following.
+    // Subsequent ticks: stable ID order (ice/conveyor continuation).
+    const players = tick.entities.filter((e) => e.kind === 'player');
+    const orderedPlayers =
+      t === 0
+        ? sortedPlayerIds
+            .map((id) => players.find((p) => p.id === id))
+            .filter((p): p is TickEntity => p !== undefined)
+        : players.slice().sort((a, b) => a.id - b.id);
+
     const orderedEntities = [
-      ...tick.entities.filter((e) => e.kind === 'player').sort((a, b) => a.id - b.id),
+      ...orderedPlayers,
       ...tick.entities.filter((e) => e.kind === 'box').sort((a, b) => a.id - b.id),
     ];
 
@@ -391,6 +401,18 @@ function runTickLoop(tick: TickState): void {
       if (behavior) {
         const ctx = { entity, newPosition: resolved, cellType: cell, tick };
         const result: BehaviorResult = behavior.onEnter(ctx);
+
+        // Teleporter: if exit is occupied by a box, try to push it first.
+        // If push fails, cancel the teleport and skip sideEffect (so the
+        // cycle guard is not set, allowing re-entry later).
+        if (result.exitBoxToPush) {
+          const pushed = pushChainImmediately(result.exitBoxToPush, vel, tick, toRemove);
+          if (!pushed) {
+            entity.velocity = null;
+            continue;
+          }
+          // Push succeeded → fall through to apply overridePosition (teleport)
+        }
 
         if (result.sideEffect) pendingSideEffects.push(result.sideEffect);
 

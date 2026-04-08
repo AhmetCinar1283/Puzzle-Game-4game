@@ -54,11 +54,15 @@ function collectPushChain(
     return [{ entity: box, nextPos: resolved }, ...sub];
   }
 
-  // Player in the way → blocked
+  // Player in the way → blocked only if NOT moving in the same push direction
   const blockingPlayer = tick.entities.find(
     (e) => e.kind === 'player' && posEqual(e.position, resolved),
   );
-  if (blockingPlayer) return null;
+  if (blockingPlayer) {
+    // If the player is moving in the same direction as the push, they will
+    // vacate this cell — allow the chain to proceed.
+    if (blockingPlayer.velocity !== direction) return null;
+  }
 
   return [{ entity: box, nextPos: resolved }];
 }
@@ -104,6 +108,9 @@ export function pushChainImmediately(
     const cell = tick.grid[nextPos.row]?.[nextPos.col] as CellType | undefined;
     const behavior = cell ? CELL_BEHAVIORS[cell] : undefined;
     if (behavior) {
+      // Set box velocity to the push direction so ice/conveyor behaviors can
+      // read it. The behavior result will override this value.
+      box.velocity = direction;
       const ctx = { entity: box, newPosition: nextPos, cellType: cell!, tick };
       const result: BehaviorResult = behavior.onEnter(ctx);
       if (result.sideEffect) pendingSideEffects.push(result.sideEffect);

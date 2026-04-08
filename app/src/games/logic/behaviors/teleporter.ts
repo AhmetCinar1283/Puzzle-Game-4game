@@ -1,5 +1,5 @@
 import type { CellBehavior } from './registry';
-import type { BehaviorResult } from '../engine/types';
+import type { BehaviorResult, TickState } from '../engine/types';
 import {
   isTeleporterIn,
   isTeleporterOut,
@@ -49,20 +49,41 @@ export const teleporterBehavior: CellBehavior = {
     if (!exitPos) return { velocity: null };
 
     // Exit occupancy check
-    const exitOccupied = tick.entities.some(
+    const exitOccupant = tick.entities.find(
       (e) => !(e.kind === entity.kind && e.id === entity.id) && posEqual(e.position, exitPos),
     );
-    if (exitOccupied) return { velocity: null };
+
+    const sideEffect = (t: TickState) => {
+      const e = t.entities.find((x) => x.kind === entity.kind && x.id === entity.id);
+      if (!e) return;
+      if (!e._teleporterUsed) e._teleporterUsed = new Set();
+      e._teleporterUsed.add(group);
+    };
+
+    if (exitOccupant) {
+      // If exit is a static box and entity has momentum, signal the tick loop
+      // to attempt a push before teleporting. If the push fails, the teleport
+      // is cancelled (tick loop skips the sideEffect so cycle guard is not set).
+      if (
+        exitOccupant.kind === 'box' &&
+        exitOccupant.velocity === null &&
+        entity.velocity !== null
+      ) {
+        return {
+          velocity: entity.velocity,
+          overridePosition: exitPos,
+          exitBoxToPush: exitOccupant,
+          sideEffect,
+        };
+      }
+      // Player or immovable box → stop
+      return { velocity: null };
+    }
 
     return {
       velocity: entity.velocity, // carry momentum through portal
       overridePosition: exitPos,
-      sideEffect: (t) => {
-        const e = t.entities.find((x) => x.kind === entity.kind && x.id === entity.id);
-        if (!e) return;
-        if (!e._teleporterUsed) e._teleporterUsed = new Set();
-        e._teleporterUsed.add(group);
-      },
+      sideEffect,
     };
   },
 };
