@@ -16,7 +16,15 @@ export type CellType =
   | 'teleporter_in_B'
   | 'teleporter_out_B'
   | 'teleporter_in_C'
-  | 'teleporter_out_C';
+  | 'teleporter_out_C'
+  | 'launcher_up'
+  | 'launcher_down'
+  | 'launcher_left'
+  | 'launcher_right'
+  | 'trampoline_up'
+  | 'trampoline_down'
+  | 'trampoline_left'
+  | 'trampoline_right';
 
 export type EdgeBehavior = 'wall' | 'portal' | 'lava';
 
@@ -26,13 +34,22 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
 
 export type GamePhase = 'playing' | 'won' | 'lost';
 
-export type LostReason = 'forbidden' | 'lava_edge' | 'trail';
+export type LostReason = 'forbidden' | 'lava_edge' | 'trail' | 'crushed';
 
 export type MoveAnimType = 'portal' | 'teleport' | 'ice' | 'conveyor' | 'normal';
 
 export interface Position {
   row: number;
   col: number;
+}
+
+/** A position waypoint that also carries the entity's height (z) at that step.
+ *  z = 0 → ground level. z > 0 → airborne (e.g. trampoline arc).
+ *  Used in animationPaths so the render layer can drive a CSS scale effect. */
+export interface Waypoint {
+  row: number;
+  col: number;
+  z: number;
 }
 
 export interface LevelEdges {
@@ -61,6 +78,26 @@ export interface BoxDef {
   requiresPower?: boolean;
 }
 
+export interface LauncherCellConfig {
+  position: Position;
+  /** How many cells the entity is launched. Default: 3. */
+  steps: number;
+}
+
+export interface TrampolineCellConfig {
+  position: Position;
+  /** How many cells the entity is flung (airborne — skips intermediate terrain). Default: 3. */
+  steps: number;
+}
+
+export interface ConveyorCellConfig {
+  position: Position;
+  /** How many cells the entity slides when launched by this conveyor. Default: 1. */
+  steps?: number;
+  /** Total number of times this conveyor can fire. undefined = unlimited. */
+  uses?: number;
+}
+
 export interface BoxState {
   id: number;
   position: Position;
@@ -84,6 +121,12 @@ export interface LevelData {
   initialBoxes?: BoxDef[];
   /** Conveyor cells that require adjacent power to activate. */
   conveyorPowerRequired?: Position[];
+  /** Per-cell conveyor configuration (steps, use limit). Cells not listed use defaults. */
+  conveyorConfig?: ConveyorCellConfig[];
+  /** Per-cell launcher configuration (steps). Cells not listed use default (3 steps). */
+  launcherConfig?: LauncherCellConfig[];
+  /** Per-cell trampoline configuration (steps). Cells not listed use default (3 steps). */
+  trampolineConfig?: TrampolineCellConfig[];
 
   difficulty?: 1 | 2 | 3 | 4;
   creatorName?: string
@@ -108,8 +151,11 @@ export interface GameState {
   trail: Record<number, Position[]>;
   lostReason?: LostReason;
   moveAnimTypes?: Record<number, MoveAnimType>;
-  /** Per-entity ordered waypoints for smooth multi-step animation. Key: "player:1", "box:2". */
-  animationPaths?: Record<string, Position[]>;
+  /** Per-entity ordered waypoints for smooth multi-step animation. Key: "player:1", "box:2".
+   *  Each waypoint carries z (height) so the renderer can drive a scale/arc effect. */
+  animationPaths?: Record<string, Waypoint[]>;
+  /** Remaining activation count per conveyor cell (posKey → count). Persists across moves. */
+  conveyorRemainingUses?: Record<string, number>;
 }
 
 export type GameAction =

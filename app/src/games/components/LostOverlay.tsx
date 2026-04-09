@@ -13,6 +13,7 @@ const REASON_KEYS: Record<LostReason, { icon: string; titleKey: string; msgKey: 
   forbidden: { icon: '⚠', titleKey: 'lost.forbidden_title', msgKey: 'lost.forbidden_msg' },
   lava_edge: { icon: '☠', titleKey: 'lost.lava_title', msgKey: 'lost.lava_msg' },
   trail: { icon: '✗', titleKey: 'lost.trail_title', msgKey: 'lost.trail_msg' },
+  crushed: { icon: '💥', titleKey: 'lost.crushed_title', msgKey: 'lost.crushed_msg' },
 };
 
 export default function LostOverlay({ onRestart, reason }: LostOverlayProps) {

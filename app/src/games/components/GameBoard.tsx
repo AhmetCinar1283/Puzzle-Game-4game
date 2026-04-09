@@ -1,4 +1,4 @@
-import type { LevelData, GameObjectState, Position, EdgeBehavior, BoxState, MoveAnimType } from '../types';
+import type { LevelData, GameObjectState, Position, Waypoint, EdgeBehavior, BoxState, MoveAnimType } from '../types';
 import { posKey } from '../logic/positionUtils';
 import GameCell from './GameCell';
 import GameObject from './GameObject';
@@ -25,7 +25,7 @@ interface GameBoardProps {
   cellSize?: number;
   moveAnimTypes?: Record<number, MoveAnimType>;
   /** Waypoint paths from engine — key format: "player:1", "box:2" */
-  animationPaths?: Record<string, Position[]>;
+  animationPaths?: Record<string, Waypoint[]>;
 }
 
 function edgeBorderStyle(behavior: EdgeBehavior): { color: string; glow: string } {

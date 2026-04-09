@@ -97,6 +97,46 @@ const CELL_STYLE: Record<CellType, React.CSSProperties> = {
     border: '2px solid rgba(20, 184, 166, 0.4)',
     boxShadow: 'inset 0 0 10px rgba(20, 184, 166, 0.12)',
   },
+  launcher_up: {
+    background: 'rgba(245, 158, 11, 0.14)',
+    border: '2px solid rgba(245, 158, 11, 0.65)',
+    boxShadow: 'inset 0 0 14px rgba(245, 158, 11, 0.22), 0 0 8px rgba(245, 158, 11, 0.15)',
+  },
+  launcher_down: {
+    background: 'rgba(245, 158, 11, 0.14)',
+    border: '2px solid rgba(245, 158, 11, 0.65)',
+    boxShadow: 'inset 0 0 14px rgba(245, 158, 11, 0.22), 0 0 8px rgba(245, 158, 11, 0.15)',
+  },
+  launcher_left: {
+    background: 'rgba(245, 158, 11, 0.14)',
+    border: '2px solid rgba(245, 158, 11, 0.65)',
+    boxShadow: 'inset 0 0 14px rgba(245, 158, 11, 0.22), 0 0 8px rgba(245, 158, 11, 0.15)',
+  },
+  launcher_right: {
+    background: 'rgba(245, 158, 11, 0.14)',
+    border: '2px solid rgba(245, 158, 11, 0.65)',
+    boxShadow: 'inset 0 0 14px rgba(245, 158, 11, 0.22), 0 0 8px rgba(245, 158, 11, 0.15)',
+  },
+  trampoline_up: {
+    background: 'rgba(34, 211, 238, 0.12)',
+    border: '2px solid rgba(34, 211, 238, 0.6)',
+    boxShadow: 'inset 0 0 14px rgba(34, 211, 238, 0.2), 0 0 8px rgba(34, 211, 238, 0.15)',
+  },
+  trampoline_down: {
+    background: 'rgba(34, 211, 238, 0.12)',
+    border: '2px solid rgba(34, 211, 238, 0.6)',
+    boxShadow: 'inset 0 0 14px rgba(34, 211, 238, 0.2), 0 0 8px rgba(34, 211, 238, 0.15)',
+  },
+  trampoline_left: {
+    background: 'rgba(34, 211, 238, 0.12)',
+    border: '2px solid rgba(34, 211, 238, 0.6)',
+    boxShadow: 'inset 0 0 14px rgba(34, 211, 238, 0.2), 0 0 8px rgba(34, 211, 238, 0.15)',
+  },
+  trampoline_right: {
+    background: 'rgba(34, 211, 238, 0.12)',
+    border: '2px solid rgba(34, 211, 238, 0.6)',
+    boxShadow: 'inset 0 0 14px rgba(34, 211, 238, 0.2), 0 0 8px rgba(34, 211, 238, 0.15)',
+  },
 };
 
 const CONVEYOR_ICON: Record<string, string> = {
@@ -104,6 +144,20 @@ const CONVEYOR_ICON: Record<string, string> = {
   conveyor_down: '▼',
   conveyor_left: '◄',
   conveyor_right: '►',
+};
+
+const LAUNCHER_ICON: Record<string, string> = {
+  launcher_up: '▲',
+  launcher_down: '▼',
+  launcher_left: '◄',
+  launcher_right: '►',
+};
+
+const TRAMPOLINE_ICON: Record<string, string> = {
+  trampoline_up: '▲',
+  trampoline_down: '▼',
+  trampoline_left: '◄',
+  trampoline_right: '►',
 };
 
 const TELEPORTER_LABEL: Partial<Record<CellType, string>> = {
@@ -120,6 +174,8 @@ const TELEPORTER_COLOR: Partial<Record<CellType, string>> = {
 
 export default function GameCell({ cellType, cellSize, isPowered }: GameCellProps) {
   const isConveyor = cellType.startsWith('conveyor_');
+  const isLauncher = cellType.startsWith('launcher_');
+  const isTrampoline = cellType.startsWith('trampoline_');
   const isTeleporterIn = cellType.startsWith('teleporter_in_');
   const isTeleporterOut = cellType.startsWith('teleporter_out_');
   const isTeleporter = isTeleporterIn || isTeleporterOut;
@@ -252,6 +308,51 @@ export default function GameCell({ cellType, cellSize, isPowered }: GameCellProp
         >
           ⚡
         </span>
+      )}
+
+      {/* Launcher (catapult/trampoline) */}
+      {isLauncher && (
+        <span
+          style={{
+            fontSize: cellSize * 0.36,
+            lineHeight: 1,
+            color: '#f59e0b',
+            textShadow: '0 0 10px rgba(245,158,11,0.9)',
+            userSelect: 'none',
+            fontWeight: 'bold',
+          }}
+        >
+          {LAUNCHER_ICON[cellType]}
+        </span>
+      )}
+
+      {/* Trampoline */}
+      {isTrampoline && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+          <span
+            style={{
+              fontSize: cellSize * 0.32,
+              lineHeight: 1,
+              color: '#22d3ee',
+              textShadow: '0 0 10px rgba(34,211,238,0.9)',
+              userSelect: 'none',
+              fontWeight: 'bold',
+            }}
+          >
+            {TRAMPOLINE_ICON[cellType]}
+          </span>
+          <span
+            style={{
+              fontSize: cellSize * 0.18,
+              lineHeight: 1,
+              color: 'rgba(34,211,238,0.7)',
+              userSelect: 'none',
+              letterSpacing: '0.02em',
+            }}
+          >
+            arc
+          </span>
+        </div>
       )}
 
       {/* Conveyor belts */}

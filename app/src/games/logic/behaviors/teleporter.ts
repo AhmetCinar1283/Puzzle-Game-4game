@@ -6,7 +6,6 @@ import {
   teleporterInToOut,
   teleporterOutToIn,
   findCellPosition,
-  posEqual,
 } from '../positionUtils';
 
 /**
@@ -44,14 +43,16 @@ export const teleporterBehavior: CellBehavior = {
     const group = cellType.slice(-1); // 'A', 'B', or 'C'
     if (entity._teleporterUsed?.has(group)) return { velocity: null };
 
-    // Find exit position
-    const exitPos = findCellPosition(tick.grid, exitCellType);
+    // Find exit position — level.grid stays CellType[][] and never changes at runtime
+    const exitPos = findCellPosition(tick.level.grid, exitCellType);
     if (!exitPos) return { velocity: null };
 
-    // Exit occupancy check
-    const exitOccupant = tick.entities.find(
-      (e) => !(e.kind === entity.kind && e.id === entity.id) && posEqual(e.position, exitPos),
-    );
+    // Exit occupancy check — O(1) via CellState.occupantIds
+    const exitCell = tick.grid[exitPos.row]?.[exitPos.col];
+    const exitOccupantId = exitCell?.occupantIds.find((id) => id !== entity.id);
+    const exitOccupant = exitOccupantId !== undefined
+      ? tick.entities.find((e) => e.id === exitOccupantId)
+      : undefined;
 
     const sideEffect = (t: TickState) => {
       const e = t.entities.find((x) => x.kind === entity.kind && x.id === entity.id);

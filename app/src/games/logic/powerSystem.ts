@@ -1,6 +1,7 @@
 import type { CellType, LevelData, BoxState, Position } from '../types';
 import { posKey, findCellPosition, teleporterInToOut, isTeleporterIn } from './positionUtils';
 
+
 const DIRS: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 
 /**
@@ -109,13 +110,68 @@ export function computePoweredCells(
   return powered;
 }
 
-/** Returns true if the conveyor at the given position is active. */
+/** Returns true if the conveyor at the given position is powered (or doesn't require power). */
 export function isConveyorActive(pos: Position, level: LevelData, poweredCells: Set<string>): boolean {
   const conveyorPowerSet = new Set<string>(
     (level.conveyorPowerRequired ?? []).map(posKey)
   );
   if (!conveyorPowerSet.has(posKey(pos))) return true; // no power requirement → always active
   return poweredCells.has(posKey(pos));
+}
+
+/** Returns the configured steps and use-limit for a conveyor cell. Defaults: steps=1, uses=null (unlimited). */
+export function getConveyorConfig(level: LevelData, pos: Position): { steps: number; uses: number | null } {
+  const cfg = level.conveyorConfig?.find(
+    (c) => c.position.row === pos.row && c.position.col === pos.col,
+  );
+  return { steps: cfg?.steps ?? 1, uses: cfg?.uses ?? null };
+}
+
+/**
+ * Returns true if the conveyor at pos can fire this move resolution.
+ * Checks both power gating and remaining use count.
+ */
+export function canConveyorFire(
+  pos: Position,
+  level: LevelData,
+  poweredCells: Set<string>,
+  conveyorRemainingUses: Record<string, number>,
+): boolean {
+  if (!isConveyorActive(pos, level, poweredCells)) return false;
+  const cfg = getConveyorConfig(level, pos);
+  if (cfg.uses === null) return true; // unlimited
+  return (conveyorRemainingUses[posKey(pos)] ?? cfg.uses) > 0;
+}
+
+/**
+ * Decrements the use count for a limited conveyor. No-op for unlimited conveyors.
+ * Mutates the conveyorRemainingUses map in place.
+ */
+export function decrementConveyorUse(
+  pos: Position,
+  level: LevelData,
+  conveyorRemainingUses: Record<string, number>,
+): void {
+  const cfg = getConveyorConfig(level, pos);
+  if (cfg.uses === null) return; // unlimited → nothing to track
+  const key = posKey(pos);
+  conveyorRemainingUses[key] = Math.max(0, (conveyorRemainingUses[key] ?? cfg.uses) - 1);
+}
+
+/** Returns the configured step count for a launcher cell. Default: 3. */
+export function getLauncherConfig(level: LevelData, pos: Position): { steps: number } {
+  const cfg = level.launcherConfig?.find(
+    (c) => c.position.row === pos.row && c.position.col === pos.col,
+  );
+  return { steps: cfg?.steps ?? 3 };
+}
+
+/** Returns the configured step count for a trampoline cell. Default: 3. */
+export function getTrampolineConfig(level: LevelData, pos: Position): { steps: number } {
+  const cfg = level.trampolineConfig?.find(
+    (c) => c.position.row === pos.row && c.position.col === pos.col,
+  );
+  return { steps: cfg?.steps ?? 3 };
 }
 
 /** Returns true if the box at the given position is currently pushable (ignoring other blockers). */

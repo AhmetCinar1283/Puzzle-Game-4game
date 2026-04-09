@@ -9,7 +9,7 @@ import type { BehaviorResult } from '../engine/types';
 export const powerNodeBehavior: CellBehavior = {
   onEnter(ctx): BehaviorResult {
     const { entity } = ctx;
-    if (entity.kind !== 'player') return { velocity: null };
+    if (!entity.behavior.isUserControlled) return { velocity: null };
 
     return {
       velocity: null,

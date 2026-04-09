@@ -212,6 +212,8 @@ const tr: Record<string, string> = {
   'lost.lava_msg': 'Lav kenarından düştünüz.',
   'lost.trail_title': 'İz Kesildi',
   'lost.trail_msg': 'Rakibinizin izini kestiniz.',
+  'lost.crushed_title': 'Ezildiniz!',
+  'lost.crushed_msg': 'Üzerinize ağır bir cisim düştü.',
   'lost.try_again': 'TEKRAR DENE',
 
   // Levels list

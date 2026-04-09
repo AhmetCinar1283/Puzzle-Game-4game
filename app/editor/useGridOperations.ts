@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import type { CellType, Position } from '@/app/src/games/types';
+import type { CellType, Position, ConveyorCellConfig, LauncherCellConfig, TrampolineCellConfig } from '@/app/src/games/types';
 import type { ObjConfig, BoxConfig } from './editorConfig';
 
 export interface SelectionRect {
@@ -21,6 +21,12 @@ interface GridOpsParams {
   setBoxes: React.Dispatch<React.SetStateAction<BoxConfig[]>>;
   conveyorPowerRequired: Position[];
   setConveyorPowerRequired: React.Dispatch<React.SetStateAction<Position[]>>;
+  conveyorConfig?: ConveyorCellConfig[];
+  setConveyorConfig?: React.Dispatch<React.SetStateAction<ConveyorCellConfig[]>>;
+  launcherConfig?: LauncherCellConfig[];
+  setLauncherConfig?: React.Dispatch<React.SetStateAction<LauncherCellConfig[]>>;
+  trampolineConfig?: TrampolineCellConfig[];
+  setTrampolineConfig?: React.Dispatch<React.SetStateAction<TrampolineCellConfig[]>>;
   pushGridHistory?: () => void;
 }
 
@@ -42,6 +48,15 @@ export function useGridOperations(p: GridOpsParams) {
     ));
     p.setConveyorPowerRequired((cpr) => cpr.map((pos) =>
       pos.row >= afterIndex ? { ...pos, row: pos.row + 1 } : pos
+    ));
+    p.setConveyorConfig?.((cc) => cc.map((c) =>
+      c.position.row >= afterIndex ? { ...c, position: { ...c.position, row: c.position.row + 1 } } : c
+    ));
+    p.setLauncherConfig?.((lc) => lc.map((c) =>
+      c.position.row >= afterIndex ? { ...c, position: { ...c.position, row: c.position.row + 1 } } : c
+    ));
+    p.setTrampolineConfig?.((tc) => tc.map((c) =>
+      c.position.row >= afterIndex ? { ...c, position: { ...c.position, row: c.position.row + 1 } } : c
     ));
   }, [p]);
 
@@ -65,6 +80,21 @@ export function useGridOperations(p: GridOpsParams) {
         pos.row > index ? { ...pos, row: pos.row - 1 } : pos
       )
     );
+    p.setConveyorConfig?.((cc) =>
+      cc.filter((c) => c.position.row !== index).map((c) =>
+        c.position.row > index ? { ...c, position: { ...c.position, row: c.position.row - 1 } } : c
+      )
+    );
+    p.setLauncherConfig?.((lc) =>
+      lc.filter((c) => c.position.row !== index).map((c) =>
+        c.position.row > index ? { ...c, position: { ...c.position, row: c.position.row - 1 } } : c
+      )
+    );
+    p.setTrampolineConfig?.((tc) =>
+      tc.filter((c) => c.position.row !== index).map((c) =>
+        c.position.row > index ? { ...c, position: { ...c.position, row: c.position.row - 1 } } : c
+      )
+    );
   }, [p]);
 
   const addCol = useCallback((afterIndex: number) => {
@@ -83,6 +113,15 @@ export function useGridOperations(p: GridOpsParams) {
     ));
     p.setConveyorPowerRequired((cpr) => cpr.map((pos) =>
       pos.col >= afterIndex ? { ...pos, col: pos.col + 1 } : pos
+    ));
+    p.setConveyorConfig?.((cc) => cc.map((c) =>
+      c.position.col >= afterIndex ? { ...c, position: { ...c.position, col: c.position.col + 1 } } : c
+    ));
+    p.setLauncherConfig?.((lc) => lc.map((c) =>
+      c.position.col >= afterIndex ? { ...c, position: { ...c.position, col: c.position.col + 1 } } : c
+    ));
+    p.setTrampolineConfig?.((tc) => tc.map((c) =>
+      c.position.col >= afterIndex ? { ...c, position: { ...c.position, col: c.position.col + 1 } } : c
     ));
   }, [p]);
 
@@ -104,6 +143,21 @@ export function useGridOperations(p: GridOpsParams) {
     p.setConveyorPowerRequired((cpr) =>
       cpr.filter((pos) => pos.col !== index).map((pos) =>
         pos.col > index ? { ...pos, col: pos.col - 1 } : pos
+      )
+    );
+    p.setConveyorConfig?.((cc) =>
+      cc.filter((c) => c.position.col !== index).map((c) =>
+        c.position.col > index ? { ...c, position: { ...c.position, col: c.position.col - 1 } } : c
+      )
+    );
+    p.setLauncherConfig?.((lc) =>
+      lc.filter((c) => c.position.col !== index).map((c) =>
+        c.position.col > index ? { ...c, position: { ...c.position, col: c.position.col - 1 } } : c
+      )
+    );
+    p.setTrampolineConfig?.((tc) =>
+      tc.filter((c) => c.position.col !== index).map((c) =>
+        c.position.col > index ? { ...c, position: { ...c.position, col: c.position.col - 1 } } : c
       )
     );
   }, [p]);

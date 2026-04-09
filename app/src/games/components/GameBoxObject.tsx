@@ -4,18 +4,20 @@ import { useEffect, useRef } from 'react';
 import { motion, useMotionValue } from 'framer-motion';
 import { animate as fmAnimate } from 'framer-motion';
 import type { AnimationPlaybackControls } from 'framer-motion';
-import type { BoxState, Position } from '../types';
+import type { BoxState, Waypoint } from '../types';
 
 interface GameBoxObjectProps {
   box: BoxState;
   cellSize: number;
   isPowered: boolean;
-  /** Ordered waypoints from animationPaths["box:id"]. */
-  path?: Position[];
+  /** Ordered waypoints from animationPaths["box:id"].
+   *  Each waypoint carries z > 0 when box is airborne (e.g. trampoline). */
+  path?: Waypoint[];
 }
 
 const SPRING = { type: 'spring' as const, stiffness: 400, damping: 30 };
 const STEP_S = 0.08;
+const Z_SCALE = 0.08; // same multiplier as GameObject
 
 export default function GameBoxObject({ box, cellSize, isPowered, path }: GameBoxObjectProps) {
   const pad = Math.round(cellSize * 0.1);
@@ -23,6 +25,7 @@ export default function GameBoxObject({ box, cellSize, isPowered, path }: GameBo
 
   const mvX = useMotionValue(box.position.col * cellSize + pad);
   const mvY = useMotionValue(box.position.row * cellSize + pad);
+  const mvScale = useMotionValue(1);
 
   const prevPathKeyRef = useRef('');
   const activeControls = useRef<AnimationPlaybackControls[]>([]);
@@ -38,32 +41,37 @@ export default function GameBoxObject({ box, cellSize, isPowered, path }: GameBo
       prevPathKeyRef.current = '';
       mvX.set(finalX);
       mvY.set(finalY);
+      mvScale.set(1);
       return;
     }
 
-    const newKey = path.map((p) => `${p.row},${p.col}`).join('|');
+    const newKey = path.map((p) => `${p.row},${p.col},${p.z}`).join('|');
     if (newKey === prevPathKeyRef.current) return;
     prevPathKeyRef.current = newKey;
 
     if (path.length > 2) {
       mvX.set(path[0].col * cellSize + pad);
       mvY.set(path[0].row * cellSize + pad);
+      mvScale.set(1 + (path[0].z ?? 0) * Z_SCALE);
 
       let delay = 0;
       const controls: AnimationPlaybackControls[] = [];
       for (let i = 1; i < path.length; i++) {
-        const pos = path[i];
-        controls.push(fmAnimate(mvX, pos.col * cellSize + pad, { duration: STEP_S, delay, ease: 'linear' }));
-        controls.push(fmAnimate(mvY, pos.row * cellSize + pad, { duration: STEP_S, delay, ease: 'linear' }));
+        const wp = path[i];
+        controls.push(fmAnimate(mvX, wp.col * cellSize + pad, { duration: STEP_S, delay, ease: 'linear' }));
+        controls.push(fmAnimate(mvY, wp.row * cellSize + pad, { duration: STEP_S, delay, ease: 'linear' }));
+        controls.push(fmAnimate(mvScale, 1 + (wp.z ?? 0) * Z_SCALE, { duration: STEP_S, delay, ease: 'linear' }));
         delay += STEP_S;
       }
       activeControls.current = controls;
       return;
     }
 
+    const finalScale = 1 + (path[path.length - 1]?.z ?? 0) * Z_SCALE;
     activeControls.current = [
       fmAnimate(mvX, finalX, SPRING),
       fmAnimate(mvY, finalY, SPRING),
+      fmAnimate(mvScale, finalScale, SPRING),
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, cellSize, pad]);
@@ -75,6 +83,7 @@ export default function GameBoxObject({ box, cellSize, isPowered, path }: GameBo
       style={{
         x: mvX,
         y: mvY,
+        scale: mvScale,
         position: 'absolute',
         top: 0,
         left: 0,

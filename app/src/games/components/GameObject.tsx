@@ -4,15 +4,15 @@ import { useEffect, useRef } from 'react';
 import { motion, useMotionValue, useAnimate } from 'framer-motion';
 import { animate as fmAnimate } from 'framer-motion';
 import type { AnimationPlaybackControls } from 'framer-motion';
-import type { GameObjectState, MoveAnimType, Position } from '../types';
+import type { GameObjectState, MoveAnimType, Waypoint } from '../types';
 
 interface GameObjectProps {
   object: GameObjectState;
   cellSize: number;
   animType?: MoveAnimType;
-  /** Ordered waypoints from animationPaths["player:id"]. When present, the
-   *  object animates step-by-step through each position. */
-  path?: Position[];
+  /** Ordered waypoints from animationPaths["player:id"].
+   *  Each waypoint carries z: > 0 means entity is airborne (scale up for visual arc). */
+  path?: Waypoint[];
 }
 
 const OBJECT_NEON: Record<number, { bg: string; glow: string; textColor: string }> = {
@@ -31,6 +31,9 @@ const OBJECT_NEON: Record<number, { bg: string; glow: string; textColor: string 
 // Step duration per grid cell for multi-waypoint paths
 const STEP_S = 0.08;
 
+// Scale multiplier per unit of z — entity grows slightly while airborne
+const Z_SCALE = 0.08;
+
 export default function GameObject({ object, cellSize, animType = 'normal', path }: GameObjectProps) {
   const neon = OBJECT_NEON[object.id] ?? {
     bg: '#bf5fff',
@@ -43,8 +46,10 @@ export default function GameObject({ object, cellSize, animType = 'normal', path
   // Motion values — driven exclusively via effects
   const mvX = useMotionValue(object.position.col * cellSize);
   const mvY = useMotionValue(object.position.row * cellSize);
+  // Scale driven by z — 1.0 at ground, grows with height
+  const mvScale = useMotionValue(1);
 
-  // Inner div scope for secondary effects (scale, rotate, opacity)
+  // Inner div scope for secondary effects (rotate, opacity)
   const [scope, animateScope] = useAnimate();
 
   const prevPathKeyRef = useRef('');
@@ -63,17 +68,20 @@ export default function GameObject({ object, cellSize, animType = 'normal', path
       prevPathKeyRef.current = '';
       mvX.set(finalX);
       mvY.set(finalY);
+      mvScale.set(1);
       return;
     }
 
-    const newKey = path.map((p) => `${p.row},${p.col}`).join('|');
-    if (newKey === prevPathKeyRef.current) return; // same move, already animating
+    // Include z in key so same grid path with different arc still re-animates
+    const newKey = path.map((p) => `${p.row},${p.col},${p.z}`).join('|');
+    if (newKey === prevPathKeyRef.current) return;
     prevPathKeyRef.current = newKey;
 
     // ── Teleport / portal: instant jump + materialize burst ───────────────────
     if (animType === 'teleport' || animType === 'portal') {
       mvX.set(finalX);
       mvY.set(finalY);
+      mvScale.set(1);
       if (scope.current) {
         animateScope(
           scope.current,
@@ -86,20 +94,24 @@ export default function GameObject({ object, cellSize, animType = 'normal', path
 
     // ── Multi-step path: walk through every waypoint ───────────────────────────
     if (path.length > 2) {
-      // Snap to starting cell (path[0] is where entity was before the move)
       mvX.set(path[0].col * cellSize);
       mvY.set(path[0].row * cellSize);
+      mvScale.set(1 + (path[0].z ?? 0) * Z_SCALE);
 
       let delay = 0;
       const controls: AnimationPlaybackControls[] = [];
 
       for (let i = 1; i < path.length; i++) {
-        const pos = path[i];
+        const wp = path[i];
+        const targetScale = 1 + (wp.z ?? 0) * Z_SCALE;
         controls.push(
-          fmAnimate(mvX, pos.col * cellSize, { duration: STEP_S, delay, ease: 'linear' }),
+          fmAnimate(mvX, wp.col * cellSize, { duration: STEP_S, delay, ease: 'linear' }),
         );
         controls.push(
-          fmAnimate(mvY, pos.row * cellSize, { duration: STEP_S, delay, ease: 'linear' }),
+          fmAnimate(mvY, wp.row * cellSize, { duration: STEP_S, delay, ease: 'linear' }),
+        );
+        controls.push(
+          fmAnimate(mvScale, targetScale, { duration: STEP_S, delay, ease: 'linear' }),
         );
         delay += STEP_S;
       }
@@ -117,6 +129,7 @@ export default function GameObject({ object, cellSize, animType = 'normal', path
     }
 
     // ── Single step: spring to final position ─────────────────────────────────
+    const finalScale = 1 + (path[path.length - 1]?.z ?? 0) * Z_SCALE;
     const spring =
       animType === 'conveyor'
         ? { type: 'spring' as const, stiffness: 320, damping: 12 }
@@ -125,16 +138,18 @@ export default function GameObject({ object, cellSize, animType = 'normal', path
     activeControls.current = [
       fmAnimate(mvX, finalX, spring),
       fmAnimate(mvY, finalY, spring),
+      fmAnimate(mvScale, finalScale, spring),
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, animType, cellSize]);
 
   return (
-    // Outer motion.div: only x/y position (driven by motion values)
+    // Outer motion.div: x/y position + scale (z arc)
     <motion.div
       style={{
         x: mvX,
         y: mvY,
+        scale: mvScale,
         position: 'absolute',
         top: padding,
         left: padding,
@@ -143,7 +158,7 @@ export default function GameObject({ object, cellSize, animType = 'normal', path
         zIndex: 10,
       }}
     >
-      {/* Inner div: scale / rotate / opacity (WAAPI, doesn't conflict with x/y) */}
+      {/* Inner div: rotate / opacity (WAAPI, doesn't conflict with x/y/scale) */}
       <div
         ref={scope}
         style={{

@@ -34,6 +34,12 @@ export const CELL_TYPES_TELEPORTER: CellType[] = [
   'teleporter_in_B', 'teleporter_out_B',
   'teleporter_in_C', 'teleporter_out_C',
 ];
+export const CELL_TYPES_LAUNCHER: CellType[] = [
+  'launcher_up', 'launcher_down', 'launcher_left', 'launcher_right',
+];
+export const CELL_TYPES_TRAMPOLINE: CellType[] = [
+  'trampoline_up', 'trampoline_down', 'trampoline_left', 'trampoline_right',
+];
 
 export const CELL_TYPES: CellType[] = [
   ...CELL_TYPES_BASIC,
@@ -41,6 +47,8 @@ export const CELL_TYPES: CellType[] = [
   ...CELL_TYPES_POWER,
   ...CELL_TYPES_CONVEYOR,
   ...CELL_TYPES_TELEPORTER,
+  ...CELL_TYPES_LAUNCHER,
+  ...CELL_TYPES_TRAMPOLINE,
 ];
 
 export const CELL_LABEL: Record<CellType | 'erase', string> = {
@@ -53,6 +61,10 @@ export const CELL_LABEL: Record<CellType | 'erase', string> = {
   teleporter_in_A: 'Tel-In A', teleporter_out_A: 'Tel-Out A',
   teleporter_in_B: 'Tel-In B', teleporter_out_B: 'Tel-Out B',
   teleporter_in_C: 'Tel-In C', teleporter_out_C: 'Tel-Out C',
+  launcher_up: 'Lnch ▲', launcher_down: 'Lnch ▼',
+  launcher_left: 'Lnch ◄', launcher_right: 'Lnch ►',
+  trampoline_up: 'Trmp ▲', trampoline_down: 'Trmp ▼',
+  trampoline_left: 'Trmp ◄', trampoline_right: 'Trmp ►',
 };
 
 export const CELL_ICON: Record<CellType | 'erase', string> = {
@@ -64,6 +76,8 @@ export const CELL_ICON: Record<CellType | 'erase', string> = {
   teleporter_in_A: '⟿A', teleporter_out_A: '⟾A',
   teleporter_in_B: '⟿B', teleporter_out_B: '⟾B',
   teleporter_in_C: '⟿C', teleporter_out_C: '⟾C',
+  launcher_up: '▲', launcher_down: '▼', launcher_left: '◄', launcher_right: '►',
+  trampoline_up: '▲', trampoline_down: '▼', trampoline_left: '◄', trampoline_right: '►',
 };
 
 export const CELL_COLOR: Record<CellType | 'erase', string> = {
@@ -76,6 +90,10 @@ export const CELL_COLOR: Record<CellType | 'erase', string> = {
   teleporter_in_A: '#ec4899', teleporter_out_A: '#ec4899',
   teleporter_in_B: '#f97316', teleporter_out_B: '#f97316',
   teleporter_in_C: '#14b8a6', teleporter_out_C: '#14b8a6',
+  launcher_up: '#f59e0b', launcher_down: '#f59e0b',
+  launcher_left: '#f59e0b', launcher_right: '#f59e0b',
+  trampoline_up: '#22d3ee', trampoline_down: '#22d3ee',
+  trampoline_left: '#22d3ee', trampoline_right: '#22d3ee',
 };
 
 export const EDGE_OPTIONS: EdgeBehavior[] = ['wall', 'portal', 'lava'];

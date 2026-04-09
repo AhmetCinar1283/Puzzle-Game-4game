@@ -5,7 +5,7 @@ import GameCell from '@/app/src/games/components/GameCell';
 import type { CellType } from '@/app/src/games/types';
 import {
   CELL_TYPES_BASIC, CELL_TYPES_ICE, CELL_TYPES_POWER,
-  CELL_TYPES_CONVEYOR, CELL_TYPES_TELEPORTER,
+  CELL_TYPES_CONVEYOR, CELL_TYPES_TELEPORTER, CELL_TYPES_LAUNCHER, CELL_TYPES_TRAMPOLINE,
   CELL_COLOR, CELL_LABEL, type ToolType,
 } from '../editorConfig';
 import { useEditorContext } from '../EditorContext';
@@ -86,6 +86,8 @@ export default function ToolPalette({ isMobile }: { isMobile: boolean }) {
     { label: 'Power', types: CELL_TYPES_POWER },
     { label: 'Conveyors', types: CELL_TYPES_CONVEYOR },
     { label: 'Teleporters', types: CELL_TYPES_TELEPORTER },
+    { label: 'Launchers', types: CELL_TYPES_LAUNCHER },
+    { label: 'Trampolines', types: CELL_TYPES_TRAMPOLINE },
   ];
 
   return (

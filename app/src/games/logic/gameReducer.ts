@@ -24,6 +24,7 @@ export function initialStateFromLevel(level: LevelData): GameState {
     phase: 'playing',
     moveCount: 0,
     trail: {},
+    conveyorRemainingUses: {},
   };
 }
 

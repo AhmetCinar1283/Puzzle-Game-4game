@@ -57,6 +57,34 @@ export function isConveyor(cell: CellType): boolean {
   return cellTypeToConveyorDir(cell) !== null;
 }
 
+export function cellTypeToLauncherDir(cell: CellType): Direction | null {
+  switch (cell) {
+    case 'launcher_up': return 'up';
+    case 'launcher_down': return 'down';
+    case 'launcher_left': return 'left';
+    case 'launcher_right': return 'right';
+    default: return null;
+  }
+}
+
+export function isLauncher(cell: CellType): boolean {
+  return cellTypeToLauncherDir(cell) !== null;
+}
+
+export function cellTypeToTrampolineDir(cell: CellType): Direction | null {
+  switch (cell) {
+    case 'trampoline_up': return 'up';
+    case 'trampoline_down': return 'down';
+    case 'trampoline_left': return 'left';
+    case 'trampoline_right': return 'right';
+    default: return null;
+  }
+}
+
+export function isTrampoline(cell: CellType): boolean {
+  return cellTypeToTrampolineDir(cell) !== null;
+}
+
 /** Returns the first grid position matching targetCell, or null. */
 export function findCellPosition(grid: CellType[][], targetCell: CellType): Position | null {
   for (let row = 0; row < grid.length; row++) {

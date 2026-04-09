@@ -212,6 +212,8 @@ const en: Record<string, string> = {
   'lost.lava_msg': 'You fell off the lava edge.',
   'lost.trail_title': 'Trail Crossed',
   'lost.trail_msg': "You crossed the opponent's trail.",
+  'lost.crushed_title': 'Crushed!',
+  'lost.crushed_msg': 'A heavy object landed on you.',
   'lost.try_again': 'TRY AGAIN',
 
   // Levels list

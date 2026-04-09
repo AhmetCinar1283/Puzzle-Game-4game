@@ -6,16 +6,27 @@ import type { BehaviorContext, BehaviorResult } from '../engine/types';
 /**
  * A cell behavior defines what happens when an entity enters (or is on) a cell.
  *
+ * canEnter (optional) is called BEFORE the entity moves. Returning false stops
+ * the entity without triggering onEnter. Omit to always allow entry — the engine
+ * handles occupancy and obstacle checks independently.
+ *
  * onEnter is called after the entity has moved to the cell. It returns a
  * BehaviorResult describing the entity's new velocity and any side effects.
  *
  * Rules for behavior authors:
  *  - Never mutate TickState directly. Use the sideEffect thunk in BehaviorResult.
- *  - Keep onEnter pure: same context always produces the same result.
+ *  - Keep canEnter and onEnter pure: same context always produces the same result.
  *  - Velocities: return the incoming ctx.entity.velocity to continue movement,
  *    or null to stop, or a different Direction to redirect.
  */
 export interface CellBehavior {
+  /**
+   * Gate entry before the entity moves. Return false to block (entity stops,
+   * velocity cleared). Inspect ctx.targetCell.occupantIds or customData as needed.
+   * If omitted, entry is always allowed (the engine still blocks for obstacles
+   * and occupancy independently).
+   */
+  canEnter?(ctx: BehaviorContext): boolean;
   onEnter(ctx: BehaviorContext): BehaviorResult;
 }
 
@@ -27,6 +38,8 @@ import { teleporterBehavior } from './teleporter';
 import { directionToggleBehavior } from './directionToggle';
 import { forbiddenBehavior } from './forbidden';
 import { powerNodeBehavior } from './powerNode';
+import { launcherBehavior } from './launcher';
+import { trampolineBehavior } from './trampoline';
 
 /**
  * Maps each CellType to its behavior module.
@@ -53,4 +66,14 @@ export const CELL_BEHAVIORS: Partial<Record<CellType, CellBehavior>> = {
   direction_toggle: directionToggleBehavior,
   forbidden: forbiddenBehavior,
   power_node: powerNodeBehavior,
+
+  launcher_up: launcherBehavior,
+  launcher_down: launcherBehavior,
+  launcher_left: launcherBehavior,
+  launcher_right: launcherBehavior,
+
+  trampoline_up: trampolineBehavior,
+  trampoline_down: trampolineBehavior,
+  trampoline_left: trampolineBehavior,
+  trampoline_right: trampolineBehavior,
 };

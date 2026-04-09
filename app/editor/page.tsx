@@ -60,6 +60,9 @@ function EditorInner() {
     objects: s.objects, setObjects: s.setObjects,
     boxes: s.boxes, setBoxes: s.setBoxes,
     conveyorPowerRequired: s.conveyorPowerRequired, setConveyorPowerRequired: s.setConveyorPowerRequired,
+    conveyorConfig: s.conveyorConfig, setConveyorConfig: s.setConveyorConfig,
+    launcherConfig: s.launcherConfig, setLauncherConfig: s.setLauncherConfig,
+    trampolineConfig: s.trampolineConfig, setTrampolineConfig: s.setTrampolineConfig,
     pushGridHistory: s.pushGridHistory,
   });
 

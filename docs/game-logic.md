@@ -11,19 +11,22 @@ All pages that interact with the game or Dexie are `'use client'` components. `u
 ```
 useGameEngine (hook)
   └── useReducer(gameReducer, level, initialStateFromLevel)
-        └── processMoveStep (pure) — momentum-based tick loop
-              ├── initTickState      — build TickState, compute poweredCells (BFS)
-              ├── resolvePlayerOrder — Kahn's topological sort for simultaneous moves
-              │     └── head-on swap detection → both players stopped
-              ├── assignInitialVelocities — assign Direction | null per player
-              │     └── two-player box conflict → both blocked
-              └── runTickLoop  (while any entity has velocity && tick < MAX_TICK=64)
+        └── processMoveStep (pure) — momentum-based fixpoint loop
+              ├── initTickState      — build CellState[][], populate occupantIds, compute poweredCells (BFS)
+              ├── assignInitialVelocities — assign Direction | null per player (no ordering)
+              │     └── two-player same-box conflict pre-pass → both blocked
+              └── runTickLoop  (fixpoint: repeat steps while any entity moved && step < MAX_TICK=64)
                     ├── activateConveyors — stationary entities on active conveyors get velocity
-                    ├── for each entity with velocity (players first, then boxes):
+                    ├── for each entity with velocity (by id order, deterministic):
                     │     ├── resolveEdgePosition → lava (die/destroy) | null (wall-stop) | Position
                     │     ├── obstacle check → stop
-                    │     ├── occupancy check → pushChainImmediately (box) or both-stop (player)
-                    │     ├── move entity, append to animationPaths
+                    │     ├── CELL_BEHAVIORS[cell]?.canEnter(ctx) → false = stop  ← NEW hook
+                    │     ├── occupancy check via CellState.occupantIds (O(1)):
+                    │     │     push_succeeded  → mover continues into vacated cell
+                    │     │     push_blocked    → mover stops
+                    │     │     mutual_stop     → both stop (head-on player collision)
+                    │     │     occupant_moving → mover KEEPS velocity, retries next step ← KEY
+                    │     ├── move entity: removeFromGrid(from) + addToGrid(to) + animationPaths
                     │     └── CELL_BEHAVIORS[cell]?.onEnter(ctx) → BehaviorResult
                     │           · ice            → preserve velocity (slide continues)
                     │           · conveyor_*     → set velocity to conveyor direction
@@ -32,6 +35,7 @@ useGameEngine (hook)
                     │           · power_node     → add to poweredPlayers (sideEffect)
                     │           · forbidden      → lostReason (player) / destroyEntity (box)
                     │           · (none)         → stop
+                    ├── if no entity moved this step → fixpoint reached, exit loop
                     └── finalizeTickState
                           ├── rebuild objects/boxes from TickEntities
                           ├── update trail (start positions of moved players)
@@ -39,6 +43,10 @@ useGameEngine (hook)
                           ├── win condition check
                           └── deriveMoveAnimTypes (backward compat for sound system)
 ```
+
+**Follow-through without ordering:** If P1 is behind P2 (both moving right), P1 gets `occupant_moving` in step 1 and keeps its velocity. After P2 moves in the same step, P1 tries again in step 2 and enters the vacated cell. No Kahn sort needed.
+
+**Head-on swaps without special detection:** P1→P2's cell, P2→P1's cell. Both see the other as occupant → `mutual_stop` → both stop. Natural resolution via the fixpoint.
 
 All game logic lives in `app/src/games/logic/` as pure functions with no React dependency.
 
@@ -48,24 +56,51 @@ All game logic lives in `app/src/games/logic/` as pure functions with no React d
 app/src/games/logic/
 ├── positionUtils.ts      posKey, DELTA, conveyor/teleporter cell helpers
 ├── powerSystem.ts        computePoweredCells — BFS power propagation
-├── movementHelpers.ts    resolveDirection, resolveEdgePosition, addToTrail, checkWinCondition, applyMoveToObject
+├── movementHelpers.ts    resolveDirection, resolveEdgePosition, addToTrail, checkWinCondition
 ├── movement.ts           shim — re-exports processMoveStep from engine/tick.ts
 ├── gameReducer.ts        initialStateFromLevel, gameReducer
 │
 ├── engine/
-│   ├── types.ts          TickState, TickEntity, Velocity, BehaviorContext, BehaviorResult
-│   ├── tick.ts           processMoveStep — main entry point (dependency sort + tick loop)
-│   └── collision.ts      collectPushChain + pushChainImmediately (atomic box chain push)
+│   ├── types.ts          CellState, TickState, TickEntity, BehaviorContext, BehaviorResult
+│   │                     + grid helpers: removeFromGrid, addToGrid, getOccupantEntity
+│   ├── tick.ts           processMoveStep — main entry point (init → velocities → fixpoint loop)
+│   ├── init.ts           initTickState — builds CellState[][] with occupantIds
+│   ├── loop.ts           runTickLoop — fixpoint loop (no ordering; occupant_moving keeps velocity)
+│   ├── velocities.ts     assignInitialVelocities + activateConveyors
+│   ├── finalize.ts       finalizeTickState — converts TickState → public GameState
+│   ├── collision.ts      collectPushChain + pushChainImmediately (atomic box chain push)
+│   └── entities/
+│       ├── player.ts     player EntityBehavior (hooks: onPushed, onLavaEdge, onFinalize)
+│       └── box.ts        box EntityBehavior
 │
 └── behaviors/
-    ├── registry.ts       CellBehavior interface + CELL_BEHAVIORS map
+    ├── registry.ts       CellBehavior interface (canEnter? + onEnter) + CELL_BEHAVIORS map
     ├── ice.ts            preserve velocity → slide continues
     ├── conveyor.ts       override velocity with conveyor direction + cycle guard
     ├── teleporter.ts     overridePosition to exit, carry velocity + cycle guard
     ├── directionToggle.ts flip entity mode via sideEffect
     ├── forbidden.ts      destroyEntity (box) or lostReason='forbidden' (player)
-    └── powerNode.ts      add player to poweredPlayers via sideEffect
+    ├── powerNode.ts      add player to poweredPlayers via sideEffect
+    ├── launcher.ts       launch entity N steps in a direction (overrides momentum)
+    └── trampoline.ts     airborne jump N steps, crush at landing
 ```
+
+### Active Grid (CellState)
+
+Each cell in `TickState.grid` is a `CellState`:
+
+```typescript
+interface CellState {
+  type: CellType;           // the cell's tile type (never changes within a move)
+  occupantIds: number[];    // entity IDs currently on this cell — updated as entities move
+  customData?: Record<string, unknown>; // for future mechanics (durability, flags, etc.)
+}
+```
+
+Grid helpers in `engine/types.ts`:
+- `removeFromGrid(tick, entity)` — remove entity from its current cell before moving
+- `addToGrid(tick, pos, entity)` — register entity at new position after moving
+- `getOccupantEntity(tick, pos, excludeId, toRemove)` — O(1) occupancy lookup
 
 ### Extending with New Cell Types
 
@@ -73,6 +108,8 @@ Add a new cell type in **3 steps**:
 1. Add the string literal to `CellType` in `types/index.ts`
 2. Create `logic/behaviors/myCellType.ts` exporting a `CellBehavior` object
 3. Add one entry to `CELL_BEHAVIORS` in `logic/behaviors/registry.ts`
+
+**Optional `canEnter` hook:** implement `canEnter(ctx): boolean` to block entry before the entity moves (e.g. a locked door checks `ctx.targetCell.customData`). Returning false stops the entity; `onEnter` is not called.
 
 No changes to the engine (`tick.ts`) are needed.
 
