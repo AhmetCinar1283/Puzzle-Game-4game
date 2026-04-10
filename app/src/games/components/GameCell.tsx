@@ -97,26 +97,6 @@ const CELL_STYLE: Record<CellType, React.CSSProperties> = {
     border: '2px solid rgba(20, 184, 166, 0.4)',
     boxShadow: 'inset 0 0 10px rgba(20, 184, 166, 0.12)',
   },
-  launcher_up: {
-    background: 'rgba(245, 158, 11, 0.14)',
-    border: '2px solid rgba(245, 158, 11, 0.65)',
-    boxShadow: 'inset 0 0 14px rgba(245, 158, 11, 0.22), 0 0 8px rgba(245, 158, 11, 0.15)',
-  },
-  launcher_down: {
-    background: 'rgba(245, 158, 11, 0.14)',
-    border: '2px solid rgba(245, 158, 11, 0.65)',
-    boxShadow: 'inset 0 0 14px rgba(245, 158, 11, 0.22), 0 0 8px rgba(245, 158, 11, 0.15)',
-  },
-  launcher_left: {
-    background: 'rgba(245, 158, 11, 0.14)',
-    border: '2px solid rgba(245, 158, 11, 0.65)',
-    boxShadow: 'inset 0 0 14px rgba(245, 158, 11, 0.22), 0 0 8px rgba(245, 158, 11, 0.15)',
-  },
-  launcher_right: {
-    background: 'rgba(245, 158, 11, 0.14)',
-    border: '2px solid rgba(245, 158, 11, 0.65)',
-    boxShadow: 'inset 0 0 14px rgba(245, 158, 11, 0.22), 0 0 8px rgba(245, 158, 11, 0.15)',
-  },
   trampoline_up: {
     background: 'rgba(34, 211, 238, 0.12)',
     border: '2px solid rgba(34, 211, 238, 0.6)',
@@ -139,26 +119,39 @@ const CELL_STYLE: Record<CellType, React.CSSProperties> = {
   },
 };
 
-const CONVEYOR_ICON: Record<string, string> = {
-  conveyor_up: '▲',
-  conveyor_down: '▼',
-  conveyor_left: '◄',
-  conveyor_right: '►',
-};
+const CONVEYOR_ICON = (cellSize: number, conveyorDim: boolean) => {
+  return (
+    <svg width={cellSize*0.55} height={cellSize*0.55} viewBox="0 0 24 24" fill="none" stroke={conveyorDim ? '#6b4fa0' : '#c4b5fd'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: conveyorDim ? 'none' : 'drop-shadow(0 0 5px rgba(196,181,253,0.8))' }}>
+      <path d="M6 21l6-6 6 6" />
+      <path d="M6 14l6-6 6 6" />
+      <path d="M6 7l6-6 6 6" />
+    </svg>
+  )
+}
 
-const LAUNCHER_ICON: Record<string, string> = {
-  launcher_up: '▲',
-  launcher_down: '▼',
-  launcher_left: '◄',
-  launcher_right: '►',
-};
-
-const TRAMPOLINE_ICON: Record<string, string> = {
-  trampoline_up: '▲',
-  trampoline_down: '▼',
-  trampoline_left: '◄',
-  trampoline_right: '►',
-};
+const TRAMPOLINE_ICON = (cellSize: number) => {
+  return (
+    <svg
+      width={cellSize * 0.55}
+      height={cellSize * 0.55}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#22d3ee"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.8))' // Neon parlaması
+      }}
+    >
+      {/* 3 adet yukarı doğru fırlatan kavisli çizgi */}
+      <path d="M12 22V12" />
+      <path d="M12 12C12 12 17 16 19 12C21 8 12 2 12 2" />
+      <path d="M12 12C12 12 7 16 5 12C3 8 12 2 12 2" />
+      <line x1="8" y1="22" x2="16" y2="22" />
+    </svg>
+  )
+}
 
 const TELEPORTER_LABEL: Partial<Record<CellType, string>> = {
   teleporter_in_A: 'A', teleporter_out_A: 'A',
@@ -170,6 +163,15 @@ const TELEPORTER_COLOR: Partial<Record<CellType, string>> = {
   teleporter_in_A: '#ec4899', teleporter_out_A: '#ec4899',
   teleporter_in_B: '#f97316', teleporter_out_B: '#f97316',
   teleporter_in_C: '#14b8a6', teleporter_out_C: '#14b8a6',
+};
+
+// Yönleri açıya çeviren basit bir yardımcı fonksiyon
+const getRotation = (cellType: string) => {
+  if (cellType.includes('up')) return '0deg';
+  if (cellType.includes('right')) return '90deg';
+  if (cellType.includes('down')) return '180deg';
+  if (cellType.includes('left')) return '270deg';
+  return '0deg';
 };
 
 export default function GameCell({ cellType, cellSize, isPowered }: GameCellProps) {
@@ -184,10 +186,10 @@ export default function GameCell({ cellType, cellSize, isPowered }: GameCellProp
   const baseStyle = CELL_STYLE[cellType];
   const style: React.CSSProperties = conveyorDim
     ? {
-        ...baseStyle,
-        opacity: 0.4,
-        filter: 'grayscale(0.5)',
-      }
+      ...baseStyle,
+      opacity: 0.4,
+      filter: 'grayscale(0.5)',
+    }
     : baseStyle;
 
   return (
@@ -310,65 +312,39 @@ export default function GameCell({ cellType, cellSize, isPowered }: GameCellProp
         </span>
       )}
 
-      {/* Launcher (catapult/trampoline) */}
-      {isLauncher && (
-        <span
-          style={{
-            fontSize: cellSize * 0.36,
-            lineHeight: 1,
-            color: '#f59e0b',
-            textShadow: '0 0 10px rgba(245,158,11,0.9)',
-            userSelect: 'none',
-            fontWeight: 'bold',
-          }}
-        >
-          {LAUNCHER_ICON[cellType]}
-        </span>
-      )}
-
       {/* Trampoline */}
       {isTrampoline && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-          <span
-            style={{
-              fontSize: cellSize * 0.32,
-              lineHeight: 1,
-              color: '#22d3ee',
-              textShadow: '0 0 10px rgba(34,211,238,0.9)',
-              userSelect: 'none',
-              fontWeight: 'bold',
-            }}
-          >
-            {TRAMPOLINE_ICON[cellType]}
-          </span>
-          <span
-            style={{
-              fontSize: cellSize * 0.18,
-              lineHeight: 1,
-              color: 'rgba(34,211,238,0.7)',
-              userSelect: 'none',
-              letterSpacing: '0.02em',
-            }}
-          >
-            arc
-          </span>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            height: '100%',
+            transform: `rotate(${getRotation(cellType)})`, // Yöne göre çevir
+          }}
+        >
+          {/* Zıplama/Yay İkonu (SVG) */}
+          {TRAMPOLINE_ICON(cellSize)}
         </div>
       )}
 
       {/* Conveyor belts */}
       {isConveyor && (
-        <span
+        <div
           style={{
-            fontSize: cellSize * 0.32,
-            lineHeight: 1,
-            color: conveyorDim ? '#6b4fa0' : '#c4b5fd',
-            textShadow: conveyorDim ? 'none' : '0 0 8px rgba(196,181,253,0.7)',
-            userSelect: 'none',
-            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            height: '100%',
+            transform: `rotate(${getRotation(cellType)})`,
+            opacity: conveyorDim ? 0.5 : 1,
           }}
         >
-          {CONVEYOR_ICON[cellType]}
-        </span>
+          {/* Çift Ok (Chevron) İkonu (SVG) */}
+          {CONVEYOR_ICON(cellSize, conveyorDim)}
+        </div>
       )}
 
       {/* Teleporters */}

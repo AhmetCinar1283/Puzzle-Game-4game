@@ -12,36 +12,33 @@ import type {
 } from '../../types';
 
 // ─── CellState ────────────────────────────────────────────────────────────────
-// Active cell representation: knows its type AND who is currently standing on it.
-// Replaced the old CellType[][] grid so occupancy is O(1) to read/write.
+// Active cell data. O(1) lookup for occupants.
 export interface CellState {
   type: CellType;
-  /** Entity IDs currently occupying this cell. Updated whenever an entity moves. */
+  /** IDs of entities on this cell. */
   occupantIds: number[];
-  /** Arbitrary per-cell data for future mechanics (e.g. durability, toggles). */
+  /** Custom data for cell mechanics (durability, counters, etc.). */
   customData?: Record<string, unknown>;
 }
 
+// ─── NeighborMap ──────────────────────────────────────────────────────────────
+// Snapshot of 4 orthogonal neighbors. null = out of bounds.
+export interface NeighborInfo {
+  cell: CellState;
+  entities: TickEntity[];
+}
+export type NeighborMap = Record<Direction, NeighborInfo | null>;
+
 // ─── Velocity ─────────────────────────────────────────────────────────────────
-// null  = entity stopped / waiting
-// Direction = entity advances one cell in this direction next tick
+// null = stopped. Direction = moving next tick.
 export type Velocity = Direction | null;
 
-// ─── Momentum ─────────────────────────────────────────────────────────────────
-// Unified multi-step movement state — replaces the old _conveyorMomentum.
-// Used by conveyors, launchers, and trampolines.
+// ─── Momentum (DEPRECATED — kept only for type-check compatibility during migration) ──
+// TODO: remove after all callers migrated to entity.force
 export interface Momentum {
   dir: Direction;
   stepsLeft: number;
-  totalSteps: number; // constant; used to compute current step index for zProfile
-  /**
-   * Height (z) of the entity at each step of this momentum arc.
-   * Index = totalSteps - stepsLeft at the START of that step.
-   * Undefined → entity stays at ground level (z = 0) throughout.
-   *
-   * Example (5-step trampoline): [2, 4, 4, 2, 0]
-   *   step 0 → z=2 (lift-off), step 2 → z=4 (peak), step 4 → z=0 (landing)
-   */
+  totalSteps: number;
   zProfile?: number[];
 }
 
@@ -50,13 +47,13 @@ export type EntityKind = 'player' | 'box';
 // ─── EntityBehavior ───────────────────────────────────────────────────────────
 
 export type OnPushedResult =
-  | { outcome: 'push_succeeded' }   // itildi, yol açıldı; mover devam eder
-  | { outcome: 'push_blocked' }     // zincir tıkandı; mover durur
-  | { outcome: 'mutual_stop' }      // player vs player; ikisi de durur
-  | { outcome: 'occupant_moving' }; // occupant zaten hareket halinde; mover durur
+  | { outcome: 'push_succeeded' }   // Pushed successfully, mover continues
+  | { outcome: 'push_blocked' }     // Path blocked, mover stops
+  | { outcome: 'mutual_stop' }      // Player vs player collision, both stop
+  | { outcome: 'occupant_moving' }; // Occupant is already moving, mover stops
 
 export interface FinalizeContext {
-  tickEntity: TickEntity | undefined; // undefined = entity yok edildi
+  tickEntity: TickEntity | undefined; // undefined = destroyed
   prevState: GameState;
   tick: TickState;
 }
@@ -66,27 +63,24 @@ export type FinalizeResult =
   | { kind: 'box_state'; state: BoxState }
   | { kind: 'destroyed' };
 
-/**
- * Her entity türünün engine'e bağımlılık olmadan davranışını tanımladığı interface.
- * Yeni entity türü = yeni EntityBehavior implementasyonu + init.ts'te 1 satır.
- */
+/** Defines entity behavior without engine dependency. */
 export interface EntityBehavior {
   // ── Flags ────────────────────────────────────────────────────────────────────
-  /** Kullanıcı girdisinden hız alır. True ise assignInitialVelocities'e girer. */
+  /** Takes input velocity. */
   readonly isUserControlled: boolean;
-  /** Artık kullanılmıyor — Kahn sort kaldırıldı, fixpoint loop sıralama sorununu çözüyor. */
+  /** Used for order resolution. */
   readonly participatesInOrderResolution: boolean;
-  /** Tick içi işlem önceliği. Düşük = önce işlenir. (player: 0, box: 1) */
+  /** Processing order in a tick. Lower is earlier (player: 0, box: 1). */
   readonly processingPriority: number;
-  /** Lava/forbidden ile kalıcı olarak tahtadan kaldırılabilir. */
+  /** Can be destroyed by lava or forbidden cells. */
   readonly isDestructible: boolean;
-  /** Hareket ettiğinde iz bırakır (trail). */
+  /** Leaves a movement trail. */
   readonly generatesTrail: boolean;
-  /** Durağan hâlde bir entity çarptığında chain push başlatır. */
+  /** Starts a chain push when hit while idle. */
   readonly isPushChainRoot: boolean;
 
   // ── Hooks ─────────────────────────────────────────────────────────────────────
-  /** Başka bir entity bu entity'nin hücresine hareket etmeye çalışıyor. */
+  /** Called when another entity tries to move into this cell. */
   onPushed(
     self: TickEntity,
     mover: TickEntity,
@@ -94,69 +88,116 @@ export interface EntityBehavior {
     toRemove: Set<TickEntity>,
   ): OnPushedResult;
 
-  /**
-   * Entity bir lava edge'e ulaştı (position güncellenmeden önce çağrılır).
-   * Halt true döndürülürse tick loop mevcut iterasyonu kırar.
-   */
+  /** Called when entity hits a lava edge. Return true to halt tick loop. */
   onLavaEdge(
     self: TickEntity,
     tick: TickState,
     toRemove: Set<TickEntity>,
   ): { halt: boolean };
 
-  /** Tüm hareket tamamlandıktan sonra public GameState'e katkı sağlar. */
+  /** Updates public GameState after movement ends. */
   onFinalize(ctx: FinalizeContext): FinalizeResult;
 }
 
 // ─── TickEntity ───────────────────────────────────────────────────────────────
-// Mutable representation of a game entity during tick resolution.
-// Mutated in place during the tick loop; never escapes the engine boundary.
+// Mutable game entity state during ticks.
 export interface TickEntity {
-  kind: string;   // 'player' | 'box' | gelecekte yeni tipler; engine artık buna dallanmaz
+  kind: string;   
   id: number;
-  position: Position;   // mutable — updated each tick step
-  velocity: Velocity;   // mutable — null = stopped
+  position: Position;   // Updated each tick step
+  velocity: Velocity;   // null = stopped
   behavior: EntityBehavior;
-  // Player-only fields (undefined for boxes)
+  
+  // Player-only fields
   mode?: MovementMode;
   lockOnTarget?: boolean;
   isLocked?: boolean;
-  // Box-only
+  
+  // Box-only fields
   requiresPower?: boolean;
-  // Height on the Z axis (0 = ground; > 0 = airborne).
-  // Set from momentum.zProfile at the start of each loop step.
+  
+  // Height (0 = ground, > 0 = airborne). Decremented each step while airborne.
   z: number;
-  // Cycle guards (reset each move resolution)
-  _conveyorVisited?: Set<string>; // posKeys of conveyor cells already activated this move
-  _teleporterUsed?: Set<string>;  // teleporter groups ('A'|'B'|'C') already used this move
-  // Unified movement momentum — drives multi-step sliding and trampoline arcs.
+
+  // ── Physics ──────────────────────────────────────────────────────────────────
+  /**
+   * Momentum magnitude — replaces the old momentum.stepsLeft system.
+   *
+   * Rules:
+   *   Ground step cost : force -= mass  (entity moves if force >= mass)
+   *   Ice / airborne   : force -= 0     (entity moves if force > 0, frictionless)
+   *   Conveyor N steps : force = mass * N
+   *   Trampoline N steps: force = mass * N, z = N
+   *   Landing (z→0)    : force *= 0.5
+   *   Elastic push     : mover.force → box.force (equal mass = full transfer)
+   *
+   * Initialized to 0. assignInitialVelocities sets force = mass for user-input.
+   */
+  force: number;
+  /** Mass (default 1). Affects push resistance and force depletion rate. */
+  mass?: number;
+  /** HP. Destroyed at 0. Undefined = indestructible. */
+  durability?: number;
+  /** Entity pushing this one right now. Cleared each step. */
+  pushedBy?: TickEntity;
+
+  // ── Cycle Guards ─────────────────────────────────────────────────────────────
+  _conveyorVisited?: Set<string>; // Visited conveyor positions
+  _teleporterUsed?: Set<string>;  // Used teleporter groups
+  /** @deprecated Use entity.force instead */
   momentum?: Momentum;
 }
 
 // ─── TickState ────────────────────────────────────────────────────────────────
-// Internal state for a single move resolution.
+// Internal state for one move resolution.
 export interface TickState {
   readonly level: LevelData;
-  readonly grid: CellState[][];         // active grid — tracks occupants per cell
-  readonly poweredCells: Set<string>;   // computed once before tick 0
-  entities: TickEntity[];               // mutated in-place
-  trail: Record<number, Position[]>;    // updated after all ticks
-  poweredPlayers: number[];             // grows when player steps on power_node
-  animationPaths: Record<string, Waypoint[]>; // "player:1" → [waypoint0, waypoint1, ...]
-  conveyorRemainingUses: Record<string, number>; // posKey → remaining uses; mutated when conveyor fires
+  readonly grid: CellState[][];         // Active grid
+  readonly poweredCells: Set<string>;   
+  entities: TickEntity[];               // Mutated in-place
+  trail: Record<number, Position[]>;    
+  poweredPlayers: number[];             
+  animationPaths: Record<string, Waypoint[]>; 
+  conveyorRemainingUses: Record<string, number>; 
   lostReason?: LostReason;
   didWin: boolean;
 }
 
-// ─── BehaviorContext ──────────────────────────────────────────────────────────
-// Passed to CellBehavior.canEnter / onEnter — snapshot of entity + cell + tick state.
-// Behaviors must NOT mutate TickState directly; use the sideEffect thunk.
+// ─── Contexts ─────────────────────────────────────────────────────────────────
+
+// Passed when an entity enters a cell.
 export interface BehaviorContext {
   entity: TickEntity;
-  newPosition: Position;   // the cell the entity just entered
+  newPosition: Position;   
   cellType: CellType;
-  targetCell: CellState;   // full cell state — use for canEnter decisions and richer onEnter logic
+  targetCell: CellState;   
   tick: TickState;
+  pusher?: TickEntity;
+  isPowered: boolean;
+  neighbors: NeighborMap;
+}
+
+// Passed when an entity is about to leave a cell.
+export interface LeaveContext {
+  entity: TickEntity;
+  fromPosition: Position;
+  toPosition: Position;
+  cellType: CellType;
+  cell: CellState;         
+  tick: TickState;
+  isPowered: boolean;
+  neighbors: NeighborMap;
+}
+
+// Passed when an entity is idle on a cell.
+export interface IdleContext {
+  entity: TickEntity;
+  position: Position;
+  cellType: CellType;
+  cell: CellState;
+  tick: TickState;
+  isPowered: boolean;
+  neighbors: NeighborMap;
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -165,22 +206,19 @@ export function entityKey(e: TickEntity): string {
   return `${e.kind}:${e.id}`;
 }
 
-/** Remove entity from its current cell's occupantIds. Call before updating entity.position. */
+/** Removes entity from current cell's occupantIds. */
 export function removeFromGrid(tick: TickState, entity: TickEntity): void {
   const cell = tick.grid[entity.position.row]?.[entity.position.col];
   if (cell) cell.occupantIds = cell.occupantIds.filter((id) => id !== entity.id);
 }
 
-/** Add entity to a cell's occupantIds. Call after updating entity.position. */
+/** Adds entity to a cell's occupantIds. */
 export function addToGrid(tick: TickState, pos: Position, entity: TickEntity): void {
   const cell = tick.grid[pos.row]?.[pos.col];
   if (cell && !cell.occupantIds.includes(entity.id)) cell.occupantIds.push(entity.id);
 }
 
-/**
- * Find the first entity occupying pos, excluding the entity with excludeId.
- * Uses CellState.occupantIds for O(1) lookup instead of scanning tick.entities.
- */
+/** Gets the first entity on a cell, excluding excludeId. */
 export function getOccupantEntity(
   tick: TickState,
   pos: Position,
@@ -189,31 +227,24 @@ export function getOccupantEntity(
 ): TickEntity | undefined {
   const cell = tick.grid[pos.row]?.[pos.col];
   if (!cell || cell.occupantIds.length === 0) return undefined;
+  
   const id = cell.occupantIds.find((id) => id !== excludeId);
   if (id === undefined) return undefined;
+  
   const e = tick.entities.find((e) => e.id === id);
   return e && !toRemove.has(e) ? e : undefined;
 }
 
 // ─── BehaviorResult ───────────────────────────────────────────────────────────
 export interface BehaviorResult {
-  /** New velocity after entering this cell. null = entity stops here. */
+  /** New velocity. null = stops here. */
   velocity: Velocity;
-  /** Remove entity from the board (box on forbidden/lava). */
+  /** If true, destroy the entity. */
   destroyEntity?: boolean;
-  /** Override the entity's position (teleporter: jump to exit cell). */
+  /** Teleport to this position. */
   overridePosition?: Position;
-  /**
-   * Side effect to apply to TickState after ALL entities in the current tick
-   * have been processed. Use for mutations that must not affect mid-tick reads
-   * (e.g. adding to poweredPlayers, setting lostReason, flipping mode).
-   */
+  /** Run this mutation after all entities are processed. */
   sideEffect?: (tick: TickState) => void;
-  /**
-   * Teleporter-only: if exit is occupied by a pushable box, the tick loop will
-   * attempt pushChainImmediately on this entity before applying the teleport.
-   * If the push fails, the teleport is cancelled (sideEffect is NOT added so
-   * the cycle guard is not set).
-   */
+  /** Teleporter exit box to push before teleporting. */
   exitBoxToPush?: TickEntity;
 }

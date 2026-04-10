@@ -6,18 +6,13 @@ import { canConveyorFire, decrementConveyorUse, getConveyorConfig } from '../pow
 
 /**
  * Assigns initial velocities to all user-controlled entities.
- *
- * No ordering: all entities receive their direction simultaneously.
- * Follow-through and head-on collisions are handled by the fixpoint loop.
- *
- * Keeps a pre-pass for the one case that can't resolve in the loop:
- * two players simultaneously pushing the same push-chain entity → both blocked.
+ * Force = mass × 1 (user input always moves exactly 1 step on normal ground).
  */
 export function assignInitialVelocities(tick: TickState, direction: Direction): void {
   const controlled = tick.entities.filter((e) => e.behavior.isUserControlled);
 
-  // Pre-pass: detect two players trying to push the same push-chain entity → both blocked
-  const boxPushClaims = new Map<number, number[]>(); // entityId → [moverId, ...]
+  // Pre-pass: two players pushing the same push-chain entity → both blocked
+  const boxPushClaims = new Map<number, number[]>();
   for (const entity of controlled) {
     if (entity.isLocked) continue;
     const actualDir = resolveDirection(direction, entity.mode!);
@@ -42,7 +37,6 @@ export function assignInitialVelocities(tick: TickState, direction: Direction): 
     if (playerIds.length > 1) for (const pid of playerIds) conflictedPlayers.add(pid);
   }
 
-  // Assign velocity to each user-controlled entity
   for (const entity of controlled) {
     if (entity.isLocked) continue;
     if (conflictedPlayers.has(entity.id)) continue;
@@ -52,46 +46,45 @@ export function assignInitialVelocities(tick: TickState, direction: Direction): 
     const candidate = { row: entity.position.row + dRow, col: entity.position.col + dCol };
     const resolved = resolveEdgePosition(candidate, tick.level);
 
-    // Immediate lava: end the whole move now
     if (resolved === 'lava') {
       tick.lostReason = 'lava_edge';
       return;
     }
-
-    if (!resolved) continue; // wall → stay
+    if (!resolved) continue;
 
     const cellType = tick.grid[resolved.row]?.[resolved.col]?.type;
     if (cellType === 'obstacle') continue;
 
-    // Check occupant at target: push-chain roots are handled in the loop;
-    // a moving entity vacates before we arrive → proceed.
     const targetCell = tick.grid[resolved.row]?.[resolved.col];
     const occupantId = targetCell?.occupantIds.find((id) => id !== entity.id);
     if (occupantId !== undefined) {
       const occupant = tick.entities.find((e) => e.id === occupantId);
       if (occupant) {
         if (occupant.behavior.isPushChainRoot) {
-          entity.velocity = actualDir; // tentative; actual push happens in tick loop
+          entity.velocity = actualDir;
+          entity.force = entity.mass ?? 1; // 1 adım kuvvet
         } else {
-          if (occupant.velocity === null) continue; // staying → blocked
-          entity.velocity = actualDir; // moving away → proceed (fixpoint handles follow-through)
+          if (occupant.velocity === null) continue;
+          entity.velocity = actualDir;
+          entity.force = entity.mass ?? 1;
         }
       }
     } else {
       entity.velocity = actualDir;
+      entity.force = entity.mass ?? 1;
     }
   }
 }
 
 /**
- * Activate stationary entities that are already on an active conveyor.
- * Sets velocity and conveyor momentum (for n-step sliding).
- * The cycle guard (_conveyorVisited) prevents re-activation of already-used cells.
+ * Activate stationary entities already on an active conveyor.
+ * Sets velocity and force = mass × cfg.steps.
+ * Cycle guard (_conveyorVisited) prevents re-activation.
  */
 export function activateConveyors(tick: TickState): void {
   for (const entity of tick.entities) {
     if (entity.velocity !== null) continue;
-    if (entity.momentum) continue; // already has momentum from a prior conveyor
+    if (entity.force > 0) continue; // zaten kuvvet var, conveyor üzerine yazmasın
     const cellType = tick.grid[entity.position.row]?.[entity.position.col]?.type;
     if (!cellType) continue;
     const convDir = cellTypeToConveyorDir(cellType);
@@ -102,7 +95,8 @@ export function activateConveyors(tick: TickState): void {
 
     const cfg = getConveyorConfig(tick.level, entity.position);
     entity.velocity = convDir;
-    entity.momentum = { dir: convDir, stepsLeft: cfg.steps, totalSteps: cfg.steps };
+    entity.force = (entity.mass ?? 1) * cfg.steps;
+    entity.momentum = undefined; // eski sistemi temizle
     if (!entity._conveyorVisited) entity._conveyorVisited = new Set();
     entity._conveyorVisited.add(key);
     decrementConveyorUse(entity.position, tick.level, tick.conveyorRemainingUses);

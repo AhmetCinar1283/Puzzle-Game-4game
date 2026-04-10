@@ -26,6 +26,7 @@ export function initTickState(state: GameState): TickState {
         lockOnTarget: obj.lockOnTarget,
         isLocked: obj.isLocked,
         z: 0,
+        force: 0,
       }),
     ),
     ...state.boxes.map(
@@ -37,6 +38,7 @@ export function initTickState(state: GameState): TickState {
         behavior: boxBehavior,
         requiresPower: box.requiresPower,
         z: 0,
+        force: 0,
       }),
     ),
   ];

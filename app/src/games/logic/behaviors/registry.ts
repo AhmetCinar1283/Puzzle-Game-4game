@@ -1,33 +1,67 @@
 import type { CellType } from '../../types';
-import type { BehaviorContext, BehaviorResult } from '../engine/types';
+import type { BehaviorContext, BehaviorResult, LeaveContext, IdleContext } from '../engine/types';
 
 // ─── CellBehavior ─────────────────────────────────────────────────────────────
 
 /**
- * A cell behavior defines what happens when an entity enters (or is on) a cell.
+ * Bir hücrenin entity'lerle etkileşimini tanımlar. Üç lifecycle hook'u var:
  *
- * canEnter (optional) is called BEFORE the entity moves. Returning false stops
- * the entity without triggering onEnter. Omit to always allow entry — the engine
- * handles occupancy and obstacle checks independently.
+ * canEnter  — entity girmeden ÖNCE çağrılır. false döndürürse entity durur,
+ *             onEnter çağrılmaz.
  *
- * onEnter is called after the entity has moved to the cell. It returns a
- * BehaviorResult describing the entity's new velocity and any side effects.
+ * onEnter   — entity hücreye girdikten SONRA çağrılır. Entity'nin yeni hızını
+ *             ve yan etkileri döndürür.
  *
- * Rules for behavior authors:
- *  - Never mutate TickState directly. Use the sideEffect thunk in BehaviorResult.
- *  - Keep canEnter and onEnter pure: same context always produces the same result.
- *  - Velocities: return the incoming ctx.entity.velocity to continue movement,
- *    or null to stop, or a different Direction to redirect.
+ * onLeave   — entity hücreden AYRILMADAN hemen önce çağrılır.
+ *             Entity'yi durduramaz; yalnızca yan etki için kullanılır
+ *             (ör. sayaç azalt, toggle sıfırla, customData güncelle).
+ *
+ * onIdle    — Her step'te, hâlâ durağan (velocity === null) olan entity için
+ *             çağrılır. activateConveyors'dan SONRA, hareket fazından ÖNCE.
+ *             BehaviorResult döndürerek entity'ye velocity verebilir veya
+ *             void döndürerek durağan bırakabilir.
+ *
+ * Behavior yazarları için kurallar:
+ *  - TickState'i doğrudan mutate etme. BehaviorResult.sideEffect thunk'ını kullan.
+ *    (İstisna: onLeave ve onIdle içinde ctx.cell.customData doğrudan değiştirilebilir —
+ *     bu, sadece o hücrenin kendi verisi olduğu için güvenlidir.)
+ *  - canEnter ve onEnter saf (pure) tutulmalı: aynı context her zaman aynı sonucu verir.
+ *  - Hız döndürürken: hareketi sürdürmek için gelen ctx.entity.velocity'i döndür,
+ *    durdurmak için null döndür, yönlendirmek için farklı bir Direction döndür.
  */
 export interface CellBehavior {
   /**
-   * Gate entry before the entity moves. Return false to block (entity stops,
-   * velocity cleared). Inspect ctx.targetCell.occupantIds or customData as needed.
-   * If omitted, entry is always allowed (the engine still blocks for obstacles
-   * and occupancy independently).
+   * Entity girmeden önce kapı kontrolü. false döndürürse entity durur,
+   * velocity temizlenir. ctx.targetCell.occupantIds veya customData'ya bakılabilir.
+   * Atlanırsa giriş her zaman izinlidir (engine obstacle ve occupancy kontrollerini
+   * bağımsız olarak yapar).
    */
   canEnter?(ctx: BehaviorContext): boolean;
+
+  /**
+   * Sürtünme katsayısı. true = sürtünmesiz (buz, hava).
+   * Engine, entity bu hücrede hareket ederken force azaltmaz (force -= 0).
+   * false/undefined = normal zemin (force -= mass her adımda).
+   * Entity bu hücredeyken hareket koşulu: frictionless ? force > 0 : force >= mass
+   */
+  frictionless?: boolean;
+
+  /** Entity hücreye girdikten sonra. Yeni hız ve yan etkileri döndürür. */
   onEnter(ctx: BehaviorContext): BehaviorResult;
+
+  /**
+   * Entity hücreden ayrılmadan hemen önce çağrılır.
+   * Entity'yi durduramaz; yalnızca yan etki (customData, TickState sideEffect) için.
+   * Opsiyonel sideEffect thunk döndürülebilir — tüm entity'ler işlendikten sonra uygulanır.
+   */
+  onLeave?(ctx: LeaveContext): { sideEffect?: (tick: import('../engine/types').TickState) => void } | void;
+
+  /**
+   * Her step'te durağan entity için çağrılır (velocity === null, conveyor aktivasyonundan sonra).
+   * void döndürürse entity durağan kalır.
+   * BehaviorResult döndürürse: velocity entity'ye set edilir, sideEffect/destroyEntity işlenir.
+   */
+  onIdle?(ctx: IdleContext): BehaviorResult | void;
 }
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
@@ -38,7 +72,6 @@ import { teleporterBehavior } from './teleporter';
 import { directionToggleBehavior } from './directionToggle';
 import { forbiddenBehavior } from './forbidden';
 import { powerNodeBehavior } from './powerNode';
-import { launcherBehavior } from './launcher';
 import { trampolineBehavior } from './trampoline';
 
 /**
@@ -66,11 +99,6 @@ export const CELL_BEHAVIORS: Partial<Record<CellType, CellBehavior>> = {
   direction_toggle: directionToggleBehavior,
   forbidden: forbiddenBehavior,
   power_node: powerNodeBehavior,
-
-  launcher_up: launcherBehavior,
-  launcher_down: launcherBehavior,
-  launcher_left: launcherBehavior,
-  launcher_right: launcherBehavior,
 
   trampoline_up: trampolineBehavior,
   trampoline_down: trampolineBehavior,

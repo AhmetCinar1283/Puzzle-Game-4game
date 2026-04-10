@@ -2,20 +2,23 @@ import type { CellBehavior } from './registry';
 import type { BehaviorResult } from '../engine/types';
 
 /**
- * Ice: entity keeps its current velocity → slides until hitting a non-ice cell.
+ * Ice: sürtünmesizdir — entity her adımda force kaybetmez.
  *
- * No canEnter hook — ice never gates entry (the engine handles occupancy).
- * This is the common case for most cells: omit canEnter to always allow entry.
+ * frictionless: true → engine bu hücrede force -= 0 uygular.
+ * Bu sayede:
+ *   - Conveyor ile gelen entity buz üzerinde tüm kuvvetini korur.
+ *   - Buz üzerinde hareket eden entity buz biter, normal zemine geçince
+ *     kalan kuvvetiyle devam eder (eski sistemde anında duruyordu).
+ *   - Trampolinle gelen entity buzda iner: force * 0.5 kalır, sürüşmeye devam eder.
  *
- * The tick loop handles the "keep moving" semantics naturally — entity just
- * carries its velocity into the next tick. Lava edges kill as normal (no
- * special "lava is wall during ice" exception from the old engine).
+ * onEnter: gelen velocity'yi korur (entity kaymayı sürdürür).
+ * Eğer entity null velocity ile geliyorsa (ör. teleporter), burada durur.
  */
 export const iceBehavior: CellBehavior = {
+  frictionless: true,
+
   onEnter(ctx): BehaviorResult {
     // Preserve incoming velocity → entity slides another step next tick.
-    // If entity arrived with null velocity (e.g. teleporter with no momentum),
-    // it stops here.
     return { velocity: ctx.entity.velocity };
   },
 };

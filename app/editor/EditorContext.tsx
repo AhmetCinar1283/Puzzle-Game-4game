@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext } from 'react';
-import type { CellType, EdgeBehavior, LevelData, Position, ConveyorCellConfig, LauncherCellConfig, TrampolineCellConfig } from '@/app/src/games/types';
+import type { CellType, EdgeBehavior, LevelData, Position, ConveyorCellConfig, TrampolineCellConfig } from '@/app/src/games/types';
 import type { StoredLevel } from '@/app/src/lib/db';
 import type { FirestoreLevel, LevelPart } from '@/app/src/lib/firebase/admin';
 import type { User } from 'firebase/auth';
@@ -35,7 +35,6 @@ export interface EditorContextValue {
   activePlacingBoxId: number | null; setActivePlacingBoxId: (id: number | null) => void;
   conveyorPowerRequired: Position[]; setConveyorPowerRequired: React.Dispatch<React.SetStateAction<Position[]>>;
   conveyorConfig: ConveyorCellConfig[]; setConveyorConfig: React.Dispatch<React.SetStateAction<ConveyorCellConfig[]>>;
-  launcherConfig: LauncherCellConfig[]; setLauncherConfig: React.Dispatch<React.SetStateAction<LauncherCellConfig[]>>;
   trampolineConfig: TrampolineCellConfig[]; setTrampolineConfig: React.Dispatch<React.SetStateAction<TrampolineCellConfig[]>>;
   // Tool
   activeTool: ToolType; setActiveTool: (t: ToolType) => void;

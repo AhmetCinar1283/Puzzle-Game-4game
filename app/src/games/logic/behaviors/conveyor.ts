@@ -4,15 +4,14 @@ import { cellTypeToConveyorDir, posKey } from '../positionUtils';
 import { canConveyorFire, decrementConveyorUse, getConveyorConfig } from '../powerSystem';
 
 /**
- * Conveyor: overrides entity velocity with the conveyor's direction and
- * applies n-step momentum so the entity slides multiple cells.
+ * Conveyor: entity'ye yön ve kuvvet verir.
  *
- * Cycle guard: each conveyor cell is tracked per-entity via _conveyorVisited.
- * If the entity has already been activated by this cell during the current
- * move resolution, it stops here — preventing infinite conveyor loops.
+ * force = mass × cfg.steps
+ *   Entity conveyor'a girince ya da durağanken aktivasyon alınca bu değer set edilir.
+ *   Normal zeminde her adım force -= mass olduğundan entity tam cfg.steps adım ilerler.
+ *   Buz üzerinde geçiyorsa force azalmaz; buz bitince kalan kuvvetle devam eder.
  *
- * The tick loop also calls this behavior for stationary entities already
- * sitting on a conveyor at the start of a turn (see activateConveyors in velocities.ts).
+ * Cycle guard: aynı conveyor hücresi entity başına sadece 1 kez aktive edilir.
  */
 export const conveyorBehavior: CellBehavior = {
   onEnter(ctx): BehaviorResult {
@@ -21,18 +20,17 @@ export const conveyorBehavior: CellBehavior = {
     const convDir = cellTypeToConveyorDir(cellType);
     if (!convDir) return { velocity: null };
 
-    // Power + use-count check
     if (!canConveyorFire(newPosition, tick.level, tick.poweredCells, tick.conveyorRemainingUses)) {
       return { velocity: null };
     }
 
-    // Cycle guard
     const key = posKey(newPosition);
     if (entity._conveyorVisited?.has(key)) {
       return { velocity: null };
     }
 
     const cfg = getConveyorConfig(tick.level, newPosition);
+    const mass = entity.mass ?? 1;
 
     return {
       velocity: convDir,
@@ -41,9 +39,11 @@ export const conveyorBehavior: CellBehavior = {
         if (!e) return;
         if (!e._conveyorVisited) e._conveyorVisited = new Set();
         e._conveyorVisited.add(key);
-        // Overwrite any existing momentum with this conveyor's fresh n-step momentum
-        e.momentum = { dir: convDir, stepsLeft: cfg.steps, totalSteps: cfg.steps };
+        // force = mass × steps: normal zeminde tam cfg.steps adım gider
+        e.force = (e.mass ?? 1) * cfg.steps;
         decrementConveyorUse(newPosition, t.level, t.conveyorRemainingUses);
+        // Eski momentum'u temizle (geçiş dönemi uyumu)
+        e.momentum = undefined;
       },
     };
   },

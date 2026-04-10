@@ -17,10 +17,6 @@ export type CellType =
   | 'teleporter_out_B'
   | 'teleporter_in_C'
   | 'teleporter_out_C'
-  | 'launcher_up'
-  | 'launcher_down'
-  | 'launcher_left'
-  | 'launcher_right'
   | 'trampoline_up'
   | 'trampoline_down'
   | 'trampoline_left'
@@ -78,12 +74,6 @@ export interface BoxDef {
   requiresPower?: boolean;
 }
 
-export interface LauncherCellConfig {
-  position: Position;
-  /** How many cells the entity is launched. Default: 3. */
-  steps: number;
-}
-
 export interface TrampolineCellConfig {
   position: Position;
   /** How many cells the entity is flung (airborne — skips intermediate terrain). Default: 3. */
@@ -123,8 +113,6 @@ export interface LevelData {
   conveyorPowerRequired?: Position[];
   /** Per-cell conveyor configuration (steps, use limit). Cells not listed use defaults. */
   conveyorConfig?: ConveyorCellConfig[];
-  /** Per-cell launcher configuration (steps). Cells not listed use default (3 steps). */
-  launcherConfig?: LauncherCellConfig[];
   /** Per-cell trampoline configuration (steps). Cells not listed use default (3 steps). */
   trampolineConfig?: TrampolineCellConfig[];
 

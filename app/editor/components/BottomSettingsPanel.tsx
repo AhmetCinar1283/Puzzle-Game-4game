@@ -7,7 +7,7 @@ import { useT } from '@/app/src/contexts/LanguageContext';
 export default function BottomSettingsPanel({ isMobile, visible }: { isMobile: boolean; visible?: boolean }) {
   const { grid, width, height, boxes, setBoxes, activePlacingBoxId, setActivePlacingBoxId,
     setActiveTool, conveyorPowerRequired, setConveyorPowerRequired,
-    conveyorConfig, setConveyorConfig, launcherConfig, setLauncherConfig,
+    conveyorConfig, setConveyorConfig,
     trampolineConfig, setTrampolineConfig } = useEditorContext();
   const t = useT();
   const [expanded, setExpanded] = useState(false);
@@ -19,13 +19,6 @@ export default function BottomSettingsPanel({ isMobile, visible }: { isMobile: b
       if (['conveyor_up', 'conveyor_down', 'conveyor_left', 'conveyor_right'].includes(grid[r][c]))
         conveyorCells.push({ r, c });
 
-  // Collect launcher cells
-  const launcherCells: { r: number; c: number }[] = [];
-  for (let r = 0; r < height; r++)
-    for (let c = 0; c < width; c++)
-      if (['launcher_up', 'launcher_down', 'launcher_left', 'launcher_right'].includes(grid[r][c]))
-        launcherCells.push({ r, c });
-
   // Collect trampoline cells
   const trampolineCells: { r: number; c: number }[] = [];
   for (let r = 0; r < height; r++)
@@ -33,7 +26,7 @@ export default function BottomSettingsPanel({ isMobile, visible }: { isMobile: b
       if (['trampoline_up', 'trampoline_down', 'trampoline_left', 'trampoline_right'].includes(grid[r][c]))
         trampolineCells.push({ r, c });
 
-  const hasContent = boxes.length > 0 || conveyorCells.length > 0 || launcherCells.length > 0 || trampolineCells.length > 0;
+  const hasContent = boxes.length > 0 || conveyorCells.length > 0 || trampolineCells.length > 0;
 
   if (!hasContent) return null;
   if (isMobile && !visible) return null;
@@ -61,9 +54,6 @@ export default function BottomSettingsPanel({ isMobile, visible }: { isMobile: b
           {conveyorCells.length > 0 && (
             <span style={{ fontSize: 11, color: '#c4b5fd' }}>◄► {conveyorCells.length} conveyor{conveyorCells.length > 1 ? 's' : ''}</span>
           )}
-          {launcherCells.length > 0 && (
-            <span style={{ fontSize: 11, color: '#f59e0b' }}>▲ {launcherCells.length} launcher{launcherCells.length > 1 ? 's' : ''}</span>
-          )}
           {trampolineCells.length > 0 && (
             <span style={{ fontSize: 11, color: '#22d3ee' }}>▲ {trampolineCells.length} trampoline{trampolineCells.length > 1 ? 's' : ''}</span>
           )}
@@ -73,7 +63,7 @@ export default function BottomSettingsPanel({ isMobile, visible }: { isMobile: b
 
       {/* Expanded content */}
       {expanded && (
-        <div style={{ padding: '0 14px 12px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ padding: '0 14px 12px', display: 'flex', flexDirection: 'row', gap: 12 }}>
 
           {/* Boxes */}
           {boxes.length > 0 && (
@@ -192,44 +182,46 @@ export default function BottomSettingsPanel({ isMobile, visible }: { isMobile: b
             </div>
           )}
 
-          {/* Launcher config: step counts */}
-          {launcherCells.length > 0 && (
+          {/* Trampoline config: step counts */}
+          {trampolineCells.length > 0 && (
             <div>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#f59e0b', marginBottom: 8 }}>
-                Launchers
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#22d3ee', marginBottom: 8 }}>
+                Trampolines
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {launcherCells.map(({ r, c }) => {
-                  const cfgEntry = launcherConfig.find((x) => x.position.row === r && x.position.col === c);
+                {trampolineCells.map(({ r, c }) => {
+                  const cfgEntry = trampolineConfig.find((x) => x.position.row === r && x.position.col === c);
+                  // Default step sayısı interface'de belirtildiği gibi 3 olarak alındı
                   const steps = cfgEntry?.steps ?? 3;
+
                   return (
                     <div key={`${r},${c}`} style={{
                       display: 'flex', flexDirection: 'column', gap: 4,
                       padding: '6px 8px', minWidth: 100,
-                      background: 'rgba(245,158,11,0.05)',
-                      border: '1px solid rgba(245,158,11,0.2)',
+                      background: 'rgba(34,211,238,0.05)',
+                      border: '1px solid rgba(34,211,238,0.2)',
                       borderRadius: 6,
                     }}>
-                      <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 700 }}>
+                      <span style={{ fontSize: 10, color: '#22d3ee', fontWeight: 700 }}>
                         {grid[r][c]} ({r},{c})
                       </span>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ fontSize: 9, color: '#f59e0b' }}>Steps:</span>
+                        <span style={{ fontSize: 9, color: '#22d3ee' }}>Steps:</span>
                         <input
                           type="number" min={1} max={20} value={steps}
                           onChange={(e) => {
-                            const val = Math.max(1, Math.min(20, parseInt(e.target.value) || 3));
-                            setLauncherConfig((lc) => {
-                              const without = lc.filter((x) => !(x.position.row === r && x.position.col === c));
-                              if (val === 3) return without; // default → omit
+                            const val = Math.max(1, Math.min(20, parseInt(e.target.value) || 1));
+                            setTrampolineConfig((tc) => {
+                              const without = tc.filter((x) => !(x.position.row === r && x.position.col === c));
+                              if (val === 3) return without; // Varsayılan değerdeyse gereksiz yere state'te tutmaya gerek yok
                               return [...without, { position: { row: r, col: c }, steps: val }];
                             });
                           }}
                           style={{
                             width: 40, padding: '2px 4px', fontSize: 10,
-                            background: 'rgba(245,158,11,0.1)',
-                            border: '1px solid rgba(245,158,11,0.3)',
-                            color: '#f59e0b', borderRadius: 4, outline: 'none',
+                            background: 'rgba(34,211,238,0.1)',
+                            border: '1px solid rgba(34,211,238,0.3)',
+                            color: '#22d3ee', borderRadius: 4, outline: 'none',
                           }}
                         />
                       </label>

@@ -23,8 +23,6 @@ interface GridOpsParams {
   setConveyorPowerRequired: React.Dispatch<React.SetStateAction<Position[]>>;
   conveyorConfig?: ConveyorCellConfig[];
   setConveyorConfig?: React.Dispatch<React.SetStateAction<ConveyorCellConfig[]>>;
-  launcherConfig?: LauncherCellConfig[];
-  setLauncherConfig?: React.Dispatch<React.SetStateAction<LauncherCellConfig[]>>;
   trampolineConfig?: TrampolineCellConfig[];
   setTrampolineConfig?: React.Dispatch<React.SetStateAction<TrampolineCellConfig[]>>;
   pushGridHistory?: () => void;
@@ -50,9 +48,6 @@ export function useGridOperations(p: GridOpsParams) {
       pos.row >= afterIndex ? { ...pos, row: pos.row + 1 } : pos
     ));
     p.setConveyorConfig?.((cc) => cc.map((c) =>
-      c.position.row >= afterIndex ? { ...c, position: { ...c.position, row: c.position.row + 1 } } : c
-    ));
-    p.setLauncherConfig?.((lc) => lc.map((c) =>
       c.position.row >= afterIndex ? { ...c, position: { ...c.position, row: c.position.row + 1 } } : c
     ));
     p.setTrampolineConfig?.((tc) => tc.map((c) =>
@@ -85,11 +80,6 @@ export function useGridOperations(p: GridOpsParams) {
         c.position.row > index ? { ...c, position: { ...c.position, row: c.position.row - 1 } } : c
       )
     );
-    p.setLauncherConfig?.((lc) =>
-      lc.filter((c) => c.position.row !== index).map((c) =>
-        c.position.row > index ? { ...c, position: { ...c.position, row: c.position.row - 1 } } : c
-      )
-    );
     p.setTrampolineConfig?.((tc) =>
       tc.filter((c) => c.position.row !== index).map((c) =>
         c.position.row > index ? { ...c, position: { ...c.position, row: c.position.row - 1 } } : c
@@ -115,9 +105,6 @@ export function useGridOperations(p: GridOpsParams) {
       pos.col >= afterIndex ? { ...pos, col: pos.col + 1 } : pos
     ));
     p.setConveyorConfig?.((cc) => cc.map((c) =>
-      c.position.col >= afterIndex ? { ...c, position: { ...c.position, col: c.position.col + 1 } } : c
-    ));
-    p.setLauncherConfig?.((lc) => lc.map((c) =>
       c.position.col >= afterIndex ? { ...c, position: { ...c.position, col: c.position.col + 1 } } : c
     ));
     p.setTrampolineConfig?.((tc) => tc.map((c) =>
@@ -147,11 +134,6 @@ export function useGridOperations(p: GridOpsParams) {
     );
     p.setConveyorConfig?.((cc) =>
       cc.filter((c) => c.position.col !== index).map((c) =>
-        c.position.col > index ? { ...c, position: { ...c.position, col: c.position.col - 1 } } : c
-      )
-    );
-    p.setLauncherConfig?.((lc) =>
-      lc.filter((c) => c.position.col !== index).map((c) =>
         c.position.col > index ? { ...c, position: { ...c.position, col: c.position.col - 1 } } : c
       )
     );

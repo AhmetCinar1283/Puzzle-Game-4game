@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import type { CellType, EdgeBehavior, LevelData, Position, ConveyorCellConfig, LauncherCellConfig, TrampolineCellConfig } from '@/app/src/games/types';
+import type { CellType, EdgeBehavior, LevelData, Position, ConveyorCellConfig, TrampolineCellConfig } from '@/app/src/games/types';
 import type { StoredLevel } from '@/app/src/lib/db';
 import type { FirestoreLevel, LevelPart } from '@/app/src/lib/firebase/admin';
 import { useAuth } from '@/app/src/hooks/useAuth';
@@ -38,7 +38,6 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const [activePlacingBoxId, setActivePlacingBoxId] = useState<number | null>(null);
   const [conveyorPowerRequired, setConveyorPowerRequired] = useState<Position[]>([]);
   const [conveyorConfig, setConveyorConfig] = useState<ConveyorCellConfig[]>([]);
-  const [launcherConfig, setLauncherConfig] = useState<LauncherCellConfig[]>([]);
   const [trampolineConfig, setTrampolineConfig] = useState<TrampolineCellConfig[]>([]);
 
   // Tool — wrap setActiveTool to track previous tool for restoring after box placement
@@ -140,7 +139,6 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setBoxes((stored.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
     setConveyorPowerRequired(stored.conveyorPowerRequired ?? []);
     setConveyorConfig(stored.conveyorConfig ?? []);
-    setLauncherConfig(stored.launcherConfig ?? []);
     setTrampolineConfig(stored.trampolineConfig ?? []);
     setActivePlacingBoxId(null);
   }, []);
@@ -157,7 +155,6 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setBoxes((bs) => bs.map((b) => ({ ...b, row: b.row !== null && b.row < newH ? b.row : null, col: b.col !== null && b.col < newW ? b.col : null })));
     setConveyorPowerRequired((cpr) => cpr.filter((p) => p.row < newH && p.col < newW));
     setConveyorConfig((cc) => cc.filter((c) => c.position.row < newH && c.position.col < newW));
-    setLauncherConfig((lc) => lc.filter((c) => c.position.row < newH && c.position.col < newW));
     setTrampolineConfig((tc) => tc.filter((c) => c.position.row < newH && c.position.col < newW));
   }, [pendingW, pendingH]);
 
@@ -219,12 +216,11 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         ...(validBoxes.length > 0 ? { initialBoxes: validBoxes.map((b) => ({ id: b.id, position: { row: b.row!, col: b.col! }, ...(b.requiresPower ? { requiresPower: true } : {}) })) } : {}),
         ...(conveyorPowerRequired.length > 0 ? { conveyorPowerRequired } : {}),
         ...(conveyorConfig.length > 0 ? { conveyorConfig } : {}),
-        ...(launcherConfig.length > 0 ? { launcherConfig } : {}),
         ...(trampolineConfig.length > 0 ? { trampolineConfig } : {}),
       },
       error: null,
     };
-  }, [editId, levelName, width, height, edges, grid, objects, trailCollision, boxes, conveyorPowerRequired, conveyorConfig, launcherConfig, trampolineConfig]);
+  }, [editId, levelName, width, height, edges, grid, objects, trailCollision, boxes, conveyorPowerRequired, conveyorConfig, trampolineConfig]);
 
   const buildPayload = useCallback((level: LevelData): Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt'> => ({
     name: level.name, width: level.width, height: level.height, edges: level.edges,
@@ -232,7 +228,6 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     trailCollision: level.trailCollision, initialBoxes: level.initialBoxes,
     conveyorPowerRequired: level.conveyorPowerRequired,
     conveyorConfig: level.conveyorConfig,
-    launcherConfig: level.launcherConfig,
     trampolineConfig: level.trampolineConfig,
     difficulty,
     ...(savedRequestId ? { requestId: savedRequestId } : {}),
@@ -341,7 +336,6 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       setBoxes((parsed.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
       setConveyorPowerRequired(parsed.conveyorPowerRequired ?? []);
       setConveyorConfig(parsed.conveyorConfig ?? []);
-      setLauncherConfig(parsed.launcherConfig ?? []);
       setTrampolineConfig(parsed.trampolineConfig ?? []);
       setActivePlacingBoxId(null);
       const objs = [...DEFAULT_OBJS.map((o) => ({ ...o }))];
@@ -373,7 +367,6 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setBoxes((fl.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
     setConveyorPowerRequired(fl.conveyorPowerRequired ?? []);
     setConveyorConfig(fl.conveyorConfig ?? []);
-    setLauncherConfig(fl.launcherConfig ?? []);
     setTrampolineConfig(fl.trampolineConfig ?? []);
     setActivePlacingBoxId(null);
   }, []);
@@ -421,7 +414,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setGrid(makeGrid(5, 5)); setTrailCollision(false); setDifficulty(2);
     setSavedRequestId(null); savedIdForSubmitRef.current = null;
     setObjects([...DEFAULT_OBJS.map((o) => ({ ...o }))]);
-    setBoxes([]); setConveyorPowerRequired([]); setConveyorConfig([]); setLauncherConfig([]); setTrampolineConfig([]); setActivePlacingBoxId(null); setFirestoreEditId(null);
+    setBoxes([]); setConveyorPowerRequired([]); setConveyorConfig([]); setTrampolineConfig([]); setActivePlacingBoxId(null); setFirestoreEditId(null);
   }, [router]);
 
   const handleTest = useCallback(() => {
@@ -441,7 +434,6 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     boxes, setBoxes, activePlacingBoxId, setActivePlacingBoxId,
     conveyorPowerRequired, setConveyorPowerRequired,
     conveyorConfig, setConveyorConfig,
-    launcherConfig, setLauncherConfig,
     trampolineConfig, setTrampolineConfig,
     // Tool
     activeTool, setActiveTool, router,
