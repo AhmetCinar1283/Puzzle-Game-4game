@@ -158,14 +158,6 @@ export function decrementConveyorUse(
   conveyorRemainingUses[key] = Math.max(0, (conveyorRemainingUses[key] ?? cfg.uses) - 1);
 }
 
-/** Returns the configured step count for a launcher cell. Default: 3. */
-export function getLauncherConfig(level: LevelData, pos: Position): { steps: number } {
-  const cfg = level.launcherConfig?.find(
-    (c) => c.position.row === pos.row && c.position.col === pos.col,
-  );
-  return { steps: cfg?.steps ?? 3 };
-}
-
 /** Returns the configured step count for a trampoline cell. Default: 3. */
 export function getTrampolineConfig(level: LevelData, pos: Position): { steps: number } {
   const cfg = level.trampolineConfig?.find(

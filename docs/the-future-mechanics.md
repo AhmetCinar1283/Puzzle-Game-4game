@@ -28,3 +28,11 @@ tick döngüsü içinde hareket eden yeni aktörler:
 
 - Devriye Gezen Düşmanlar (Patrols): Oyuncunun her hamlesinde (her tick'te) haritada bir adım atan, belirli bir rotaya sahip hareketli tehditler. Bulmacaya doğru yolu bulmanın yanı sıra, oradan "doğru zamanda geçme" zorunluluğunu ekler.
 - Kırılgan Kutular (Fragile Boxes): BoxState içerisine eklenecek bir dayanıklılık (durability) verisiyle çalışan mekanik. Belli bir sayıda kez itilebilen, daha fazla ittirilmeye çalışıldığında kırılan kutular.
+
+
+### 5. Oynanış
+- **Zaman Yankısı (Time Echoes):** Oyuncu bir seviyede "Kayıt (Record)" tuşuna basar, 5 hamle yapar. Sonra başa döner. O ilk yaptığı 5 hamle "Hayalet" bir kopya tarafından haritada tekrar edilirken, oyuncu o hayaletin açtığı yolları kullanarak asıl karakteriyle başka bir hedefe ilerler.
+- **Öklidyen Olmayan Uzay (Non-Euclidean Grid):** Oyundaki Fog of War (Savaş Sisi) ile birleştiğinde o kozmik korku ve bilinmezlik hissiyatını arşa çıkaracak bir harita yapısı. Haritanın sağ kenarından çıkan bir nesne sol kenardan değil, haritanın tam ortasındaki alakasız bir yönden çıkabilir. Uzayın katlandığı, yön algısının bozulduğu ve oyuncunun ezberden çıkıp haritayı deneyimleyerek haritalandırması gerektiği alanlar eklenebilir.
+- **Kısıtlı Enerji Havuzu ve Şarj Hücreleri:** Nesnelere sadece bir "mass" değil, kısıtlı bir "pil/enerji" değeri verilebilir. Hareket etmek, ağır bir kutuyu itmek ekstra enerji tüketir. Haritada sadece belirli noktalarda "Şarj İstasyonları" olur. Bu durum, bulmacaya rotayı bulmanın yanı sıra, bir ekonomi ve kaynak yönetimi planlaması yapmayı da zorunlu kılar.
+- **Kuantum Dolanıklığı (Quantum Entanglement):** Kuantum bağı (Tether) fikrine çok benzer ama daha karmaşığı. Haritanın farklı yerlerindeki iki nesne "dolanık" hale gelir. Oyuncu birinci nesneyi sağa ittiğinde, haritanın diğer ucundaki ikinci nesne de fiziksel bir etki olmamasına rağmen istemsizce sağa kayar (veya ayna simetrisiyle sola kayar). Birbirinden bağımsız iki haritada (Dual Maps) tam bir senkronizasyon bulmacası yaratır.
+- **Ağırlık ve Denge Plakaları:** Tek bir nesnenin basmasının yetmediği devasa mekanizmalar. Bir kapının açılması için "Ağırlık = 5" gerekiyordur. Oyuncu oraya bir normal kutu (mass: 1) ve bir de ağır kasa (mass: 4) itip üst üste veya yan yana bindirdiğinde anca o mekanizmayı tetikleyebilir.

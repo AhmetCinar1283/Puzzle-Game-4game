@@ -9,7 +9,16 @@ export const playerBehavior: EntityBehavior = {
   generatesTrail: true,
   isPushChainRoot: false,
 
-  onPushed(_self, _mover, _tick, _toRemove): OnPushedResult {
+  onPushed(self, mover, _tick, _toRemove): OnPushedResult {
+    // Self is moving — distinguish follow-through from head-on.
+    if (self.velocity !== null && mover.velocity !== null) {
+      const opposite: Record<string, string> = { up: 'down', down: 'up', left: 'right', right: 'left' };
+      // Head-on: self moving directly back towards mover → both stop.
+      if (self.velocity === opposite[mover.velocity]) return { outcome: 'mutual_stop' };
+      // Same or perpendicular: self will vacate the cell → mover retries next step.
+      return { outcome: 'occupant_moving' };
+    }
+    // Self stationary → mover is blocked.
     return { outcome: 'mutual_stop' };
   },
 
