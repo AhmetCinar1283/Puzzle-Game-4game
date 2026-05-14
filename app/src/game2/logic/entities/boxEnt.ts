@@ -1,67 +1,64 @@
 // entities/boxEnt.ts
-// Kutunun tepkisel davranışları.
-// KURAL: Bu dosya matematik yapar — ama motor yapmaz.
 
 import { EntityBehavior } from '../entityTypes';
 import { DIRECTION_DELTA } from '../types';
 
 export const boxBehavior: EntityBehavior = {
 
-    // Buz veya konveyör gibi hücrelerden force kazanan kutu devam eder.
     onTick: (self) => {
-        if (self.physics.force <= 0) return [];
+        const intents = [];
 
-        const delta = DIRECTION_DELTA[self.physics.direction];
-        return [{
-            entityId: self.id,
-            type: 'move',
-            targetPos: {
-                row: self.position.row + delta.row,
-                col: self.position.col + delta.col,
-            },
-            force: self.physics.force,
-        }];
-    },
-
-    // Birisi kutuyu itmeye çalıştığında:
-    onPushed: (self, pusher, appliedForce) => {
-        // "heavy" özelliği: asla itilemez
-        if (self.traits.has('heavy')) {
-            return { status: 'reject' };
-        }
-
-        // Güç yok: itilemez
-        if (appliedForce <= 0) {
-            return { status: 'reject' };
-        }
-
-        // "requiresPower" özel kuralı: hücre elektrikli değilse itilemez.
-        // Bu kontrolü hücrenin onValidateIntent hook'u da yapabilir;
-        // burası "kutu kendi kendini reddediyor" durumu için yedek kontrol.
-        if (self.customData.requiresPower && !self.customData.isPowered) {
-            return { status: 'reject' };
-        }
-
-        // Normal kutu: iticinin yönünde hareket eder.
-        const delta = DIRECTION_DELTA[pusher.physics.direction];
-        return {
-            status: 'accept',
-            resultingIntent: {
+        // Buz veya konveyörden kazanılan force ile hareket
+        if (self.physics.force > 0) {
+            const delta = DIRECTION_DELTA[self.physics.direction];
+            intents.push({
                 entityId: self.id,
-                type: 'move',
+                type: 'move' as const,
                 targetPos: {
                     row: self.position.row + delta.row,
                     col: self.position.col + delta.col,
                 },
+                force: self.physics.force,
+            });
+        }
+
+        // Yerçekimi: havadayken her tick bir kademe indir
+        if (self.physics.z > 0) {
+            const newZ = self.physics.z - 1;
+            intents.push({
+                entityId: self.id,
+                type: 'fall' as const,
+                newZ,
+                triggerLanded: newZ === 0,
+            });
+        }
+
+        return intents;
+    },
+
+    onPushed: (self, pusher, appliedForce) => {
+        if (self.traits.has('heavy'))                           return { status: 'reject' };
+        if (appliedForce <= 0)                                  return { status: 'reject' };
+        if (self.customData.requiresPower && !self.customData.isPowered) return { status: 'reject' };
+
+        // İtme yönü pozisyon farkından hesaplanır — pusher'ın physics.direction'ına
+        // güvenilmez çünkü zincir iterken pusher başka yöne bakıyor olabilir.
+        const dr = self.position.row - pusher.position.row;
+        const dc = self.position.col - pusher.position.col;
+        return {
+            status: 'accept',
+            resultingIntent: {
+                entityId: self.id,
+                type: 'move' as const,
+                targetPos: {
+                    row: self.position.row + dr,
+                    col: self.position.col + dc,
+                },
                 force: appliedForce,
             },
-            // İten kişi tüm force'u korur — iten hedefe girer.
             forceRemaining: appliedForce,
         };
     },
 
-    // Üzerine bir şey düştüğünde (trampolin yerleşimi vb.)
-    onLanded: (_self) => {
-        return [];
-    },
+    onLanded: (_self, _entities) => [],
 };

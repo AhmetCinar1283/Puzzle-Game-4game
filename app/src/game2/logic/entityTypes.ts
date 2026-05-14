@@ -46,5 +46,5 @@ export interface EntityBehavior {
   onPushed?: (self: Entity, pusher: Entity, appliedForce: number) => PushResponse;
   onCrushed?: (self: Entity, crusher: Entity) => ActionIntent[] | null;
   onTick?: (self: Entity) => ActionIntent[];
-  onLanded?: (self: Entity) => ActionIntent[] | null;
+  onLanded?: (self: Entity, entities: Entity[]) => ActionIntent[] | null;
 }

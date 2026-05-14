@@ -1,26 +1,28 @@
 // cells/iceCell.ts
-// Buz: sürtünmesiz zemin — her adımda force tüketilmez, nesne kayar.
-// Ağır bir nesne üzerine düşerse kırılır (normal hücreye dönüşür).
+// Buz: sürtünmesiz zemin — nesne kayar.
+// Ağır bir nesne üzerine düşerse kırılır.
 
 import { CellBehavior, CellDef } from '../cellTypes';
 
 export const iceDef: CellDef = {
-    friction: 0,     // Sürtünme yok — force tükenmez
-    durability: 1,   // 1+ kütleli nesne düşerse kırılır
+    friction: 0,
+    durability: 1,
     isWalkable: true,
 };
 
 export const iceBehavior: CellBehavior = {
 
-    // Buz üzerine girildiğinde: hücre, force'u olduğu gibi korur.
-    // Motor değil, BUZ hücresi bu kararı verir.
-    onEnter: (cell, entity) => [{
-        entityId: entity.id,
-        type: 'mutate_entity',
-        newForce: entity.physics.force, // Sürtünme yok → force değişmez
-    }],
+    onEnter: (cell, entity) => {
+        if (entity.physics.z > 0) return []; // Havada — buz etkisi yok
 
-    // Ağır bir şey düşerse: kendini normal hücreye çevirir.
+        return [{
+            entityId: entity.id,
+            type: 'mutate_entity',
+            newForce: entity.physics.force, // Sürtünme yok → force değişmez
+        }];
+    },
+
+    // Ağır bir şey düşerse normal hücreye dönüşür
     onImpact: (cell, fallingEntity) => {
         if (fallingEntity.def.mass >= (cell.def.durability ?? 99)) {
             return [{

@@ -1,6 +1,5 @@
 // cells/powerCell.ts
-// Güç noktası: üzerine basan oyuncuyu "elektrikli" yapar.
-// Elektrikli oyuncunun iz'i elektrik kablosu işlevi görür.
+// Güç noktası: üzerine basan entity'yi elektrikli yapar.
 
 import { CellBehavior, CellDef } from '../cellTypes';
 
@@ -10,9 +9,13 @@ export const powerDef: CellDef = {
 };
 
 export const powerBehavior: CellBehavior = {
-    onEnter: (_cell, entity) => [{
-        entityId: entity.id,
-        type: 'mutate_entity',
-        newElectrifiedState: true,
-    }],
+    onEnter: (_cell, entity) => {
+        if (entity.physics.z > 0) return []; // Havada — güç aktarılmaz
+
+        return [{
+            entityId: entity.id,
+            type: 'mutate_entity',
+            newElectrifiedState: true,
+        }];
+    },
 };

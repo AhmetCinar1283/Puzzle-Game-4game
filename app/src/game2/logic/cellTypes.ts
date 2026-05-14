@@ -10,7 +10,8 @@ export interface CellDef {
 export type CellTypes =
     | 'normal' | 'obstacle' | 'forbidden' | 'ice'
     | 'power' | 'toggle'
-    | 'conveyor' | 'trampoline' | 'teleport';
+    | 'conveyor' | 'trampoline' | 'teleport'
+    | 'target';    // Oyuncunun ulaşması gereken hedef hücre
 
 // SAF VERİ — JSON'a çevrilebilir, behavior içermez.
 // Motor, davranışları her zaman CELL_BEHAVIORS[cell.type] registry'sinden okur.

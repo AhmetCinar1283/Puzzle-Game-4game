@@ -1,22 +1,16 @@
 // engine/getNextTopologyPosition.ts
 // Kenar (edge) kurallarını uygulayan yardımcı.
-// Ileride LevelData tipine bağlanacak; şimdilik taslak.
-//
-// NOT: Bu fonksiyon onValidateIntent pattern'ına taşınacak —
-// kenar hücreleri 'lava' / 'wall' / 'portal' davranışını
-// kendi behavior'larında tanımlayacak.
 
 import { Position, Direction } from '../types';
 
-// Geçici minimal tip — gerçek LevelData entegrasyonuna kadar
-interface LevelEdges {
+export interface LevelEdges {
     top: 'wall' | 'portal' | 'lava';
     bottom: 'wall' | 'portal' | 'lava';
     left: 'wall' | 'portal' | 'lava';
     right: 'wall' | 'portal' | 'lava';
 }
 
-interface LevelBounds {
+export interface LevelBounds {
     rows: number;
     cols: number;
     edges: LevelEdges;

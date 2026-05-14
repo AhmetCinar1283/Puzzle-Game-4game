@@ -4,15 +4,16 @@
 
 import { Cell, CellBehavior, CellDef } from '../cellTypes';
 
-import { normalBehavior,    normalDef    } from './normalCell';
-import { iceBehavior,       iceDef       } from './iceCell';
-import { obstacleBehavior,  obstacleDef  } from './obstacleCell';
-import { forbiddenBehavior, forbiddenDef } from './forbiddenCell';
-import { powerBehavior,     powerDef     } from './powerCell';
-import { toggleBehavior,    toggleDef    } from './toggleCell';
-import { conveyorBehavior,  conveyorDef  } from './conveyorCell';
+import { normalBehavior,     normalDef     } from './normalCell';
+import { iceBehavior,        iceDef        } from './iceCell';
+import { obstacleBehavior,   obstacleDef   } from './obstacleCell';
+import { forbiddenBehavior,  forbiddenDef  } from './forbiddenCell';
+import { powerBehavior,      powerDef      } from './powerCell';
+import { toggleBehavior,     toggleDef     } from './toggleCell';
+import { conveyorBehavior,   conveyorDef   } from './conveyorCell';
 import { trampolineBehavior, trampolineDef } from './trampolineCell';
-import { teleportBehavior,  teleportDef  } from './teleporterCell';
+import { teleportBehavior,   teleportDef   } from './teleporterCell';
+import { targetBehavior,     targetDef     } from './targetCell';
 
 export const CELL_BEHAVIORS: Record<Cell['type'], CellBehavior> = {
     'normal':     normalBehavior,
@@ -24,6 +25,7 @@ export const CELL_BEHAVIORS: Record<Cell['type'], CellBehavior> = {
     'conveyor':   conveyorBehavior,
     'trampoline': trampolineBehavior,
     'teleport':   teleportBehavior,
+    'target':     targetBehavior,
 };
 
 export const CELL_DEFS: Record<Cell['type'], CellDef> = {
@@ -36,4 +38,5 @@ export const CELL_DEFS: Record<Cell['type'], CellDef> = {
     'conveyor':   conveyorDef,
     'trampoline': trampolineDef,
     'teleport':   teleportDef,
+    'target':     targetDef,
 };

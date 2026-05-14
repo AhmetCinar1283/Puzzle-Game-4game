@@ -2,7 +2,8 @@ import { Cell } from '../cellTypes';
 import { CELL_BEHAVIORS, CELL_DEFS } from '../cells/registry';
 import { ENTITY_BEHAVIORS } from '../entities/registry';
 import { Entity } from '../entityTypes';
-import { ActionIntent, UIEvent } from '../types';
+import { ActionIntent, Direction, UIEvent } from '../types';
+import { LevelBounds, getNextTopologyPosition } from './getNextTopologyPosition';
 
 // ============================================================
 // SIFIR MANTIK MOTORU — ALTIN KURAL
@@ -18,16 +19,14 @@ import { ActionIntent, UIEvent } from '../types';
 export function processSingleTick(
     entities: Entity[],
     grid: Cell[][],
-    startingIntents: ActionIntent[]   // Önceki tick'ten taşınan niyetler
+    startingIntents: ActionIntent[],
+    levelBounds?: LevelBounds,
 ): { vfxEvents: string[]; pendingNextTick: ActionIntent[]; uiEvents: UIEvent[] } {
 
     const collectedVfx: string[] = [];
     const collectedUi:  UIEvent[] = [];
     const pendingNextTick: ActionIntent[] = [];
 
-    // Hook sonuçlarını toplamak için yardımcı.
-    // VFX ve UI anında toplanır (bu tick gösterilir).
-    // Oyun niyetleri (move, mutate, vb.) sonraki tick'e gider.
     const collectToNextTick = (hookResult: ActionIntent[]) => {
         for (const intent of hookResult) {
             if (intent.vfxTriggers?.length) collectedVfx.push(...intent.vfxTriggers);
@@ -38,9 +37,6 @@ export function processSingleTick(
 
     // ======================================================================
     // 0. FAZ: DURUM MUTASYONLARINI HEMEN UYGULA
-    // Önceki tick'ten gelen mutate_entity / mutate_cell niyetleri,
-    // onTick'ten ÖNCE uygulanır; böylece entity'ler güncel state'i görür.
-    // (Örn: normalCell.onEnter force=0 döndürdü → bu tick'te onTick force'u 0 görür)
     // ======================================================================
     const gameplayStartIntents: ActionIntent[] = [];
 
@@ -48,7 +44,6 @@ export function processSingleTick(
         if (intent.uiEvent) collectedUi.push(intent.uiEvent);
 
         if (intent.type === 'mutate_entity') {
-            // Saf atama — motor matematik yapmaz
             const entity = entities.find(e => e.id === intent.entityId);
             if (entity) {
                 if (intent.newDirection  !== undefined) entity.physics.direction  = intent.newDirection;
@@ -66,14 +61,12 @@ export function processSingleTick(
                 }
             }
         } else {
-            // move, fall, destroy → çarpışma kontrolünden geçsin
             gameplayStartIntents.push(intent);
         }
     }
 
     // ======================================================================
     // 1. FAZ: NİYETLERİ TOPLA
-    // Motor üretmez — sadece dinler.
     // ======================================================================
     let intents: ActionIntent[] = [...gameplayStartIntents];
 
@@ -97,6 +90,16 @@ export function processSingleTick(
         return { vfxEvents: collectedVfx, pendingNextTick, uiEvents: collectedUi };
     }
 
+    // Her entity için yalnızca ilk move intent geçerlidir.
+    // startingIntents'ten gelen teleport/diğer hareketer onTick hareketine göre önceliklidir.
+    const seenMoveIds = new Set<number>();
+    intents = intents.filter(intent => {
+        if (intent.type !== 'move') return true;
+        if (seenMoveIds.has(intent.entityId)) return false;
+        seenMoveIds.add(intent.entityId);
+        return true;
+    });
+
     // ======================================================================
     // 2. FAZ: KAFA KAFAYA VE TAKAS ÇARPIŞMALARINI FİLTRELE
     // ======================================================================
@@ -105,13 +108,23 @@ export function processSingleTick(
     // ======================================================================
     // 3. FAZ: ZİNCİRLEME BAĞIMLILIKLARI ÇÖZ
     // ======================================================================
-    const approvedIntents = resolveDependencyChains(intents, entities, grid);
+    const approvedIntents = resolveDependencyChains(intents, entities, grid, levelBounds);
 
     // ======================================================================
     // 4. FAZ: ONAYLANAN NİYETLERİ UYGULA
-    // Motor lojistiği sağlar; hook dönüşlerini collectToNextTick ile iletir.
     // ======================================================================
-    for (const intent of approvedIntents) {
+    // Fall intent'leri en sona bırak: triggerLanded ezme kontrolü
+    // entity konumunu kullandığından, tüm move'lar önce uygulanmalıdır.
+    const sortedApproved = [
+        ...approvedIntents.filter(i => i.type !== 'fall'),
+        ...approvedIntents.filter(i => i.type === 'fall'),
+    ];
+
+    // Bir entity aynı tick'te yalnızca bir kez hareket edebilir.
+    // (Teleport + onTick move gibi çift-move durumlarını önler.)
+    const movedEntityIds = new Set<number>();
+
+    for (const intent of sortedApproved) {
         if (intent.vfxTriggers?.length) collectedVfx.push(...intent.vfxTriggers);
         if (intent.uiEvent)             collectedUi.push(intent.uiEvent);
 
@@ -122,8 +135,8 @@ export function processSingleTick(
 
             case 'move': {
                 if (!intent.targetPos) break;
+                if (movedEntityIds.has(entity.id)) break; // bu tick'te zaten hareket etti
 
-                // Eski hücreden çıkış
                 const oldCell = grid[entity.position.row]?.[entity.position.col];
                 if (oldCell) {
                     const leaveBehavior = CELL_BEHAVIORS[oldCell.type];
@@ -132,10 +145,10 @@ export function processSingleTick(
                     }
                 }
 
-                // Koordinat güncelleme (saf lojistik — motor matematik yapmaz)
                 entity.position = intent.targetPos;
+                movedEntityIds.add(entity.id);
 
-                // Yeni hücreye giriş
+                // Havadayken (z > 0) hücre efektleri uygulanmaz — onEnter kendi kontrol eder
                 const newCell = grid[intent.targetPos.row]?.[intent.targetPos.col];
                 if (newCell) {
                     const enterBehavior = CELL_BEHAVIORS[newCell.type];
@@ -148,7 +161,7 @@ export function processSingleTick(
 
             case 'fall': {
                 if (intent.newZ === undefined) break;
-                entity.physics.z = intent.newZ; // Motor yerçekimini bilmez, değeri eşitler
+                entity.physics.z = intent.newZ;
 
                 if (intent.triggerImpact) {
                     const cell = grid[entity.position.row]?.[entity.position.col];
@@ -161,9 +174,37 @@ export function processSingleTick(
                 }
 
                 if (intent.triggerLanded) {
+                    const landCell = grid[entity.position.row]?.[entity.position.col];
+
+                    // İniş anında aynı konumdaki entity'leri ez (flying entity hayatta kalır)
+                    for (const other of entities) {
+                        if (other.id === entity.id) continue;
+                        if (other.customData._destroyed) continue;
+                        if (other.position.row !== entity.position.row) continue;
+                        if (other.position.col !== entity.position.col) continue;
+                        other.customData._destroyed = true;
+                        if (other.type === 'player') {
+                            collectedUi.push(
+                                { kind: 'text',   textType: 'error', message: 'Oyun bitti! Ezildiniz.' },
+                                { kind: 'button', buttonType: 'restart', label: 'Yeniden Başla' },
+                            );
+                        }
+                    }
+
+                    // Engel hücresine iniliyorsa hücreyi parçala
+                    if (landCell?.type === 'obstacle') {
+                        landCell.type = 'normal';
+                        landCell.def  = CELL_DEFS['normal'];
+                    } else if (landCell) {
+                        const landCellBehavior = CELL_BEHAVIORS[landCell.type];
+                        if (landCellBehavior?.onEnter) {
+                            collectToNextTick(landCellBehavior.onEnter(landCell, entity));
+                        }
+                    }
+
                     const entityBehavior = ENTITY_BEHAVIORS[entity.type];
                     if (entityBehavior?.onLanded) {
-                        const landed = entityBehavior.onLanded(entity);
+                        const landed = entityBehavior.onLanded(entity, entities);
                         if (landed) collectToNextTick(landed);
                     }
                 }
@@ -171,7 +212,6 @@ export function processSingleTick(
             }
 
             case 'mutate_entity': {
-                // Saf atama — motor matematik yapmaz, hesaplanan değeri behavior sağlar
                 if (intent.newDirection  !== undefined) entity.physics.direction  = intent.newDirection;
                 if (intent.newForce      !== undefined) entity.physics.force      = intent.newForce;
                 if (intent.newElectrifiedState !== undefined) entity.isElectrified = intent.newElectrifiedState;
@@ -190,7 +230,6 @@ export function processSingleTick(
             }
 
             case 'destroy': {
-                // Entity'yi işaretle; üst katman (oyun döngüsü) filtreler
                 entity.customData._destroyed = true;
                 break;
             }
@@ -205,8 +244,20 @@ export function processSingleTick(
 }
 
 // ============================================================
-// YARDIMCI FONKSİYONLAR — saf lojistik, oyun kuralı içermez
+// YARDIMCI FONKSİYONLAR
 // ============================================================
+
+// Tek adımlık harekette yönü pozisyon farkından çıkar.
+// Teleport gibi çok adımlı hareketlerde null döner.
+function inferMoveDirection(from: { row: number; col: number }, to: { row: number; col: number }): Direction | null {
+    const dr = to.row - from.row;
+    const dc = to.col - from.col;
+    if (dr === -1 && dc ===  0) return 'up';
+    if (dr ===  1 && dc ===  0) return 'down';
+    if (dr ===  0 && dc === -1) return 'left';
+    if (dr ===  0 && dc ===  1) return 'right';
+    return null;
+}
 
 function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): ActionIntent[] {
     const solidTargetCounts = new Map<string, number>();
@@ -214,24 +265,25 @@ function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): Ac
     for (const intent of intents) {
         if (!intent.targetPos) continue;
         const entity = entities.find(e => e.id === intent.entityId);
-        if (entity?.def.isSolid) {
-            const key = `${intent.targetPos.row},${intent.targetPos.col}`;
-            solidTargetCounts.set(key, (solidTargetCounts.get(key) ?? 0) + 1);
-        }
+        if (!entity?.def.isSolid) continue;
+        // Havadaki entity zemin engeline tabi değil
+        if (intent.type === 'move' && entity.physics.z > 0) continue;
+        const key = `${intent.targetPos.row},${intent.targetPos.col}`;
+        solidTargetCounts.set(key, (solidTargetCounts.get(key) ?? 0) + 1);
     }
 
     return intents.filter(intent => {
         if (!intent.targetPos) return true;
         const me = entities.find(e => e.id === intent.entityId);
         if (!me) return true;
-        if (!me.def.isSolid) return true; // Hayalet — çarpışma kuralı yok
+        if (!me.def.isSolid) return true;
+        // Havadaki entity her şeyin üzerinden geçer
+        if (intent.type === 'move' && me.physics.z > 0) return true;
 
         const key = `${intent.targetPos.row},${intent.targetPos.col}`;
 
-        // Kafa kafaya: iki katı nesne aynı kareye
         if ((solidTargetCounts.get(key) ?? 0) > 1) return false;
 
-        // Takas: A → B'nin yeri, B → A'nın yeri (swap)
         const targetEntity = entities.find(e =>
             e.position.row === intent.targetPos!.row &&
             e.position.col === intent.targetPos!.col &&
@@ -253,7 +305,8 @@ function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): Ac
 function resolveDependencyChains(
     intents: ActionIntent[],
     entities: Entity[],
-    grid: Cell[][]
+    grid: Cell[][],
+    levelBounds?: LevelBounds,
 ): ActionIntent[] {
     let pending = [...intents];
     const approved: ActionIntent[] = [];
@@ -268,22 +321,60 @@ function resolveDependencyChains(
             if (!me) continue;
 
             const targetPos = intent.targetPos ?? me.position;
-            const targetCell = grid[targetPos.row]?.[targetPos.col];
+            let targetCell = grid[targetPos.row]?.[targetPos.col];
 
-            // Harita dışı → red
+            // ---- Harita dışı → kenar kuralına bak ----
             if (!targetCell) {
-                changedThisPass = true;
-                continue;
+                if (levelBounds && intent.type === 'move' && intent.targetPos) {
+                    const dir = inferMoveDirection(me.position, intent.targetPos);
+                    if (dir) {
+                        const edgeResult = getNextTopologyPosition(me.position, dir, levelBounds);
+
+                        if (edgeResult === 'wall') {
+                            // Duvara çarptı — dur
+                            changedThisPass = true;
+                            continue;
+                        } else if (edgeResult === 'lava') {
+                            // Lav — entity yok edilir
+                            if (me.type === 'player') {
+                                approved.push(
+                                    { entityId: me.id, type: 'destroy', uiEvent: { kind: 'text', textType: 'error', message: 'Oyun bitti!' } },
+                                    { entityId: me.id, type: 'mutate_entity', uiEvent: { kind: 'button', buttonType: 'restart', label: 'Yeniden Başla' } },
+                                );
+                            } else {
+                                approved.push({ entityId: me.id, type: 'destroy' });
+                            }
+                            changedThisPass = true;
+                            continue;
+                        } else {
+                            // Portal — hedefe sar
+                            intent.targetPos = edgeResult;
+                            targetCell = grid[edgeResult.row]?.[edgeResult.col];
+                            if (!targetCell) { changedThisPass = true; continue; }
+                        }
+                    } else {
+                        // Tek adımlı olmayan hareket (teleport çıkışı vb.) — durdur
+                        changedThisPass = true;
+                        continue;
+                    }
+                } else {
+                    // Kenar bilgisi yok → varsayılan duvar davranışı
+                    changedThisPass = true;
+                    continue;
+                }
             }
 
-            // ---- Zemin kontrolü (motor kural bilmez, zemine sorar) ----
+            // ---- Zemin kontrolü — havadayken (z > 0) atla ----
+            const isFlying = intent.type === 'move' && me.physics.z > 0;
             let cellAllows = true;
-            const cellBehavior = CELL_BEHAVIORS[targetCell.type];
 
-            if (cellBehavior?.onValidateIntent) {
-                cellAllows = cellBehavior.onValidateIntent(targetCell, intent, me);
-            } else if (intent.type === 'move' && !targetCell.def.isWalkable) {
-                cellAllows = false;
+            if (!isFlying) {
+                const cellBehavior = CELL_BEHAVIORS[targetCell.type];
+                if (cellBehavior?.onValidateIntent) {
+                    cellAllows = cellBehavior.onValidateIntent(targetCell, intent, me);
+                } else if (intent.type === 'move' && !targetCell.def.isWalkable) {
+                    cellAllows = false;
+                }
             }
 
             if (!cellAllows) {
@@ -303,13 +394,15 @@ function resolveDependencyChains(
                 continue;
             }
 
-            // ---- Zincir bağımlılığı ----
-            const blocker = entities.find(e =>
-                e.id !== me.id &&
-                e.position.row === targetPos.row &&
-                e.position.col === targetPos.col &&
-                e.def.isSolid
-            );
+            // ---- Zincir bağımlılığı — havadayken katı entity'leri yoksay ----
+            const blocker = !isFlying
+                ? entities.find(e =>
+                    e.id !== me.id &&
+                    e.position.row === targetPos.row &&
+                    e.position.col === targetPos.col &&
+                    e.def.isSolid
+                )
+                : undefined;
 
             const blockerIsLeaving = blocker
                 ? approved.some(a =>
@@ -335,6 +428,17 @@ function resolveDependencyChains(
             const pushOccurred = attemptPushing(pending, intents, entities, grid);
             if (!pushOccurred) break;
         }
+    }
+
+    // Hareketi engellenen entity'lerin force'unu sıfırla.
+    // Aksi hâlde onTick her tick yeni bir move intent üretir ve döngü kilitlenir.
+    const approvedMoveIds = new Set(
+        approved.filter(a => a.type === 'move').map(a => a.entityId)
+    );
+    for (const intent of intents) {
+        if (intent.type !== 'move') continue;
+        if (approvedMoveIds.has(intent.entityId)) continue;
+        approved.push({ entityId: intent.entityId, type: 'mutate_entity', newForce: 0 });
     }
 
     return approved;
@@ -363,13 +467,18 @@ function attemptPushing(
         const intentEntity = entities.find(e => e.id === intent.entityId);
         if (!intentEntity) continue;
 
-        // Motor itme kurallarını bilmez — blocker'ın davranışına sorar
         const blockerBehavior = ENTITY_BEHAVIORS[blocker.type];
         if (!blockerBehavior?.onPushed) continue;
 
         const response = blockerBehavior.onPushed(blocker, intentEntity, intent.force ?? 0);
 
         if (response.status === 'accept') {
+            // Kutunun gideceği hedef hücrenin geçerli olup olmadığını kontrol et
+            const boxTarget = response.resultingIntent.targetPos;
+            if (boxTarget) {
+                const boxTargetCell = grid[boxTarget.row]?.[boxTarget.col];
+                if (!boxTargetCell || !boxTargetCell.def.isWalkable) continue;
+            }
             pending.push(response.resultingIntent);
             allIntents.push(response.resultingIntent);
             intent.force = response.forceRemaining;

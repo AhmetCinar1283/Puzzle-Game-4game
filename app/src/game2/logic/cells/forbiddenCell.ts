@@ -1,19 +1,18 @@
 // cells/forbiddenCell.ts
-// Yasaklı hücre: içinden geçilebilir ama durulamaz.
-// → Oyuncu burada durursa "Oyun bitti" (destroy + UI mesajı).
-// → Kutu itilirse sessizce yok olur (destroy, sessiz).
+// Yasaklı hücre: giren entity yok edilir.
 
 import { CellBehavior, CellDef } from '../cellTypes';
 
 export const forbiddenDef: CellDef = {
     friction: 1,
-    isWalkable: true, // Girilir — ama giren yok edilir
+    isWalkable: true,
 };
 
 export const forbiddenBehavior: CellBehavior = {
     onEnter: (cell, entity) => {
+        if (entity.physics.z > 0) return []; // Havada — üzerinden geç
+
         if (entity.type === 'player') {
-            // Oyuncu: yok et + ekrana hata mesajı + yeniden başlatma butonu
             return [
                 {
                     entityId: entity.id,
@@ -22,16 +21,12 @@ export const forbiddenBehavior: CellBehavior = {
                 },
                 {
                     entityId: entity.id,
-                    type: 'mutate_entity', // Sahte niyet — sadece UI butonunu taşımak için
-                    uiEvent: { kind: 'button', buttonType: 'restart', label: 'Yeniden Başlat' },
+                    type: 'mutate_entity',
+                    uiEvent: { kind: 'button', buttonType: 'restart', label: 'Yeniden Başla' },
                 },
             ];
         }
 
-        // Kutu: sessizce yok et
-        return [{
-            entityId: entity.id,
-            type: 'destroy',
-        }];
+        return [{ entityId: entity.id, type: 'destroy' }];
     },
 };

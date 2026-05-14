@@ -1,6 +1,5 @@
 // cells/toggleCell.ts
-// Yön değiştirici: nesnenin hareket algısını tersine çevirir (Normal ↔ Ters).
-// Oyun kontrolcüsü entity.customData.mode'u okuyarak girdi yönünü belirler.
+// Yön değiştirici: nesnenin hareket modunu tersine çevirir (normal ↔ reversed).
 
 import { CellBehavior, CellDef } from '../cellTypes';
 
@@ -11,6 +10,8 @@ export const toggleDef: CellDef = {
 
 export const toggleBehavior: CellBehavior = {
     onEnter: (_cell, entity) => {
+        if (entity.physics.z > 0) return []; // Havada — toggle tetiklenme
+
         const currentMode = (entity.customData.mode as 'normal' | 'reversed') ?? 'normal';
         const newMode = currentMode === 'normal' ? 'reversed' : 'normal';
 

@@ -1,48 +1,37 @@
 // cells/teleporterCell.ts
 // Işınlayıcı: giren nesneyi eşleşen çıkışa taşır.
-// Çıkış doluysa motor move'u reddeder → ışınlanma gerçekleşmez.
-// Hız korunur: nesne çıkışta da aynı force ile devam eder.
+// Hız korunur. Çıkış doluysa motor move'u reddeder.
 //
-// customData şeması:
-//   group: 'A' | 'B' | 'C'          — hangi ışınlayıcı grubu
-//   isIn: boolean                    — giriş mi (true) yoksa çıkış mı (false)
-//   exitPos?: Position               — giriş hücresi için eşleşen çıkış konumu
-//   entrancePos?: Position           — çıkış hücresi için eşleşen giriş konumu
+// customData:
+//   group: 'A' | 'B' | 'C'
+//   isIn: boolean           — true = giriş, false = çıkış
+//   exitPos?: Position      — giriş hücresi için çıkış konumu
+//   entrancePos?: Position  — çıkış hücresi için giriş konumu
 
 import { CellBehavior, CellDef } from '../cellTypes';
 import { Position } from '../types';
 
 export const teleportDef: CellDef = {
-    friction: 0,     // Hız korunur — çıkışta normal zemin zaten durduracak
+    friction: 0,
     isWalkable: true,
 };
 
 export const teleportBehavior: CellBehavior = {
     onEnter: (cell, entity) => {
-        const isIn = cell.customData.isIn as boolean ?? true;
+        if (entity.physics.z > 0) return []; // Havada — ışınlanma yok
 
-        if (isIn) {
-            // Giriş hücresi: çıkışa ışınla
-            const exitPos = cell.customData.exitPos as Position | undefined;
-            if (!exitPos) return []; // Eşleşen çıkış yoksa hiçbir şey yapma
+        const isIn = (cell.customData.isIn as boolean) ?? true;
 
-            return [{
-                entityId: entity.id,
-                type: 'move',
-                targetPos: exitPos,
-                force: entity.physics.force, // Hızı taşı
-            }];
-        } else {
-            // Çıkış hücresi: tersine ışınla (çıkıştan girişe adım atılırsa)
-            const entrancePos = cell.customData.entrancePos as Position | undefined;
-            if (!entrancePos) return [];
+        if (!isIn) return []; // Çıkış hücresi — sadece iniş noktası, geri göndermez
 
-            return [{
-                entityId: entity.id,
-                type: 'move',
-                targetPos: entrancePos,
-                force: entity.physics.force,
-            }];
-        }
+        const exitPos = cell.customData.exitPos as Position | undefined;
+        if (!exitPos) return [];
+
+        return [{
+            entityId: entity.id,
+            type: 'move',
+            targetPos: exitPos,
+            force: entity.physics.force,
+        }];
     },
 };

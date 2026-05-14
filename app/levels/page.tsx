@@ -246,7 +246,7 @@ export default function LevelsPage() {
                         isLocked={isLocked}
                         onPlay={() => {
                           if (isLocked) return;
-                          router.push(`/game?id=${lv.id}&source=preset`);
+                          router.push(`/play?id=${lv.id}&source=preset`);
                         }}
                         onEdit={() => lv.firestoreId ? router.push(`/editor?firestoreId=${lv.firestoreId}`) : undefined}
                         onDelete={() => handleDeletePreset(lv)}
@@ -276,7 +276,7 @@ export default function LevelsPage() {
                     <LevelRow
                       key={lv.id} level={lv} index={idx} total={userLevels.length}
                       isPreset={false} isMobile={isMobile} cols=""
-                      onPlay={() => router.push(`/game?id=${lv.id}`)}
+                      onPlay={() => router.push(`/play?id=${lv.id}`)}
                       onEdit={() => router.push(`/editor?id=${lv.id}`)}
                       onDelete={() => handleDelete(lv.id)}
                       onMoveUp={() => move(idx, -1)} onMoveDown={() => move(idx, 1)}
