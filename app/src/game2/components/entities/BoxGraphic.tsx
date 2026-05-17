@@ -9,31 +9,41 @@ export const BoxGraphic = ({ entity }: { entity: Entity }) => {
     const isPowered = entity.isElectrified;
     const dimmed = requiresPower && !isPowered;
 
+    // Renkleri daha kolay yönetmek için sabitler
+    const hex = '#f97316';
+    const rgb = '249,115,22';
+
     return (
         <div style={{
             width: 64, height: 64,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
+            {/* Dış Kalıp - Görseldeki gibi yuvarlatılmış köşeler ve parlama */}
             <div style={{
-                width: 44, height: 44,
-                background: dimmed
-                    ? 'rgba(249,115,22,0.08)'
-                    : 'rgba(249,115,22,0.15)',
-                border: `2px solid ${dimmed ? 'rgba(249,115,22,0.3)' : '#f97316'}`,
+                width: 48, height: 48, // Resimdeki orantıya uyacak şekilde biraz büyütüldü
+                borderRadius: 10,      // Resimdeki yumuşak köşeler
+                border: `2px solid ${dimmed ? `rgba(${rgb},0.3)` : hex}`,
                 boxShadow: dimmed
                     ? 'none'
-                    : '0 0 10px rgba(249,115,22,0.4), inset 0 0 8px rgba(249,115,22,0.1)',
+                    : `0 0 12px rgba(${rgb},0.5), inset 0 0 6px rgba(${rgb},0.15)`,
+                background: dimmed ? 'transparent' : `rgba(${rgb},0.02)`,
                 boxSizing: 'border-box',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'border-color 200ms, box-shadow 200ms',
+                transition: 'all 200ms ease-in-out',
             }}>
-                <svg width={22} height={22} viewBox="0 0 24 24" fill="none"
-                    stroke={dimmed ? 'rgba(249,115,22,0.4)' : '#f97316'}
-                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    style={{ filter: dimmed ? 'none' : 'drop-shadow(0 0 4px rgba(249,115,22,0.8))' }}
+                {/* Merkez İkon - Görseldeki iç içe geçmiş kareler */}
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"
+                    style={{ filter: dimmed ? 'none' : `drop-shadow(0 0 4px ${hex})` }}
                 >
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <path d="M3 9h18M9 3v18" />
+                    {/* Dış ince kare */}
+                    <rect x="2" y="2" width="20" height="20" rx="2" 
+                        stroke={dimmed ? `rgba(${rgb},0.4)` : hex} 
+                        strokeWidth="2.5" 
+                    />
+                    {/* İç dolu kare */}
+                    <rect x="8" y="8" width="8" height="8" rx="1" 
+                        fill={dimmed ? `rgba(${rgb},0.4)` : hex} 
+                    />
                 </svg>
             </div>
         </div>

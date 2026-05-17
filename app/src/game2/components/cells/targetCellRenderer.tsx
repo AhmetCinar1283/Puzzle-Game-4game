@@ -9,24 +9,32 @@ const PLAYER_COLORS: Record<number, { hex: string; rgb: string }> = {
 export const TargetCellRenderer = ({ cell }: { cell: Cell }) => {
     const playerIndex = (cell.customData.playerIndex as number) ?? 0;
     const { hex, rgb } = PLAYER_COLORS[playerIndex] ?? PLAYER_COLORS[0];
+    
+    // Eski animasyon sınıflarını yeni oyuncu index'ine göre dinamik olarak belirliyoruz
+    const pulseClassName = playerIndex === 0 ? 'target-pulse-green' : 'target-pulse-blue';
+    const cellSize = 64;
 
     return (
         <div style={{
-            width: 64, height: 64,
+            width: cellSize, height: cellSize,
             background: `rgba(${rgb},0.08)`,
-            border: `2px dashed rgba(${rgb},0.55)`,
+            border: `2px solid rgba(${rgb},0.55)`,
             boxSizing: 'border-box',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-            {/* Hedef işareti — iç içe iki kare + merkez nokta */}
-            <svg width={32} height={32} viewBox="0 0 24 24" fill="none">
-                <rect x="3"  y="3"  width="18" height="18" rx="2"
-                    stroke={hex} strokeWidth="1.5" strokeOpacity="0.5" />
-                <rect x="7"  y="7"  width="10" height="10" rx="1"
-                    stroke={hex} strokeWidth="1.5" strokeOpacity="0.75" />
-                <circle cx="12" cy="12" r="2"
-                    fill={hex} style={{ filter: `drop-shadow(0 0 4px ${hex})` }} />
-            </svg>
+            {/* Eski stil hedef işareti ve animasyonu */}
+            <span
+                className={pulseClassName}
+                style={{
+                    fontSize: cellSize * 0.38,
+                    lineHeight: 1,
+                    color: hex,
+                    userSelect: 'none',
+                    display: 'inline-block',
+                }}
+            >
+                ◎
+            </span>
         </div>
     );
 };
