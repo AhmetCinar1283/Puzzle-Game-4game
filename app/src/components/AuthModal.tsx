@@ -61,6 +61,7 @@ export default function AuthModal({ onClose }: Props) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // Tag state (signed-in view only)
   const [tagData, setTagData] = useState<TagData | null>(null);
@@ -97,10 +98,24 @@ export default function AuthModal({ onClose }: Props) {
     }
   };
 
-  const handleGoogle = () => run(linkWithGoogle);
+  const handleGoogle = () => {
+    if (!acceptedTerms) {
+      setError(t('auth.err_terms_required'));
+      return;
+    }
+    localStorage.setItem('accepted_terms', 'true');
+    run(linkWithGoogle);
+  };
 
   const handleEmailSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (tab === 'register' && !acceptedTerms) {
+      setError(t('auth.err_terms_required'));
+      return;
+    }
+    if (tab === 'register') {
+      localStorage.setItem('accepted_terms', 'true');
+    }
     run(() => linkWithEmail(email, password, tab));
   };
 
@@ -235,6 +250,39 @@ export default function AuthModal({ onClose }: Props) {
         {t('auth.continue_google')}
       </button>
 
+      {/* Legal Acceptance Checkbox */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', margin: '14px 0 6px' }}>
+        <input
+          type="checkbox"
+          id="terms-checkbox"
+          checked={acceptedTerms}
+          onChange={(e) => setAcceptedTerms(e.target.checked)}
+          style={{
+            marginTop: 3,
+            cursor: 'pointer',
+            accentColor: '#00ff88',
+            width: 16,
+            height: 16,
+            flexShrink: 0,
+          }}
+        />
+        <label htmlFor="terms-checkbox" style={{ color: '#64748b', fontSize: 11, lineHeight: 1.5, cursor: 'pointer', userSelect: 'none' }}>
+          {t('auth.terms_checkbox_text_1')}
+          <a href="/terms" target="_blank" rel="noopener noreferrer" style={legalLinkStyle} onMouseEnter={(e) => e.currentTarget.style.color = '#00c4ff'} onMouseLeave={(e) => e.currentTarget.style.color = '#00ff88'}>
+            {t('auth.terms_checkbox_text_2')}
+          </a>
+          {t('auth.terms_checkbox_text_3')}
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" style={legalLinkStyle} onMouseEnter={(e) => e.currentTarget.style.color = '#00c4ff'} onMouseLeave={(e) => e.currentTarget.style.color = '#00ff88'}>
+            {t('auth.terms_checkbox_text_4')}
+          </a>
+          {t('auth.terms_checkbox_text_5')}
+          <a href="/kvkk" target="_blank" rel="noopener noreferrer" style={legalLinkStyle} onMouseEnter={(e) => e.currentTarget.style.color = '#00c4ff'} onMouseLeave={(e) => e.currentTarget.style.color = '#00ff88'}>
+            {t('auth.terms_checkbox_text_6')}
+          </a>
+          {t('auth.terms_checkbox_text_7')}
+        </label>
+      </div>
+
       {/* Divider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0' }}>
         <div style={{ flex: 1, height: 1, background: '#1f2937' }} />
@@ -247,7 +295,7 @@ export default function AuthModal({ onClose }: Props) {
         {(['signin', 'register'] as const).map((tabKey) => (
           <button
             key={tabKey}
-            onClick={() => { setTab(tabKey); setError(''); }}
+            onClick={() => { setTab(tabKey); setError(''); setAcceptedTerms(false); }}
             style={{
               flex: 1, padding: '6px 0', borderRadius: 6, border: 'none',
               fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -452,4 +500,12 @@ const errorStyle: React.CSSProperties = {
   fontSize: 12,
   margin: '2px 0 0',
   lineHeight: 1.5,
+};
+
+const legalLinkStyle: React.CSSProperties = {
+  color: '#00ff88',
+  textDecoration: 'underline',
+  cursor: 'pointer',
+  fontWeight: 600,
+  transition: 'color 0.15s',
 };

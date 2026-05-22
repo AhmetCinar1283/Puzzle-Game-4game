@@ -138,7 +138,7 @@ export default function Home() {
     const id = storageGet('lastPlayedLevelId');
     const src = storageGet('lastPlayedSource');
     if (id) {
-      router.push(src === 'preset' ? `/game?id=${id}&source=preset` : `/game?id=${id}`);
+      router.push(src === 'preset' ? `/play?id=${id}&source=preset` : `/play?id=${id}`);
       return;
     }
     router.push('/levels');

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { localClear, type StoredLevel, type StoredPlayedLevel } from '@/app/src/lib/db';
 import { useAuth } from '@/app/src/hooks/useAuth';
 import { SectionHeader, LevelTable } from './components/LevelTable';
@@ -13,9 +13,12 @@ import type { LevelPart } from '@/app/src/lib/firebase/adminTypes';
 
 type LevelEntry = StoredLevel & { id: number };
 
-export default function LevelsPage() {
+const SELECTED_PART_STORAGE_KEY = 'levelsPage:selectedPartId';
+
+function LevelsPageContent() {
   const t = useT();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isModerator } = useAuth();
   const { totalScore } = useAppSelector(selectUser);
   const [presets, setPresets] = useState<LevelEntry[]>([]);
@@ -31,6 +34,17 @@ export default function LevelsPage() {
   const [partsMap, setPartsMap] = useState<Map<string, LevelPart>>(new Map());
   const { user } = useAuth()
 
+  // ── Geri tuşu (popstate) ─────────────────────────────
+  useEffect(() => {
+    window.history.pushState({ levels: true }, '');
+    function handlePopState() {
+      router.replace('/');
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     function check() { setIsMobile(window.innerWidth < 600); }
     check();
@@ -41,7 +55,7 @@ export default function LevelsPage() {
   const reload = useCallback(async () => {
     const { getOrderedLevels, getPresetLevels, getDB } = await import('@/app/src/lib/db');
     const [presetData, userData] = await Promise.all([getPresetLevels(), getOrderedLevels()]);
-    setPresets(presetData.sort((a, b) => a.position - b.position) as LevelEntry[]);
+    setPresets(presetData as LevelEntry[]);
     setUserLevels(userData as LevelEntry[]);
 
     const db = getDB();
@@ -55,19 +69,41 @@ export default function LevelsPage() {
 
   // Load part names and full part data from Firestore (for lock computation)
   useEffect(() => {
+    // On mount: read stored partId from URL or localStorage
+    const fromUrl = searchParams.get('part');
+    const fromStorage = localStorage.getItem(SELECTED_PART_STORAGE_KEY);
+    const initialPart = fromUrl || fromStorage || '';
+    if (initialPart) setSelectedPartId(initialPart);
+
     import('@/app/src/lib/firebase/adminParts').then(({ getAllParts }) => {
       getAllParts()
         .then((fetchedParts) => {
           const mapped = fetchedParts.map((p) => ({ id: p.partId, name: p.name }));
           setParts(mapped);
-          setSelectedPartId((prev) => prev || (mapped[0]?.id ?? ''));
+          setSelectedPartId((prev) => {
+            // Keep existing selection if valid, otherwise fall back to first
+            if (prev && mapped.some((p) => p.id === prev)) return prev;
+            return mapped[0]?.id ?? '';
+          });
           const m = new Map<string, LevelPart>();
           fetchedParts.forEach((p) => m.set(p.partId, p));
           setPartsMap(m);
         })
         .catch((err) => console.warn('[Parts]', err));
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Persist selectedPartId to localStorage + URL whenever it changes
+  useEffect(() => {
+    if (!selectedPartId) return;
+    localStorage.setItem(SELECTED_PART_STORAGE_KEY, selectedPartId);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('part') !== selectedPartId) {
+      url.searchParams.set('part', selectedPartId);
+      window.history.replaceState(window.history.state, '', url.toString());
+    }
+  }, [selectedPartId]);
 
   useEffect(() => {
     import('@/app/src/lib/firebase/sync').then(({ syncLevelsMeta }) => {
@@ -178,12 +214,12 @@ export default function LevelsPage() {
           {t('levels.title')}
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
+          {/* <button
             onClick={() => { localClear().then(() => { reload() }) }} disabled={syncing} title="Firestore'dan güncelle"
             style={{ fontSize: 14, padding: '5px 10px', background: 'rgba(255,50,50,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: syncing ? '#1e3a5f' : '#475569', borderRadius: 7, cursor: syncing ? 'not-allowed' : 'pointer', transition: 'color 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <span style={{ display: 'inline-block', animation: syncing ? 'spin 1s linear infinite' : 'none' }}>Del</span>
-          </button>
+          </button> */}
           <button
             onClick={handleRefresh} disabled={syncing} title="Firestore'dan güncelle"
             style={{ fontSize: 14, padding: '5px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: syncing ? '#1e3a5f' : '#475569', borderRadius: 7, cursor: syncing ? 'not-allowed' : 'pointer', transition: 'color 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -325,3 +361,12 @@ export default function LevelsPage() {
     </div>
   );
 }
+
+export default function LevelsPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100dvh', background: '#030712' }} />}>
+      <LevelsPageContent />
+    </Suspense>
+  );
+}
+

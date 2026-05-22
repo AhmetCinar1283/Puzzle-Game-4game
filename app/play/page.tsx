@@ -12,7 +12,7 @@ import { WinResultOverlay } from './components/WinResultOverlay';
 import type { UIButtonType, Direction } from '@/app/src/game2/logic/types';
 import type { Entity } from '@/app/src/game2/logic/entityTypes';
 import type { Cell } from '@/app/src/game2/logic/cellTypes';
-import { useT } from '../src/contexts/LanguageContext';
+
 
 // ─── Worker tipi (docs/scoring.md) ──────────────────────────────────────────
 
@@ -38,7 +38,7 @@ function storedToLevelData(stored: StoredLevel & { id: number }) {
 // ─── Inner component ─────────────────────────────────────────────────────────
 
 function PlayContent() {
-    const t = useT();
+
     const searchParams = useSearchParams();
     const router = useRouter();
 
@@ -65,6 +65,20 @@ function PlayContent() {
     // ── Win overlay ──────────────────────────────────────────
     const [showWin, setShowWin] = useState(false);
     const [workerResult, setWorkerResult] = useState<WorkerResult | null>(null);
+
+    // ── Geri tuşu (popstate) ──────────────────────────────────────
+    useEffect(() => {
+        // Sayfaya girince history'ye bir durum ekle, öyle ki geri basılınca popstate tetiklenir
+        window.history.pushState({ play: true }, '');
+        function handlePopState() {
+            router.replace('/levels');
+        }
+        window.addEventListener('popstate', handlePopState);
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ── Seviye yükleme ───────────────────────────────────────
     useEffect(() => {
@@ -233,62 +247,31 @@ function PlayContent() {
 
     return (
         <main style={{
-            height: '100dvh',
+            // Tam ekran — scroll yok, native'de de bounce yok
+            position: 'fixed',
+            inset: 0,
             background: '#030712',
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px 8px',
-            boxSizing: 'border-box',
             overflow: 'hidden',
+            touchAction: 'none',
         }}>
-            {/* Geri butonu */}
-            <button
-                onClick={() => router.push('/levels')}
-                style={{
-                    position: 'fixed',
-                    top: 12,
-                    left: 16,
-                    background: 'none',
-                    border: 'none',
-                    color: '#1e3a5f',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    letterSpacing: '0.06em',
-                    zIndex: 30,
-                }}
-            >
-                {t('game.back')}
-            </button>
-
-            {/* Bölüm adı */}
-            {levelName && (
-                <span style={{
-                    position: 'fixed',
-                    top: 14,
-                    color: '#1e3a5f',
-                    fontSize: 11,
-                    letterSpacing: '0.08em',
-                    zIndex: 30,
-                }}>
-                    {levelName}
-                </span>
-            )}
-
-            {/* Oyun tahtası */}
+            {/* PlayScreen kendi HUD'unu içeriyor: level adı, restart, ses */}
             <PlayScreen
                 key={`${levelId}-${restartKey}`}
+                levelName={levelName}
                 initialEntities={game2State.entities}
                 initialGrid={game2State.grid}
                 onMoveExecuted={handleMoveExecuted}
                 onButtonPressed={handleButtonPressed}
             />
 
-            {/* Kazanma result overlay */}
+            {/* Kazanma result overlay — position:fixed olduğu için scale wrapper dışına çıkar */}
             {showWin && (
                 <WinResultOverlay
                     result={workerResult}
+                    moveCount={moveHistoryRef.current.length}
+                    onRestart={() => handleButtonPressed('restart')}
                     onNextLevel={nextLevelId !== null ? handleNextLevel : undefined}
                     onMenu={() => router.push('/levels')}
                 />

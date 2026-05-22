@@ -15,34 +15,57 @@ export const BoxGraphic = ({ entity }: { entity: Entity }) => {
 
     return (
         <div style={{
-            width: 64, height: 64,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 64,
+            height: 64,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
         }}>
+            <style>{`
+                @keyframes electricSpark {
+                    0% { transform: scale(1); box-shadow: 0 0 12px rgba(${rgb}, 0.5), inset 0 0 6px rgba(${rgb}, 0.15); }
+                    50% { transform: scale(1.04); box-shadow: 0 0 24px rgba(251,191,36, 0.95), inset 0 0 12px rgba(251,191,36, 0.4); border-color: #fbbf24; }
+                    100% { transform: scale(1); box-shadow: 0 0 12px rgba(${rgb}, 0.5), inset 0 0 6px rgba(${rgb}, 0.15); }
+                }
+                .box-container-active {
+                    animation: electricSpark 1.2s infinite ease-in-out;
+                }
+            `}</style>
+
             {/* Dış Kalıp - Görseldeki gibi yuvarlatılmış köşeler ve parlama */}
-            <div style={{
-                width: 48, height: 48, // Resimdeki orantıya uyacak şekilde biraz büyütüldü
-                borderRadius: 10,      // Resimdeki yumuşak köşeler
-                border: `2px solid ${dimmed ? `rgba(${rgb},0.3)` : hex}`,
-                boxShadow: dimmed
-                    ? 'none'
-                    : `0 0 12px rgba(${rgb},0.5), inset 0 0 6px rgba(${rgb},0.15)`,
-                background: dimmed ? 'transparent' : `rgba(${rgb},0.02)`,
-                boxSizing: 'border-box',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all 200ms ease-in-out',
-            }}>
+            <div 
+                className={isPowered && !dimmed ? 'box-container-active' : undefined}
+                style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 10,
+                    border: `2px solid ${dimmed ? `rgba(${rgb},0.3)` : isPowered ? '#fbbf24' : hex}`,
+                    boxShadow: dimmed
+                        ? 'none'
+                        : isPowered 
+                            ? 'none' // will be animated by class
+                            : `0 0 12px rgba(${rgb},0.5), inset 0 0 6px rgba(${rgb},0.15)`,
+                    background: dimmed ? 'transparent' : `rgba(${rgb},0.02)`,
+                    boxSizing: 'border-box',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 200ms ease-in-out',
+                }}
+            >
                 {/* Merkez İkon - Görseldeki iç içe geçmiş kareler */}
-                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"
-                    style={{ filter: dimmed ? 'none' : `drop-shadow(0 0 4px ${hex})` }}
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none"
+                    style={{ filter: dimmed ? 'none' : `drop-shadow(0 0 4px ${isPowered ? '#fbbf24' : hex})` }}
                 >
                     {/* Dış ince kare */}
-                    <rect x="2" y="2" width="20" height="20" rx="2" 
-                        stroke={dimmed ? `rgba(${rgb},0.4)` : hex} 
+                    <rect x="2" y="2" width="20" height="20" rx="3" 
+                        stroke={dimmed ? `rgba(${rgb},0.4)` : isPowered ? '#fbbf24' : hex} 
                         strokeWidth="2.5" 
                     />
                     {/* İç dolu kare */}
-                    <rect x="8" y="8" width="8" height="8" rx="1" 
-                        fill={dimmed ? `rgba(${rgb},0.4)` : hex} 
+                    <rect x="8" y="8" width="8" height="8" rx="1.5" 
+                        fill={dimmed ? `rgba(${rgb},0.4)` : isPowered ? '#fbbf24' : hex} 
                     />
                 </svg>
             </div>

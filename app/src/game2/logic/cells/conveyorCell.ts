@@ -22,6 +22,7 @@ export const conveyorBehavior: CellBehavior = {
             type: 'mutate_entity',
             newDirection: direction,
             newForce: CONVEYOR_FORCE,
+            vfxTriggers: ['sound_conveyor'],
         }];
     },
 
@@ -42,6 +43,7 @@ export const conveyorBehavior: CellBehavior = {
             type: 'mutate_entity',
             newDirection: direction,
             newForce: CONVEYOR_FORCE,
+            vfxTriggers: ['sound_conveyor'],
         }];
     },
 };

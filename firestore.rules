@@ -42,14 +42,17 @@ rules_version = '2';
         allow read: if isOwner(uid);
 
         allow create: if isOwner(uid)
-          && request.resource.data.keys().hasOnly([
+          && request.resource.data.keys().hasAll([
               'uid','authProvider','createdAt','totalScore','completedCount',
-              'role','email','displayName'
+              'role','email','displayName','acceptedTermsAt'
             ])
           && request.resource.data.uid == uid
           && request.resource.data.totalScore == 0
           && request.resource.data.completedCount == 0
-          && request.resource.data.role == 'user';
+          && request.resource.data.role == 'user'
+          // acceptedTermsAt ve createdAt'in tam olarak şu anki sunucu zamanı olmasını zorunlu tutuyoruz:
+          && request.resource.data.acceptedTermsAt == request.time
+          && request.resource.data.createdAt == request.time;
 
         // Clients may update profile fields only — totalScore and completedCount are worker-only
         allow update: if isOwner(uid)

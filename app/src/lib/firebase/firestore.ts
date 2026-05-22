@@ -56,6 +56,7 @@ export interface UserDoc {
   email?: string;
   displayName?: string;
   tag?: string;
+  acceptedTermsAt?: FieldValue;
 }
 
 export interface PlayedLevelData {
@@ -77,12 +78,12 @@ function resolveAuthProvider(user: User): 'anonymous' | 'google' | 'email' {
  * If the user has just linked a Google account, merges the new provider info
  * without overwriting existing fields (e.g. totalScore, createdAt).
  */
-export async function createOrUpdateUserDoc(user: User): Promise<void> {
+export async function createOrUpdateUserDoc(user: User, acceptedTerms?: boolean): Promise<void> {
   const ref = doc(db, 'users', user.uid);
   const snap = await getDoc(ref);
 
   if (!snap.exists()) {
-    const data: Omit<UserDoc, 'createdAt'> & { createdAt: FieldValue } = {
+    const data: Omit<UserDoc, 'createdAt'> & { createdAt: FieldValue; acceptedTermsAt?: FieldValue } = {
       uid: user.uid,
       authProvider: resolveAuthProvider(user),
       createdAt: serverTimestamp(),
@@ -92,12 +93,20 @@ export async function createOrUpdateUserDoc(user: User): Promise<void> {
     };
     if (user.email) data.email = user.email;
     if (user.displayName) data.displayName = user.displayName;
+    if (acceptedTerms) {
+      data.acceptedTermsAt = serverTimestamp();
+    }
     await setDoc(ref, data);
   } else if (!user.isAnonymous) {
     // Anonymous → real account upgrade: patch only the identity fields
-    const patch: Partial<UserDoc> = { authProvider: resolveAuthProvider(user) };
+    const patch: Partial<UserDoc> & { acceptedTermsAt?: FieldValue } = { 
+      authProvider: resolveAuthProvider(user) 
+    };
     if (user.email) patch.email = user.email;
     if (user.displayName) patch.displayName = user.displayName;
+    if (acceptedTerms) {
+      patch.acceptedTermsAt = serverTimestamp();
+    }
     await setDoc(ref, patch, { merge: true });
   }
 }

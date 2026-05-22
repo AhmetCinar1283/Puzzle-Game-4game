@@ -145,6 +145,7 @@ export function processSingleTick(
                     }
                 }
 
+                const prevPos = { ...entity.position };
                 entity.position = intent.targetPos;
                 movedEntityIds.add(entity.id);
 
@@ -153,7 +154,7 @@ export function processSingleTick(
                 if (newCell) {
                     const enterBehavior = CELL_BEHAVIORS[newCell.type];
                     if (enterBehavior?.onEnter) {
-                        collectToNextTick(enterBehavior.onEnter(newCell, entity));
+                        collectToNextTick(enterBehavior.onEnter(newCell, entity, grid, entities, prevPos));
                     }
                 }
                 break;
@@ -198,7 +199,7 @@ export function processSingleTick(
                     } else if (landCell) {
                         const landCellBehavior = CELL_BEHAVIORS[landCell.type];
                         if (landCellBehavior?.onEnter) {
-                            collectToNextTick(landCellBehavior.onEnter(landCell, entity));
+                            collectToNextTick(landCellBehavior.onEnter(landCell, entity, grid, entities));
                         }
                     }
 
@@ -259,6 +260,18 @@ function inferMoveDirection(from: { row: number; col: number }, to: { row: numbe
     return null;
 }
 
+function getDestinationZ(entityId: number, currentZ: number, intents: ActionIntent[]): number {
+    const fallIntent = intents.find(i => i.entityId === entityId && i.type === 'fall');
+    if (fallIntent && fallIntent.newZ !== undefined) {
+        return fallIntent.newZ;
+    }
+    const mutation = intents.find(i => i.entityId === entityId && i.type === 'mutate_entity' && i.newZ !== undefined);
+    if (mutation && mutation.newZ !== undefined) {
+        return mutation.newZ;
+    }
+    return currentZ;
+}
+
 function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): ActionIntent[] {
     const solidTargetCounts = new Map<string, number>();
 
@@ -267,7 +280,8 @@ function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): Ac
         const entity = entities.find(e => e.id === intent.entityId);
         if (!entity?.def.isSolid) continue;
         // Havadaki entity zemin engeline tabi değil
-        if (intent.type === 'move' && entity.physics.z > 0) continue;
+        const destZ = getDestinationZ(entity.id, entity.physics.z, intents);
+        if (intent.type === 'move' && destZ > 0) continue;
         const key = `${intent.targetPos.row},${intent.targetPos.col}`;
         solidTargetCounts.set(key, (solidTargetCounts.get(key) ?? 0) + 1);
     }
@@ -278,7 +292,8 @@ function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): Ac
         if (!me) return true;
         if (!me.def.isSolid) return true;
         // Havadaki entity her şeyin üzerinden geçer
-        if (intent.type === 'move' && me.physics.z > 0) return true;
+        const destZ = getDestinationZ(me.id, me.physics.z, intents);
+        if (intent.type === 'move' && destZ > 0) return true;
 
         const key = `${intent.targetPos.row},${intent.targetPos.col}`;
 
@@ -287,7 +302,8 @@ function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): Ac
         const targetEntity = entities.find(e =>
             e.position.row === intent.targetPos!.row &&
             e.position.col === intent.targetPos!.col &&
-            e.def.isSolid
+            e.def.isSolid &&
+            getDestinationZ(e.id, e.physics.z, intents) === 0
         );
         if (targetEntity) {
             const isSwapping = intents.some(i =>
@@ -365,10 +381,11 @@ function resolveDependencyChains(
             }
 
             // ---- Zemin kontrolü — havadayken (z > 0) atla ----
-            const isFlying = intent.type === 'move' && me.physics.z > 0;
+            const destZ = getDestinationZ(me.id, me.physics.z, intents);
+            const isFlyingAtDestination = intent.type === 'move' && destZ > 0;
             let cellAllows = true;
 
-            if (!isFlying) {
+            if (!isFlyingAtDestination) {
                 const cellBehavior = CELL_BEHAVIORS[targetCell.type];
                 if (cellBehavior?.onValidateIntent) {
                     cellAllows = cellBehavior.onValidateIntent(targetCell, intent, me);
@@ -395,12 +412,13 @@ function resolveDependencyChains(
             }
 
             // ---- Zincir bağımlılığı — havadayken katı entity'leri yoksay ----
-            const blocker = !isFlying
+            const blocker = !isFlyingAtDestination
                 ? entities.find(e =>
                     e.id !== me.id &&
                     e.position.row === targetPos.row &&
                     e.position.col === targetPos.col &&
-                    e.def.isSolid
+                    e.def.isSolid &&
+                    getDestinationZ(e.id, e.physics.z, intents) === 0
                 )
                 : undefined;
 
@@ -455,9 +473,21 @@ function attemptPushing(
     for (const intent of pending) {
         if (intent.type !== 'move' || !intent.targetPos) continue;
 
+        const me = entities.find(e => e.id === intent.entityId);
+        if (!me) continue;
+
+        // Havada uçan nesneler alttakileri itmez
+        const pusherDestZ = getDestinationZ(me.id, me.physics.z, allIntents);
+        if (pusherDestZ > 0) continue;
+
+        // Teleportlar veya komşu olmayan (non-adjacent) hareketler itme tetikleyemez
+        const moveDir = inferMoveDirection(me.position, intent.targetPos);
+        if (!moveDir) continue;
+
         const blocker = entities.find(e =>
             e.position.row === intent.targetPos!.row &&
-            e.position.col === intent.targetPos!.col
+            e.position.col === intent.targetPos!.col &&
+            getDestinationZ(e.id, e.physics.z, allIntents) === 0
         );
         if (!blocker) continue;
 

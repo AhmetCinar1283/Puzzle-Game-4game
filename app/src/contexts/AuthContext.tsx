@@ -145,7 +145,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function syncUser() {
       if (!user) return;
       try {
-        await createOrUpdateUserDoc(user);
+        const accepted = localStorage.getItem('accepted_terms') === 'true';
+        if (accepted) {
+          localStorage.removeItem('accepted_terms');
+        }
+        await createOrUpdateUserDoc(user, accepted);
         const snap = await getDoc(doc(db, 'users', user.uid));
         if (snap.exists()) {
           const data = snap.data();

@@ -9,28 +9,59 @@ const PLAYER_COLORS: Record<number, { hex: string; rgb: string }> = {
 export const TargetCellRenderer = ({ cell }: { cell: Cell }) => {
     const playerIndex = (cell.customData.playerIndex as number) ?? 0;
     const { hex, rgb } = PLAYER_COLORS[playerIndex] ?? PLAYER_COLORS[0];
-    
-    // Eski animasyon sınıflarını yeni oyuncu index'ine göre dinamik olarak belirliyoruz
-    const pulseClassName = playerIndex === 0 ? 'target-pulse-green' : 'target-pulse-blue';
     const cellSize = 64;
 
     return (
         <div style={{
-            width: cellSize, height: cellSize,
-            background: `rgba(${rgb},0.08)`,
-            border: `2px solid rgba(${rgb},0.55)`,
+            width: cellSize,
+            height: cellSize,
+            background: 'rgba(15, 23, 42, 0.65)',
+            border: `2px solid rgba(${rgb}, 0.65)`,
+            borderRadius: '10px',
+            boxShadow: `inset 0 0 16px rgba(${rgb}, 0.25), 0 0 10px rgba(${rgb}, 0.2)`,
             boxSizing: 'border-box',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            overflow: 'hidden'
         }}>
-            {/* Eski stil hedef işareti ve animasyonu */}
+            <style>{`
+                @keyframes targetPulse {
+                    0% { transform: scale(0.9); opacity: 0.7; }
+                    50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 8px rgba(${rgb}, 0.95)); }
+                    100% { transform: scale(0.9); opacity: 0.7; }
+                }
+                @keyframes targetRotate {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                .target-pulse-anim {
+                    animation: targetPulse 2.2s infinite ease-in-out;
+                }
+                .target-rotate-anim {
+                    position: absolute;
+                    width: 48px;
+                    height: 48px;
+                    border: 1.5px dashed rgba(${rgb}, 0.45);
+                    border-radius: 50%;
+                    animation: targetRotate 8s infinite linear;
+                    pointer-events: none;
+                }
+            `}</style>
+            
+            <div className="target-rotate-anim" />
+
             <span
-                className={pulseClassName}
+                className="target-pulse-anim"
                 style={{
-                    fontSize: cellSize * 0.38,
+                    fontSize: cellSize * 0.42,
                     lineHeight: 1,
                     color: hex,
+                    textShadow: `0 0 10px rgba(${rgb}, 0.8)`,
                     userSelect: 'none',
                     display: 'inline-block',
+                    zIndex: 1,
                 }}
             >
                 ◎

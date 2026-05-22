@@ -19,6 +19,7 @@ export const iceBehavior: CellBehavior = {
             entityId: entity.id,
             type: 'mutate_entity',
             newForce: entity.physics.force, // Sürtünme yok → force değişmez
+            vfxTriggers: ['sound_ice_slide'],
         }];
     },
 

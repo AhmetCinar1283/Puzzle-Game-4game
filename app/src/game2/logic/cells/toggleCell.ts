@@ -19,6 +19,7 @@ export const toggleBehavior: CellBehavior = {
             entityId: entity.id,
             type: 'mutate_entity',
             customDataPatch: { mode: newMode },
+            vfxTriggers: ['sound_toggle'],
         }];
     },
 };

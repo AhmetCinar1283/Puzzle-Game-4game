@@ -18,12 +18,20 @@ import { CELL_RENDERERS } from './cells/CELL_RENDERERS';
 import { ENTITY_RENDERERS } from './entities/ENTITY_RENDERERS';
 import { PhysicsWrapper } from './physicsWrapper';
 
-const FRAME_MS = 80;
 const CELL_SIZE = 64;
 
 const VFX_SOUNDS: Record<string, string> = {
-    sound_boing:     '/sounds/boing.mp3',
-    sound_ice_break: '/sounds/ice_break.mp3',
+    sound_move:         '/sounds/move.mp3',
+    sound_push:         '/sounds/box_push.flac',
+    sound_ice_slide:    '/sounds/ice.mp3',
+    sound_ice_break:    '/sounds/ice_break.mp3',
+    sound_portal_enter: '/sounds/portal.mp3',
+    sound_portal_exit:  '/sounds/teleport.mp3',
+    sound_boing:        '/sounds/boing.mp3',
+    sound_conveyor:     '/sounds/conveyor.mp3',
+    sound_toggle:       '/sounds/toggle.mp3',
+    sound_win:          '/sounds/win.mp3',
+    sound_lose:         '/sounds/lose.mp3',
 };
 
 function playAudio(src: string) {
@@ -36,18 +44,24 @@ interface GameBoardProps {
 }
 
 const GameBoard = ({ snapshots, onAnimationEnd }: GameBoardProps) => {
+    const [prevSnapshots, setPrevSnapshots] = useState<TickSnapshot[] | null>(snapshots);
     const [currentFrame, setCurrentFrame] = useState(0);
+
+    // Yeni snapshot dizisi gelince başa sar (Render-phase state adjustment)
+    if (snapshots !== prevSnapshots) {
+        setPrevSnapshots(snapshots);
+        setCurrentFrame(0);
+    }
+
     const onAnimationEndRef = useRef(onAnimationEnd);
     onAnimationEndRef.current = onAnimationEnd;
 
-    // Yeni snapshot dizisi gelince başa sar (ilk mount hariç)
-    const isFirstMount = useRef(true);
-    useEffect(() => {
-        if (isFirstMount.current) { isFirstMount.current = false; return; }
-        setCurrentFrame(0);
-    }, [snapshots]);
+    // Toplam animasyon süresini ~300ms ile sınırlamak için dinamik kare süresi hesaplaması
+    const frameMs = snapshots
+        ? Math.max(50, Math.min(120, 300 / snapshots.length))
+        : 80;
 
-    // Frame ilerletme — 1 framelık snapshot animasyonu tetiklemez (sadece ekrana çizer)
+    // Frame ilerletme — 1 framelik snapshot animasyonu tetiklemez (sadece ekrana çizer)
     useEffect(() => {
         if (!snapshots || snapshots.length === 0) return;
         if (snapshots.length === 1) return; // Başlangıç durumu: animasyon yok
@@ -57,9 +71,9 @@ const GameBoard = ({ snapshots, onAnimationEnd }: GameBoardProps) => {
             return;
         }
 
-        const timer = setTimeout(() => setCurrentFrame(c => c + 1), FRAME_MS);
+        const timer = setTimeout(() => setCurrentFrame(c => c + 1), frameMs);
         return () => clearTimeout(timer);
-    }, [currentFrame, snapshots]);
+    }, [currentFrame, snapshots, frameMs]);
 
     // VFX ses çalma
     useEffect(() => {
@@ -95,7 +109,17 @@ const GameBoard = ({ snapshots, onAnimationEnd }: GameBoardProps) => {
                 {snapshot.grid.map((row: Cell[]) =>
                     row.map((cell: Cell) => {
                         const Renderer = CELL_RENDERERS[cell.type];
-                        return <Renderer key={cell.id} cell={cell} />;
+                        const prevSnapshot = frameIndex > 0 ? snapshots[frameIndex - 1] : null;
+                        const entityOnCell = snapshot.entities.find(e => e.position.row === cell.position.row && e.position.col === cell.position.col) ?? null;
+                        const prevEntityOnCell = prevSnapshot?.entities.find(e => e.position.row === cell.position.row && e.position.col === cell.position.col) ?? null;
+                        return (
+                            <Renderer 
+                                key={cell.id} 
+                                cell={cell} 
+                                entityOnCell={entityOnCell}
+                                prevEntityOnCell={prevEntityOnCell}
+                            />
+                        );
                     })
                 )}
             </div>
@@ -105,11 +129,15 @@ const GameBoard = ({ snapshots, onAnimationEnd }: GameBoardProps) => {
                 {snapshot.entities.map((entity: Entity) => {
                     const Renderer = ENTITY_RENDERERS[entity.type];
                     const currentCell = snapshot.grid[entity.position.row]?.[entity.position.col];
+                    const prevSnapshot = frameIndex > 0 ? snapshots[frameIndex - 1] : null;
+                    const prevEntity = prevSnapshot?.entities.find(e => e.id === entity.id) ?? null;
                     return (
                         <PhysicsWrapper
                             key={entity.id}
                             entity={entity}
+                            prevEntity={prevEntity}
                             currentCellType={currentCell?.type ?? 'normal'}
+                            frameMs={frameMs}
                         >
                             <Renderer entity={entity} />
                         </PhysicsWrapper>
