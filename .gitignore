@@ -54,11 +54,17 @@ electron/
 # Benim eklediklerim
 
 # /firebaseFunctions
+/.archive
 /firebase.json
-# /firestore.rules
-# /firestore.indexes.json
+/firestore.rules
+/firestore.indexes.json
 /.claude
 /.agent
 /.continue
 /android
-/syncron-worker/.dev.vars
+/functions
+/electron
+
+/docs/
+/syncron-worker
+/.firebaserc
