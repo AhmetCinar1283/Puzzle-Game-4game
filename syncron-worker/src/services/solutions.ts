@@ -1,5 +1,5 @@
 import { fsGet, fsSet, fromDoc } from './firestore';
-import type { StarCount } from './types';
+import type { StarCount } from '../types';
 
 const TOP_N = 3;
 

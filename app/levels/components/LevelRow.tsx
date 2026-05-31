@@ -62,8 +62,10 @@ function ContextMenu({ x, y, isPreset, index, total, onEdit, onDelete, onMoveUp,
       <div
         style={{
           position: 'fixed', left: x, top: y, zIndex: 301,
-          background: '#0d1424',
-          border: '1px solid rgba(0,196,255,0.18)',
+          background: 'rgba(13, 20, 37, 0.85)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(0,196,255,0.25)',
           borderRadius: 10, padding: '5px 0', minWidth: 170,
           boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 24px rgba(0,196,255,0.06)',
         }}
@@ -193,11 +195,20 @@ export function LevelRow({
           padding: isMobile ? '13px 12px' : '14px 16px',
           background: locked
             ? 'rgba(255,255,255,0.01)'
-            : hovered ? 'rgba(0,255,136,0.05)' : 'rgba(255,255,255,0.025)',
+            : hovered 
+              ? `rgba(${level.difficulty === 1 ? '0, 255, 136' : level.difficulty === 2 ? '251, 191, 36' : level.difficulty === 3 ? '249, 115, 22' : level.difficulty === 4 ? '239, 68, 68' : '0, 255, 136'}, 0.07)` 
+              : 'rgba(8, 12, 28, 0.45)',
           border: `1px solid ${locked
-            ? 'rgba(30,58,95,0.2)'
-            : hovered ? 'rgba(0,255,136,0.28)' : 'rgba(30,58,95,0.35)'}`,
-          borderRadius: 10, transition: 'all 0.15s',
+            ? 'rgba(30,58,95,0.18)'
+            : hovered 
+              ? (level.difficulty ? DIFF_COLOR[level.difficulty] : '#00ff88')
+              : 'rgba(255, 255, 255, 0.06)'}`,
+          borderRadius: 12, 
+          boxShadow: !locked && hovered 
+            ? `0 6px 20px rgba(${level.difficulty === 1 ? '0, 255, 136' : level.difficulty === 2 ? '251, 191, 36' : level.difficulty === 3 ? '249, 115, 22' : level.difficulty === 4 ? '239, 68, 68' : '0, 255, 136'}, 0.15), inset 0 0 10px rgba(255,255,255,0.02)` 
+            : '0 4px 12px rgba(0,0,0,0.2)',
+          transform: !locked && hovered ? 'scale(1.01) translateY(-1px)' : 'scale(1)',
+          transition: 'all 0.22s cubic-bezier(0.25, 0.8, 0.25, 1)',
           opacity: locked ? 0.45 : 1,
           cursor: locked ? 'default' : 'pointer',
           userSelect: 'none',

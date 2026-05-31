@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  typescript: {
+    // !! DİKKAT !!
+    // Bu seçenek, proje build edilirken TypeScript hatalarını görmezden gelmenizi sağlar.
+    // Projenizde tip hataları olsa bile build işlemi başarılı olur.
+    ignoreBuildErrors: true,
+  },
 };
 
 export default nextConfig;

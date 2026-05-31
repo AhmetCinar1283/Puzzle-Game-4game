@@ -17,6 +17,7 @@ import { Entity } from '../logic/entityTypes';
 import { CELL_RENDERERS } from './cells/CELL_RENDERERS';
 import { ENTITY_RENDERERS } from './entities/ENTITY_RENDERERS';
 import { PhysicsWrapper } from './physicsWrapper';
+import { LevelEdges } from '../logic/engine/getNextTopologyPosition';
 
 const CELL_SIZE = 64;
 
@@ -40,10 +41,48 @@ function playAudio(src: string) {
 
 interface GameBoardProps {
     snapshots: TickSnapshot[] | null;
+    levelEdges?: LevelEdges;
     onAnimationEnd?: () => void;
 }
 
-const GameBoard = ({ snapshots, onAnimationEnd }: GameBoardProps) => {
+const edgeStyles = `
+    @keyframes lava-flow-horiz {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    @keyframes lava-flow-vert {
+        0% { background-position: 50% 0%; }
+        50% { background-position: 50% 100%; }
+        100% { background-position: 50% 0%; }
+    }
+    @keyframes portal-shift-horiz {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    @keyframes portal-shift-vert {
+        0% { background-position: 50% 0%; }
+        50% { background-position: 50% 100%; }
+        100% { background-position: 50% 0%; }
+    }
+    @keyframes edge-glow-pulse {
+        0% { opacity: 0.85; }
+        50% { opacity: 1; }
+        100% { opacity: 0.85; }
+    }
+    @keyframes label-breath {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.15); filter: brightness(1.2); }
+        100% { transform: scale(1); }
+    }
+    @keyframes portal-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+`;
+
+const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) => {
     const [prevSnapshots, setPrevSnapshots] = useState<TickSnapshot[] | null>(snapshots);
     const [currentFrame, setCurrentFrame] = useState(0);
 
@@ -85,6 +124,89 @@ const GameBoard = ({ snapshots, onAnimationEnd }: GameBoardProps) => {
         });
     }, [currentFrame, snapshots]);
 
+    const renderEdgeStrip = (side: 'top' | 'bottom' | 'left' | 'right', behavior?: 'wall' | 'portal' | 'lava') => {
+        if (!behavior) return null;
+
+        const isLava = behavior === 'lava';
+        const isPortal = behavior === 'portal';
+        const isHorizontal = side === 'top' || side === 'bottom';
+
+        const style: React.CSSProperties = {
+            position: 'absolute',
+            zIndex: 90,
+            pointerEvents: 'none',
+            ...(side === 'top' && { top: 0, left: 0, right: 0, height: 4 }),
+            ...(side === 'bottom' && { bottom: 0, left: 0, right: 0, height: 4 }),
+            ...(side === 'left' && { top: 0, bottom: 0, left: 0, width: 4 }),
+            ...(side === 'right' && { top: 0, bottom: 0, right: 0, width: 4 }),
+        };
+
+        if (isLava) {
+            style.background = isHorizontal
+                ? 'linear-gradient(90deg, #ef4444, #f97316, #ef4444, #ef4444)'
+                : 'linear-gradient(180deg, #ef4444, #f97316, #ef4444, #ef4444)';
+            style.backgroundSize = isHorizontal ? '300% 100%' : '100% 300%';
+            style.boxShadow = '0 0 10px #ef4444, 0 0 20px rgba(239, 68, 68, 0.5)';
+            style.animation = `${isHorizontal ? 'lava-flow-horiz' : 'lava-flow-vert'} 4s infinite linear, edge-glow-pulse 1.5s infinite ease-in-out`;
+        } else if (isPortal) {
+            style.background = isHorizontal
+                ? 'linear-gradient(90deg, #8b5cf6, #ec4899, #8b5cf6, #8b5cf6)'
+                : 'linear-gradient(180deg, #8b5cf6, #ec4899, #8b5cf6, #8b5cf6)';
+            style.backgroundSize = isHorizontal ? '300% 100%' : '100% 300%';
+            style.boxShadow = '0 0 10px #a855f7, 0 0 20px rgba(168, 85, 247, 0.5)';
+            style.animation = `${isHorizontal ? 'portal-shift-horiz' : 'portal-shift-vert'} 3s infinite linear, edge-glow-pulse 1.2s infinite ease-in-out`;
+        } else {
+            style.background = 'rgba(30, 58, 138, 0.4)';
+            style.boxShadow = 'none';
+        }
+
+        return <div style={style} />;
+    };
+
+    const renderEdgeLabel = (side: 'top' | 'bottom' | 'left' | 'right', behavior?: 'wall' | 'portal' | 'lava') => {
+        if (!behavior || behavior === 'wall') return null;
+
+        const isLava = behavior === 'lava';
+        const isPortal = behavior === 'portal';
+
+        const style: React.CSSProperties = {
+            position: 'absolute',
+            zIndex: 95,
+            pointerEvents: 'none',
+            fontSize: 14,
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 24,
+            height: 24,
+            borderRadius: '50%',
+            backgroundColor: isLava ? 'rgba(239, 68, 68, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+            border: `1px solid ${isLava ? 'rgba(239, 68, 68, 0.4)' : 'rgba(168, 85, 247, 0.4)'}`,
+            color: isLava ? '#ef4444' : '#a855f7',
+            textShadow: `0 0 6px ${isLava ? '#ef4444' : '#a855f7'}`,
+            boxShadow: `0 0 10px ${isLava ? 'rgba(239, 68, 68, 0.1)' : 'rgba(168, 85, 247, 0.1)'}`,
+            animation: 'label-breath 2.5s infinite ease-in-out',
+            ...(side === 'top' && { top: -28, left: '50%', transform: 'translateX(-50%)' }),
+            ...(side === 'bottom' && { bottom: -28, left: '50%', transform: 'translateX(-50%)' }),
+            ...(side === 'left' && { left: -28, top: '50%', transform: 'translateY(-50%)' }),
+            ...(side === 'right' && { right: -28, top: '50%', transform: 'translateY(-50%)' }),
+        };
+
+        const iconStyle: React.CSSProperties = isPortal ? {
+            animation: 'portal-spin 6s infinite linear',
+            display: 'inline-block',
+        } : {};
+
+        return (
+            <div style={style}>
+                <span style={iconStyle}>
+                    {isLava ? '☠' : '🌀'}
+                </span>
+            </div>
+        );
+    };
+
     if (!snapshots || snapshots.length === 0) return null;
 
     const frameIndex = Math.min(currentFrame, snapshots.length - 1);
@@ -98,6 +220,22 @@ const GameBoard = ({ snapshots, onAnimationEnd }: GameBoardProps) => {
 
     return (
         <div style={{ position: 'relative', width: boardWidth, height: boardHeight }}>
+            <style dangerouslySetInnerHTML={{ __html: edgeStyles }} />
+
+            {/* Edge neon border strips & animated labels */}
+            {levelEdges && (
+                <>
+                    {renderEdgeStrip('top', levelEdges.top)}
+                    {renderEdgeStrip('bottom', levelEdges.bottom)}
+                    {renderEdgeStrip('left', levelEdges.left)}
+                    {renderEdgeStrip('right', levelEdges.right)}
+
+                    {renderEdgeLabel('top', levelEdges.top)}
+                    {renderEdgeLabel('bottom', levelEdges.bottom)}
+                    {renderEdgeLabel('left', levelEdges.left)}
+                    {renderEdgeLabel('right', levelEdges.right)}
+                </>
+            )}
 
             {/* Hücre katmanı */}
             <div style={{
@@ -119,6 +257,118 @@ const GameBoard = ({ snapshots, onAnimationEnd }: GameBoardProps) => {
                                 entityOnCell={entityOnCell}
                                 prevEntityOnCell={prevEntityOnCell}
                             />
+                        );
+                    })
+                )}
+            </div>
+
+            {/* Trail Katmanı ── Fütüristik Neon İzler */}
+            <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', width: boardWidth, height: boardHeight }}>
+                {snapshot.grid.map((row: Cell[]) =>
+                    row.map((cell: Cell) => {
+                        const trailPlayerIndex = cell.customData.trailPlayerIndex as number | undefined;
+                        if (trailPlayerIndex === undefined) return null;
+
+                        const color = trailPlayerIndex === 0 ? '#00ff88' : '#00c4ff'; // P1: Green, P2: Blue
+                        const glow = trailPlayerIndex === 0 
+                            ? 'rgba(0, 255, 136, 0.65)' 
+                            : 'rgba(0, 196, 255, 0.65)';
+
+                        const r = cell.position.row;
+                        const c = cell.position.col;
+
+                        // Komşu hücrelerin iz durumlarını kontrol et
+                        const hasLeft  = snapshot.grid[r]?.[c - 1]?.customData.trailPlayerIndex === trailPlayerIndex;
+                        const hasRight = snapshot.grid[r]?.[c + 1]?.customData.trailPlayerIndex === trailPlayerIndex;
+                        const hasUp    = snapshot.grid[r - 1]?.[c]?.customData.trailPlayerIndex === trailPlayerIndex;
+                        const hasDown  = snapshot.grid[r + 1]?.[c]?.customData.trailPlayerIndex === trailPlayerIndex;
+
+                        // Oyuncunun asıl konumuna kusursuz bağlantı sağla
+                        const player = snapshot.entities.find(e => e.type === 'player' && !e.customData._destroyed && ((e.customData.playerIndex as number) ?? 0) === trailPlayerIndex);
+                        const isPlayerLeft  = player && player.position.row === r && player.position.col === c - 1;
+                        const isPlayerRight = player && player.position.row === r && player.position.col === c + 1;
+                        const isPlayerUp    = player && player.position.row === r - 1 && player.position.col === c;
+                        const isPlayerDown  = player && player.position.row === r + 1 && player.position.col === c;
+
+                        return (
+                            <div 
+                                key={`trail-${cell.id}`}
+                                style={{
+                                    position: 'absolute',
+                                    top: r * CELL_SIZE,
+                                    left: c * CELL_SIZE,
+                                    width: CELL_SIZE,
+                                    height: CELL_SIZE,
+                                    pointerEvents: 'none',
+                                    zIndex: 5,
+                                }}
+                            >
+                                {/* Sol bağlantı çizgisi */}
+                                {(hasLeft || isPlayerLeft) && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: 29,
+                                        width: 32,
+                                        height: 6,
+                                        backgroundColor: color,
+                                        boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
+                                    }} />
+                                )}
+
+                                {/* Sağ bağlantı çizgisi */}
+                                {(hasRight || isPlayerRight) && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: 32,
+                                        top: 29,
+                                        width: 32,
+                                        height: 6,
+                                        backgroundColor: color,
+                                        boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
+                                    }} />
+                                )}
+
+                                {/* Yukarı bağlantı çizgisi */}
+                                {(hasUp || isPlayerUp) && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: 29,
+                                        top: 0,
+                                        width: 6,
+                                        height: 32,
+                                        backgroundColor: color,
+                                        boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
+                                    }} />
+                                )}
+
+                                {/* Aşağı bağlantı çizgisi */}
+                                {(hasDown || isPlayerDown) && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: 29,
+                                        top: 32,
+                                        width: 6,
+                                        height: 32,
+                                        backgroundColor: color,
+                                        boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
+                                    }} />
+                                )}
+
+                                {/* Merkezdeki parlak lazer düğümü / yuvarlak (parlak beyaz çekirdekli neon) */}
+                                <div style={{
+                                    position: 'absolute',
+                                    left: 25,
+                                    top: 25,
+                                    width: 14,
+                                    height: 14,
+                                    borderRadius: '50%',
+                                    backgroundColor: '#ffffff',
+                                    border: `3px solid ${color}`,
+                                    boxShadow: `0 0 10px ${color}, 0 0 20px ${color}`,
+                                    zIndex: 6,
+                                }} />
+                            </div>
                         );
                     })
                 )}

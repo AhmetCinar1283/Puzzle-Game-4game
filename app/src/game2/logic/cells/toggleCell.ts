@@ -9,15 +9,18 @@ export const toggleDef: CellDef = {
 };
 
 export const toggleBehavior: CellBehavior = {
-    onEnter: (_cell, entity) => {
+    onEnter: (cell, entity) => {
         if (entity.physics.z > 0) return []; // Havada — toggle tetiklenme
 
         const currentMode = (entity.customData.mode as 'normal' | 'reversed') ?? 'normal';
         const newMode = currentMode === 'normal' ? 'reversed' : 'normal';
 
+        const newForce = entity.physics.force - cell.def.friction;
+
         return [{
             entityId: entity.id,
             type: 'mutate_entity',
+            newForce: newForce < 0 ? 0 : newForce,
             customDataPatch: { mode: newMode },
             vfxTriggers: ['sound_toggle'],
         }];

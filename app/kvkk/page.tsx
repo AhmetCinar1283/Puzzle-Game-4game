@@ -118,19 +118,19 @@ export default function KvkkPage() {
               <p>6698 sayılı Kişisel Verilerin Korunması Kanunu (&quot;KVKK&quot;) uyarınca, Syncron platformu üzerinde gerçekleştireceğiniz kayıt ve üyelik işlemleri kapsamında kişisel verilerinizin işlenmesi ve yurt dışına aktarılması konularında açık rızanız talep edilmektedir.</p>
               
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>1. Açık Rıza Kapsamında İşlenen Veriler</h2>
-              <p>Hesap açarken veya Google hesabınızı bağladığınızda sisteme kaydettiğiniz e-posta adresiniz, belirlediğiniz kullanıcı adı (tag) ve oyun skorlarınız, KVKK uyarınca kişisel veri niteliğindedir.</p>
+              <p>Hesap açarken veya Google hesabınızı bağladığınızda sisteme kaydettiğiniz e-posta adresiniz, belirlediğiniz kullanıcı adı (tag), oyun skorlarınız ve destek sistemi üzerinden oluşturduğunuz biletler, ilettiğiniz mesajlar ve admin yanıtları KVKK uyarınca kişisel veri niteliğindedir.</p>
 
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>2. Yurt Dışına Veri Aktarımı (Önemli)</h2>
-              <p>Syncron, bulut veri tabanı altyapısı olarak Google Firebase Firestore servislerini kullanmaktadır. Google sunucuları ve yedekleme sistemleri yurt dışında (başta AB ülkeleri ve ABD olmak üzere) konumlandırılmıştır. Bu doğrultuda, platforma kayıt olarak ve verilerinizin bulut ortamında saklanmasına izin vererek, kişisel verilerinizin <strong>yurt dışına aktarılmasına açık rıza gösterdiğinizi</strong> kabul edersiniz.</p>
+              <p>Syncron, bulut veri tabanı ve destek bilet sistemi altyapısı olarak Google Firebase Firestore servislerini kullanmaktadır. Google sunucuları ve yedekleme sistemleri yurt dışında (başta AB ülkeleri ve ABD olmak üzere) konumlandırılmıştır. Bu doğrultuda, platforma kayıt olarak, bir destek talebi açarak ve verilerinizin bulut ortamında saklanmasına izin vererek, kişisel verilerinizin <strong>yurt dışına aktarılmasına açık rıza gösterdiğinizi</strong> kabul edersiniz.</p>
 
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>3. İşleme Amaçları ve Hukuki Sebepler</h2>
-              <p>Kişisel verileriniz, platform üzerinde kimlik doğrulamanızın yapılması, oyun ilerlemenizin yedeklenmesi, liderlik tablolarında (skor tablosu) isminizin ve derecenizin yayınlanması amaçlarıyla işlenmektedir. Bu rıza beyanı, kanunun aradığı &quot;açık rıza&quot; hukuki sebebine dayanmaktadır.</p>
+              <p>Kişisel verileriniz, platform üzerinde kimlik doğrulamanızın yapılması, oyun ilerlemenizin yedeklenmesi, liderlik tablolarında (skor tablosu) isminizin ve derecenizin yayınlanması, destek taleplerinizin yanıtlanması ve teknik yardım süreçlerinin yürütülmesi amaçlarıyla işlenmektedir. Bu rıza beyanı, kanunun aradığı &quot;açık rıza&quot; hukuki sebebine dayanmaktadır.</p>
 
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>4. Açık Rızanın Geri Alınması</h2>
-              <p>Dilediğiniz zaman açık rızanızı geri çekme ve kişisel verilerinizin sistemlerimizden tamamen silinmesini talep etme hakkınız bulunmaktadır. Rızanızı geri çekmeniz durumunda, çevrimiçi ilerleme eşitleme ve skor tablosu gibi bulut özellikleri devre dışı kalacak, hesabınız kalıcı olarak silinecektir.</p>
+              <p>Dilediğiniz zaman açık rızanızı geri çekme ve kişisel verilerinizin ile destek geçmişinizin sistemlerimizden tamamen silinmesini talep etme hakkınız bulunmaktadır. Rızanızı geri çekmeniz durumunda, çevrimiçi ilerleme eşitleme ve destek özellikleri devre dışı kalacak, hesabınız kalıcı olarak silinecektir.</p>
 
               <p style={{ marginTop: '20px', color: '#e5e7eb', fontWeight: 600 }}>
-                &quot;Hesap Oluştur&quot; veya &quot;Google ile Devam Et&quot; butonuna basarak kayıt olurken aktif kutucuğu işaretlemeniz halinde, yukarıdaki metni okuduğunuzu, verilerinizin yurt dışındaki Google sunucularına aktarılmasına ve skor tablolarında yayınlanmasına özgür iradenizle açık rıza verdiğinizi beyan etmiş olursunuz.
+                &quot;Hesap Oluştur&quot; veya &quot;Google ile Devam Et&quot; butonuna basarak kayıt olurken aktif kutucuğu işaretlemeniz halinde, yukarıdaki metni okuduğunuzu, verilerinizin yurt dışındaki Google sunucularına aktarılmasına, destek sisteminde işlenmesine ve skor tablolarında yayınlanmasına özgür iradenizle açık rıza verdiğinizi beyan etmiş olursunuz.
               </p>
             </div>
           ) : (
@@ -139,19 +139,19 @@ export default function KvkkPage() {
               <p>In accordance with the Turkish Personal Data Protection Law No. 6698 (&quot;KVKK&quot;), we request your explicit consent regarding the processing and transfer of your personal data abroad when registering an account on Syncron.</p>
               
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>1. Scope of Processed Data</h2>
-              <p>Your email address, custom profile tag (username), and calculated game scores recorded under your sync profile constitute personal data under KVKK protection guidelines.</p>
+              <p>Your email address, custom profile tag (username), calculated game scores, and support tickets with submitted messages and administrator replies recorded under your profile constitute personal data under KVKK protection guidelines.</p>
 
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>2. Abroad Data Transfer (Critical Consent)</h2>
-              <p>Syncron operates using Google Cloud Firebase database systems. Google servers and physical backup nodes are hosted in locations abroad (primarily European Union countries and the United States). By registering an account and enabling cloud progress saving, you declare your **explicit consent to the transfer of your personal data abroad**.</p>
+              <p>Syncron operates using Google Cloud Firebase database and support ticket systems. Google servers and physical backup nodes are hosted in locations abroad (primarily European Union countries and the United States). By registering an account, submitting a support ticket, and enabling cloud progress saving, you declare your **explicit consent to the transfer of your personal data abroad**.</p>
 
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>3. Processing Purposes</h2>
-              <p>Your records are processed strictly to authenticate your account session, secure your game status, back up solutions across browsers, and render your ranking details on public high-score leaderboards.</p>
+              <p>Your records are processed strictly to authenticate your account session, secure your game status, back up solutions across browsers, render your ranking details on public high-score leaderboards, and respond to your technical assistance support tickets.</p>
 
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>4. Revoking Your Consent</h2>
-              <p>You reserve the right to withdraw your explicit consent at any time and request permanent deletion of your credentials. Revoking this consent will automatically terminate your account session, wipe database backups, and disable online cloud synchronization.</p>
+              <p>You reserve the right to withdraw your explicit consent at any time and request permanent deletion of your credentials and ticket history. Revoking this consent will automatically terminate your account session, wipe database backups and support history, and disable online cloud synchronization.</p>
 
               <p style={{ marginTop: '20px', color: '#e5e7eb', fontWeight: 600 }}>
-                By checking the active consent checkbox during account creation or Google linking, you state that you have read and understood this document and willingly provide your explicit consent to the abroad transfer and leaderboard processing of your data.
+                By checking the active consent checkbox during account creation or Google linking, you state that you have read and understood this document and willingly provide your explicit consent to the abroad transfer, support ticket processing, and leaderboard rendering of your data.
               </p>
             </div>
           )}

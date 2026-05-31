@@ -17,7 +17,8 @@ export default function EditorRightPanel({ isMobile, visible }: { isMobile: bool
     handleCopyBoard, handlePasteBoard, copied,
     isModerator, parts, selectedPartId, setSelectedPartId,
     firestoreEditId, setFirestoreEditId, publishStatus, doPublish,
-    generateLevelData,
+    generateLevelData, setGeneratorDialogOpen,
+    optimalSolution, optimalSolutionMoves,
   } = useEditorContext();
 
   const [pasteError, setPasteError] = useState('');
@@ -113,9 +114,29 @@ export default function EditorRightPanel({ isMobile, visible }: { isMobile: bool
         );
       })}
 
+      {optimalSolution && (
+        <Sec title="⚡ BFS OPTIMAL SOLUTION">
+          <div style={{ background: '#040914', border: '1px solid rgba(0,196,255,0.25)', borderRadius: 8, padding: 10, boxShadow: '0 0 10px rgba(0,196,255,0.05)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#00c4ff', marginBottom: 6 }}>
+              Solvable in: <span style={{ color: '#00ff88' }}>{optimalSolutionMoves} Moves</span>
+            </div>
+            <div style={{ fontSize: 10, color: '#94a3b8', lineHeight: 1.4, maxHeight: 110, overflowY: 'auto', background: '#060d1a', border: '1px solid rgba(30,58,95,0.4)', borderRadius: 5, padding: '6px 8px', fontFamily: 'monospace' }}>
+              {optimalSolution.map((dir, idx) => (
+                <span key={idx} style={{ textTransform: 'uppercase', color: dir === 'up' ? '#38bdf8' : dir === 'down' ? '#f43f5e' : dir === 'left' ? '#fbbf24' : '#34d399', display: 'inline-block', marginRight: 4, fontWeight: 'bold' }}>
+                  {dir}{idx < optimalSolution.length - 1 ? ',' : ''}
+                </span>
+              ))}
+            </div>
+          </div>
+        </Sec>
+      )}
+
       <Sec title={t('editor.actions')}>
         {testError && <p style={{ fontSize: 11, color: '#ef4444', marginBottom: 8 }}>{testError}</p>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <button onClick={() => setGeneratorDialogOpen(true)} style={{ padding: '9px', fontSize: 12, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', background: 'rgba(0,196,255,0.06)', border: '1px solid rgba(0,196,255,0.35)', color: '#00c4ff', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            ⚡ Generate Level
+          </button>
           <button onClick={handleTest} style={{ padding: '9px', fontSize: 12, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', background: 'rgba(0,255,136,0.06)', border: '1px solid rgba(0,255,136,0.35)', color: '#00ff88', borderRadius: 8, cursor: 'pointer' }}>
             {t('editor.test_level')}
           </button>

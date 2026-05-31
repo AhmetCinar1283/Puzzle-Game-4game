@@ -77,6 +77,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   // UI
   const [testLevel, setTestLevel] = useState<LevelData | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
+  const [optimalSolution, setOptimalSolution] = useState<string[] | null>(null);
+  const [optimalSolutionMoves, setOptimalSolutionMoves] = useState<number>(0);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savePosition, setSavePosition] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
@@ -123,6 +125,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     const stored = await getDB().levels.get(id);
     if (!stored) return;
     setLevelName(stored.name);
+    setOptimalSolution(null);
+    setOptimalSolutionMoves(0);
     setWidth(stored.width); setHeight(stored.height);
     setPendingW(stored.width); setPendingH(stored.height);
     setEdges(stored.edges as typeof edges);
@@ -353,6 +357,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const loadFirestoreLevel = useCallback((fl: FirestoreLevel) => {
     setFirestoreEditId(fl.firestoreId);
     setLevelName(fl.name);
+    setOptimalSolution(null);
+    setOptimalSolutionMoves(0);
     setWidth(fl.width); setHeight(fl.height);
     setPendingW(fl.width); setPendingH(fl.height);
     setEdges(fl.edges as typeof edges);
@@ -409,13 +415,73 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
 
   const handleNewLevel = useCallback(() => {
     router.push('/editor');
-    setLevelName('My Level'); setWidth(5); setHeight(5); setPendingW(5); setPendingH(5);
+    setLevelName('My Level');
+    setOptimalSolution(null);
+    setOptimalSolutionMoves(0);
+    setWidth(5); setHeight(5); setPendingW(5); setPendingH(5);
     setEdges({ top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' });
     setGrid(makeGrid(5, 5)); setTrailCollision(false); setDifficulty(2);
     setSavedRequestId(null); savedIdForSubmitRef.current = null;
     setObjects([...DEFAULT_OBJS.map((o) => ({ ...o }))]);
     setBoxes([]); setConveyorPowerRequired([]); setConveyorConfig([]); setTrampolineConfig([]); setActivePlacingBoxId(null); setFirestoreEditId(null);
   }, [router]);
+
+  const [generatorDialogOpen, setGeneratorDialogOpen] = useState(false);
+
+  const doGenerateLevel = useCallback(async (filtersUI: import('./components/EditorDialogs').GeneratorFiltersUI) => {
+    pushGridHistory();
+    const { generateProceduralLevel } = await import('@/app/src/games/logic/generator');
+    
+    const { level, solution, moveCount } = generateProceduralLevel({
+      width: filtersUI.width,
+      height: filtersUI.height,
+      difficulty: filtersUI.difficulty,
+      playerCount: filtersUI.playerCount,
+      edgeBehavior: filtersUI.edgeBehavior,
+      edgeTopAllowed: filtersUI.edgeTopAllowed,
+      edgeBottomAllowed: filtersUI.edgeBottomAllowed,
+      edgeLeftAllowed: filtersUI.edgeLeftAllowed,
+      edgeRightAllowed: filtersUI.edgeRightAllowed,
+      conveyorSteps: filtersUI.conveyorSteps,
+      trampolineSteps: filtersUI.trampolineSteps,
+      playerMode: filtersUI.playerMode,
+      playerLock: filtersUI.playerLock,
+      trailCollision: filtersUI.trailCollision,
+      obstacleDensity: filtersUI.obstacleDensity,
+      iceDensity: filtersUI.iceDensity,
+      conveyorDensity: filtersUI.conveyorDensity,
+      trampolineDensity: filtersUI.trampolineDensity,
+      forbiddenDensity: filtersUI.forbiddenDensity,
+      toggleDensity: filtersUI.toggleDensity,
+      teleporterCount: filtersUI.teleporterCount,
+    });
+
+    setLevelName(level.name);
+    setOptimalSolution(solution);
+    setOptimalSolutionMoves(moveCount);
+    setWidth(level.width); setHeight(level.height);
+    setPendingW(level.width); setPendingH(level.height);
+    setEdges(level.edges);
+    setGrid(level.grid as CellType[][]);
+    setTrailCollision(!!level.trailCollision);
+    setDifficulty((level.difficulty != undefined ? level.difficulty : 2) as 1 | 2 | 3 | 4);
+    setSavedRequestId(null);
+    setFirestoreEditId(null);
+    
+    const objs = [...DEFAULT_OBJS.map((o) => ({ ...o }))];
+    level.initialObjects.forEach((obj) => {
+      const idx = objs.findIndex((o) => o.id === obj.id);
+      if (idx >= 0) objs[idx] = { id: obj.id, row: obj.position.row, col: obj.position.col, mode: obj.mode, lockOnTarget: obj.lockOnTarget };
+    });
+    setObjects(objs);
+
+    setBoxes((level.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
+    setConveyorPowerRequired(level.conveyorPowerRequired ?? []);
+    setConveyorConfig(level.conveyorConfig ?? []);
+    setTrampolineConfig(level.trampolineConfig ?? []);
+    setActivePlacingBoxId(null);
+    setGeneratorDialogOpen(false);
+  }, [pushGridHistory]);
 
   const handleTest = useCallback(() => {
     const { level, error } = generateLevelData();
@@ -444,6 +510,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     saveDialogOpen, setSaveDialogOpen, savePosition, setSavePosition,
     saveSuccess, copied,
     submitDialogOpen, setSubmitDialogOpen, submitNote, setSubmitNote, submitStatus, submitError,
+    generatorDialogOpen, setGeneratorDialogOpen,
+    optimalSolution,
+    optimalSolutionMoves,
     // Admin
     parts, selectedPartId, setSelectedPartId, firestoreLevels,
     showFirestoreLevels, setShowFirestoreLevels, publishStatus, firestoreEditId, setFirestoreEditId,
@@ -456,5 +525,6 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     handleCopyBoard, handlePasteBoard,
     loadFirestoreLevel, doPublish,
     handleLoadLevel, handleNewLevel, handleTest,
+    doGenerateLevel,
   };
 }

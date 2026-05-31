@@ -94,6 +94,9 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
     // Oyuncular — initialObjects sıralaması P1=0, P2=1
     for (let i = 0; i < stored.initialObjects.length; i++) {
         const obj = stored.initialObjects[i];
+        const isLocked = !!obj.lockOnTarget &&
+            grid[obj.position.row]?.[obj.position.col]?.type === 'target' &&
+            (grid[obj.position.row]?.[obj.position.col]?.customData.playerIndex as number) === i;
         entities.push({
             id:       nextId++,
             type:     'player',
@@ -103,8 +106,10 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
             traits:   new Set(['player_controlled', 'destructible']),
             isElectrified: false,
             customData: {
-                playerIndex: i,
-                mode:        obj.mode ?? 'normal',  // 'normal' | 'reversed'
+                playerIndex:  i,
+                mode:         obj.mode ?? 'normal',  // 'normal' | 'reversed'
+                lockOnTarget: obj.lockOnTarget ?? true,
+                isLocked,
             },
         });
     }

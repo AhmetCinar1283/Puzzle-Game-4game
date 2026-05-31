@@ -2,7 +2,8 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import GameShell from '@/app/src/games/components/GameShell';
+import { PlayScreen } from '@/app/src/game2/components/PlayScreen';
+import { convertToGame2State } from '@/app/play/converter';
 import { NBtn } from './components/EditorUI';
 import EditorLeftPanel from './components/EditorLeftPanel';
 import ToolPalette from './components/ToolPalette';
@@ -161,15 +162,37 @@ function EditorInner() {
           savedRequestId={s.savedRequestId} levelName={s.levelName}
           difficulty={s.difficulty} user={s.user} userTag={s.userTag}
           onSubmit={s.handleSubmitLevel}
+          generatorDialogOpen={s.generatorDialogOpen}
+          onGeneratorClose={() => s.setGeneratorDialogOpen(false)}
+          onGenerate={s.doGenerateLevel}
         />
 
         {s.testLevel && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(2,5,14,0.88)', backdropFilter: 'blur(6px)', zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: 700, padding: '0 16px' }}>
-              <span style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#00ff88', textShadow: '0 0 8px rgba(0,255,136,0.5)' }}>Test Mode</span>
-              <button onClick={() => s.setTestLevel(null)} style={{ fontSize: 12, padding: '6px 16px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.35)', color: '#ef4444', borderRadius: 7, cursor: 'pointer' }}>✕ Close</button>
+          <div style={{ position: 'fixed', inset: 0, background: '#030712', zIndex: 100, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', background: 'rgba(3,7,18,0.97)', borderBottom: '1px solid rgba(0,196,255,0.15)' }}>
+              <span style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#00ff88', textShadow: '0 0 8px rgba(0,255,136,0.5)', fontWeight: 700 }}>Test Mode (Game2 Physics)</span>
+              <button onClick={() => s.setTestLevel(null)} style={{ fontSize: 12, padding: '6px 16px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.35)', color: '#ef4444', borderRadius: 7, cursor: 'pointer', fontWeight: 600 }}>✕ Close Test</button>
             </div>
-            <GameShell level={s.testLevel} />
+            <div style={{ flex: 1, position: 'relative' }}>
+              <PlayScreen
+                key={s.testLevel.id}
+                levelName={s.testLevel.name}
+                initialEntities={convertToGame2State(s.testLevel as any).entities}
+                initialGrid={convertToGame2State(s.testLevel as any).grid}
+                levelEdges={s.testLevel.edges as any}
+                trailCollision={!!s.testLevel.trailCollision}
+                onMoveExecuted={() => {}}
+                onButtonPressed={(btn) => {
+                  if (btn === 'menu' || btn === 'next_level') {
+                    s.setTestLevel(null);
+                  } else if (btn === 'restart') {
+                    const temp = s.testLevel;
+                    s.setTestLevel(null);
+                    setTimeout(() => s.setTestLevel(temp), 50);
+                  }
+                }}
+              />
+            </div>
           </div>
         )}
       </div>

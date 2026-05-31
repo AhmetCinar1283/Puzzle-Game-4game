@@ -1,0 +1,91 @@
+Created At: 2026-05-26T08:03:03Z
+Completed At: 2026-05-26T08:03:03Z
+File Path: `file:///c:/Users/ahmet/Desktop/Projects/myReactApps/know-and-conquer/app/admin/users/%5Buid%5D/page.tsx`
+Total Lines: 1032
+Total Bytes: 46545
+Showing lines 91 to 890
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+91:   // Load profile & statistics
+92:   useEffect(() => {
+93:     async function loadWorkspaceData() {
+94:       setLoadingProfile(true);
+95:       try {
+96:         const [profileRes, statsRes, levelsRes] = await Promise.all([
+97:           fetchAdminApi(`/admin/users/${uid}`),
+98:           fetchAdminApi(`/admin/users/${uid}/stats`),
+99:           fetchAdminApi(`/admin/users/${uid}/played-levels?limit=100`),
+100:         ]);
+101: 
+102:         if (profileRes.success) {
+103:           setProfile(profileRes.user);
+104:         }
+105:         if (statsRes.success) {
+106:           setStats(statsRes.stats || []);
+107:           setLastActivity(statsRes.lastActivity || null);
+108:         }
+109:         if (levelsRes.success) {
+110:           setPlayedLevels(levelsRes.playedLevels || []);
+111:         }
+112:       } catch (err) {
+113:         console.error('[AdminWorkspace] Error loading workspace data:', err);
+114:       } finally {
+115:         setLoadingProfile(false);
+116:       }
+117:     }
+118: 
+119:     if (uid) loadWorkspaceData();
+120:   }, [uid]);
+121: 
+122:   // Load audit logs with dynamic filters
+123:   useEffect(() => {
+124:     let active = true;
+125: 
+126:     async function loadLogs() {
+127:       setLoadingLogs(true);
+128:       try {
+129:         // Construct query parameters
+130:         const params = new URLSearchParams();
+131:         params.append('limit', '15');
+132:         params.append('offset', '0'); // Reset offset on filter change
+133: 
+134:         if (activeCategory !== 'all') {
+135:           params.app
+<truncated 36817 bytes>
+54:                           padding: '5px 12px',
+855:                           fontSize: '12px',
+856:                           outline: 'none',
+857:                         }}
+858:                       />
+859:                     </div>
+860: 
+861:                     {/* Date Before Filter */}
+862:                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+863:                       <label style={{ fontSize: '9px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>
+864:                         {isTr ? 'Şu Tarihten Önce (Before)' : 'Logged Before'}
+865:                       </label>
+866:                       <input
+867:                         type="date"
+868:                         value={dateBefore}
+869:                         onChange={(e) => setDateBefore(e.target.value)}
+870:                         style={{
+871:                           background: '#060d1a',
+872:                           border: '1px solid rgba(147, 51, 234, 0.15)',
+873:                           color: '#e2e8f0',
+874:                           borderRadius: '6px',
+875:                           padding: '5px 12px',
+876:                           fontSize: '12px',
+877:                           outline: 'none',
+878:                         }}
+879:                       />
+880:                     </div>
+881:                   </div>
+882:                 </div>
+883: 
+884:                 {/* Timeline display */}
+885:                 {loadingLogs ? (
+886:                   <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
+887:                     <span style={{ color: '#9333ea', fontSize: '12px', letterSpacing: '0.1em' }}>
+888:                       {isTr ? 'GÜNLÜKLER OKUNUYOR...' : 'FETCHING AUDIT LOGS...'}
+889:                     </span>
+890:                   </div>
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

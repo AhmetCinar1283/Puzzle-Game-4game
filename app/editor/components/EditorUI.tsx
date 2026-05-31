@@ -20,9 +20,9 @@ export function Sec({ title, children }: { title: string; children: React.ReactN
   );
 }
 
-export function Lbl({ children }: { children: React.ReactNode }) {
+export function Lbl({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#334155', display: 'block', marginBottom: 5 }}>
+    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#334155', display: 'block', marginBottom: 5, ...style }}>
       {children}
     </span>
   );

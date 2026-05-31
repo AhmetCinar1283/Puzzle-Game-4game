@@ -17,34 +17,33 @@
 	"vars": {
 		"FIREBASE_PROJECT_ID": "syncron-1923",
 		"FIREBASE_API_KEY": "AIzaSyAjiRbyBEiJhZoa04G9ptzImGnBXl2OF4M",
-		"ALLOWED_ORIGIN": "http://localhost:3000",
-	}
-	/**
-	 * Smart Placement
-	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
-	 */
-	// "placement": {  "mode": "smart" }
-	/**
-	 * Bindings
-	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-	 * databases, object storage, AI inference, real-time communication and more.
-	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-	 */
-	/**
-	 * Environment Variables
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-	 * Note: Use secrets to store sensitive data.
-	 * https://developers.cloudflare.com/workers/configuration/secrets/
-	 */
-	// "vars": {  "MY_VARIABLE": "production_value" }
-	/**
-	 * Static Assets
-	 * https://developers.cloudflare.com/workers/static-assets/binding/
-	 */
-	// "assets": {  "directory": "./public/",  "binding": "ASSETS" }
-	/**
-	 * Service Bindings (communicate between multiple Workers)
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-	 */
-	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+		"ALLOWED_ORIGIN": "http://localhost:3000"
+	},
+	// ─── Cron Triggers ───────────────────────────────────────────────────────
+	// Runs runLogRetention() every Sunday at 03:00 UTC
+	// Archives logs older than 90 days to R2, then deletes them from D1.
+	"triggers": {
+		"crons": [
+			"0 3 * * SUN"
+		]
+	},
+	// ─── D1 Database ─────────────────────────────────────────────────────────
+	// Create with: wrangler d1 create syncron-audit-logs
+	// Then paste the database_id output below.
+	"d1_databases": [
+		{
+			"binding": "AUDIT_DB",
+			"database_name": "syncron-audit-logs",
+			"database_id": "81a86126-95ec-4268-8eb9-e90ac71bab94"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "syncron_audit_archive",
+			"bucket_name": "syncron-audit-archive"
+		}
+	]
+	// Secrets (set via CLI, never in this file):
+	//   wrangler secret put GOOGLE_SERVICE_ACCOUNT
+	//   wrangler secret put LOG_SECRET
 }

@@ -15,10 +15,8 @@ export const PlayerGraphic = ({ entity }: { entity: Entity }) => {
     const mode = (entity.customData.mode as 'normal' | 'reversed') ?? 'normal';
     const isReversed = mode === 'reversed';
     
-    // Eğer ters yöndeyse kırmızı/gül rengi elektrik aurası verelim
-    const { primary, glow } = isReversed
-        ? { primary: '#f43f5e', glow: 'rgba(244,63,94,0.85)' }
-        : PLAYER_COLORS[playerIndex] ?? PLAYER_COLORS[0];
+    // Ters yönde de olsak oyuncu kendi asıl rengini korusun (yeşil/mavi vs.)
+    const { primary, glow } = PLAYER_COLORS[playerIndex] ?? PLAYER_COLORS[0];
 
     return (
         <div style={{
@@ -70,11 +68,29 @@ export const PlayerGraphic = ({ entity }: { entity: Entity }) => {
                 <circle cx="12" cy="12" r="8" fill={primary} fillOpacity={isReversed ? "0.22" : "0.15"} stroke={primary} strokeWidth="2" />
                 
                 {/* Merkez göstergesi */}
-                {isReversed ? (
-                    /* Geri Sarma (Rewind / ◀◀) sembolü */
+                {entity.customData.isLocked ? (
+                    /* Locked: Şık bir kilit simgesi */
+                    <g style={{ filter: `drop-shadow(0 0 4px ${primary})` }}>
+                        {/* Lock Body */}
+                        <rect x="8.5" y="11" width="7" height="6" rx="1.2" fill={primary} />
+                        {/* Lock Shackle */}
+                        <path
+                            d="M9.5 11V8.5a2.5 2.5 0 015 0V11"
+                            stroke="#ffffff"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            fill="none"
+                        />
+                        {/* Keyhole */}
+                        <circle cx="12" cy="14" r="0.8" fill="#ffffff" />
+                    </g>
+                ) : isReversed ? (
+                    /* Reversed mod: Eksi işareti (Normal moddaki artı işaretine zıt) */
                     <path
-                        d="M10 8l-4 4 4 4V8zm5 0l-4 4 4 4V8z"
-                        fill="#ffffff"
+                        d="M9 12h6"
+                        stroke="#ffffff"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
                         style={{ filter: 'drop-shadow(0 0 3px #ffffff)' }}
                     />
                 ) : (

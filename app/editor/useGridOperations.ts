@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import type { CellType, Position, ConveyorCellConfig, LauncherCellConfig, TrampolineCellConfig } from '@/app/src/games/types';
+import type { CellType, Position, ConveyorCellConfig, TrampolineCellConfig } from '@/app/src/games/types';
 import type { ObjConfig, BoxConfig } from './editorConfig';
 
 export interface SelectionRect {

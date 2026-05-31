@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/src/hooks/useAuth';
 import type { LevelPart, LevelOrderEntry } from '@/app/src/lib/firebase/admin';
 import { DIFFICULTY_COLORS, DIFFICULTY_LABELS } from '@/app/editor/editorConfig';
+import { useT } from '@/app/src/contexts/LanguageContext';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -209,6 +210,7 @@ function PartCard({
   onReorderLevel,
   onDeleteLevel,
   onEditLevel,
+  onDesignMap,
 }: {
   part: LevelPart;
   onUpdateName: (name: string) => void;
@@ -217,7 +219,9 @@ function PartCard({
   onReorderLevel: (levelId: string, dir: 'up' | 'down') => void;
   onDeleteLevel: (levelId: string) => void;
   onEditLevel: (levelId: string) => void;
+  onDesignMap: () => void;
 }) {
+  const t = useT();
   const [editMode, setEditMode] = useState(false);
   const [nameVal, setNameVal] = useState(part.name);
   const [unlockVal, setUnlockVal] = useState(String(part.unlockRequirement));
@@ -339,9 +343,12 @@ function PartCard({
             />
           ))
         )}
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
           <NeonBtn color="#00ff88" onClick={() => onEditLevel('')} small>
             + Add Level via Editor
+          </NeonBtn>
+          <NeonBtn color="#00c4ff" onClick={onDesignMap} small>
+            {t('admin.design_map')}
           </NeonBtn>
         </div>
       </div>
@@ -354,16 +361,60 @@ function PartCard({
 export default function AdminLevelPartsPage() {
   const router = useRouter();
   const { role, loading } = useAuth();
+  const t = useT();
 
   const [parts, setParts] = useState<LevelPart[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [toast, setToast] = useState('');
+
+  // Map Designer state
+  const [designerPart, setDesignerPart] = useState<LevelPart | null>(null);
 
   // Create part modal
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newUnlock, setNewUnlock] = useState('0');
   const [creating, setCreating] = useState(false);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 3000);
+  }, []);
+
+  const handleSaveMapLayout = useCallback((
+    partId: string,
+    levelCoords: Record<string, { mapX: number; mapY: number }>,
+    portalCoords: { portalX: number; portalY: number; portalStartX: number; portalStartY: number },
+    theme: string
+  ) => {
+    setParts((prev) =>
+      prev.map((p) => {
+        if (p.partId !== partId) return p;
+
+        const newOrder = { ...p.order };
+        Object.entries(levelCoords).forEach(([levelId, c]) => {
+          if (newOrder[levelId]) {
+            newOrder[levelId] = {
+              ...newOrder[levelId],
+              mapX: c.mapX,
+              mapY: c.mapY
+            };
+          }
+        });
+
+        return {
+          ...p,
+          order: newOrder,
+          portalX: portalCoords.portalX,
+          portalY: portalCoords.portalY,
+          portalStartX: portalCoords.portalStartX,
+          portalStartY: portalCoords.portalStartY,
+          mapTheme: theme
+        };
+      })
+    );
+    showToast('Map layout updated successfully');
+  }, [showToast]);
 
   // Redirect non-admins
   useEffect(() => {
@@ -380,11 +431,6 @@ export default function AdminLevelPartsPage() {
       setDataLoading(false);
     })();
   }, [role]);
-
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(''), 3000);
-  }, []);
 
   // ── Create part ─────────────────────────────────────────────────────────────
 
@@ -533,6 +579,7 @@ export default function AdminLevelPartsPage() {
               onReorderLevel={(levelId, dir) => handleReorderLevel(part.partId, levelId, dir)}
               onDeleteLevel={(levelId) => handleDeleteLevel(part.partId, levelId)}
               onEditLevel={handleEditLevel}
+              onDesignMap={() => setDesignerPart(part)}
             />
           ))
         )}
@@ -577,6 +624,15 @@ export default function AdminLevelPartsPage() {
         </Modal>
       )}
 
+      {/* Map Designer Modal */}
+      {designerPart && (
+        <MapDesignerModal
+          part={designerPart}
+          onClose={() => setDesignerPart(null)}
+          onSave={handleSaveMapLayout}
+        />
+      )}
+
       {/* Toast */}
       {toast && (
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: 'rgba(6,13,26,0.96)', border: '1px solid rgba(0,196,255,0.4)', borderRadius: 10, padding: '10px 20px', fontSize: 13, color: '#00c4ff', zIndex: 200, boxShadow: '0 0 20px rgba(0,196,255,0.2)', pointerEvents: 'none' }}>
@@ -586,3 +642,513 @@ export default function AdminLevelPartsPage() {
     </div>
   );
 }
+
+// ─── Map Designer Modal ────────────────────────────────────────────────────────
+
+interface Coords {
+  x: number;
+  y: number;
+}
+
+interface MapDesignerModalProps {
+  part: LevelPart;
+  onClose: () => void;
+  onSave: (
+    partId: string,
+    levelCoords: Record<string, { mapX: number; mapY: number }>,
+    portalCoords: { portalX: number; portalY: number; portalStartX: number; portalStartY: number },
+    theme: string
+  ) => void;
+}
+
+function MapDesignerModal({ part, onClose, onSave }: MapDesignerModalProps) {
+  const t = useT();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [mapTheme, setMapTheme] = useState<string>(part.mapTheme || 'cyber-grid');
+
+  const sortedLevels = useMemo(() => {
+    return Object.values(part.order).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  }, [part.order]);
+
+  // Local state for coordinates
+  const [levelCoords, setLevelCoords] = useState<Record<string, Coords>>(() => {
+    const coords: Record<string, Coords> = {};
+    sortedLevels.forEach((lv, i) => {
+      if (lv.mapX !== undefined && lv.mapY !== undefined) {
+        coords[lv.id] = { x: lv.mapX, y: lv.mapY };
+      } else {
+        const count = sortedLevels.length;
+        const ratio = count > 1 ? i / (count - 1) : 0.5;
+        const y = Math.round(80 - ratio * 60); // Winding spline center
+        const x = Math.round(50 + Math.sin(ratio * Math.PI * 3) * 32);
+        coords[lv.id] = { x, y };
+      }
+    });
+    return coords;
+  });
+
+  // Exit Portal state (Top portal)
+  const [portalCoords, setPortalCoords] = useState<Coords>(() => {
+    if (part.portalX !== undefined && part.portalY !== undefined) {
+      return { x: part.portalX, y: part.portalY };
+    }
+    return { x: 50, y: 10 };
+  });
+
+  // Entry Portal state (Bottom portal)
+  const [portalStartCoords, setPortalStartCoords] = useState<Coords>(() => {
+    if (part.portalStartX !== undefined && part.portalStartY !== undefined) {
+      return { x: part.portalStartX, y: part.portalStartY };
+    }
+    return { x: 50, y: 90 };
+  });
+
+  const [saving, setSaving] = useState(false);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const getThemeBackground = () => {
+    switch (mapTheme) {
+      case 'star-nebula':
+        return {
+          background: 'radial-gradient(circle at 50% 50%, #0c1530 0%, #020617 100%)',
+          boxShadow: 'inset 0 0 100px rgba(99, 102, 241, 0.15)'
+        };
+      case 'cosmic-vortex':
+        return {
+          background: 'radial-gradient(circle at 50% 50%, #200c3b 0%, #06020f 100%)',
+          boxShadow: 'inset 0 0 100px rgba(168, 85, 247, 0.15)'
+        };
+      case 'retro-matrix':
+        return {
+          background: '#000',
+          backgroundImage: 'linear-gradient(to right, rgba(34, 197, 94, 0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(34, 197, 94, 0.05) 1px, transparent 1px)',
+          backgroundSize: '25px 25px'
+        };
+      case 'neon-abyss':
+        return {
+          background: 'linear-gradient(180deg, #0d0614 0%, #020005 100%)',
+          boxShadow: 'inset 0 0 100px rgba(236, 72, 153, 0.12)'
+        };
+      case 'cyber-grid':
+      default:
+        return {
+          background: '#030712',
+          backgroundImage: 'linear-gradient(to right, rgba(0, 196, 255, 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0, 196, 255, 0.06) 1px, transparent 1px)',
+          backgroundSize: '30px 30px'
+        };
+    }
+  };
+
+  const getThemeColor = () => {
+    if (mapTheme === 'retro-matrix') return '#22c55e';
+    if (mapTheme === 'neon-abyss') return '#ec4899';
+    if (mapTheme === 'cosmic-vortex') return '#a855f7';
+    if (mapTheme === 'star-nebula') return '#6366f1';
+    return '#00c4ff';
+  };
+
+  const generatePreset = (type: 'snake' | 'spiral' | 'circle') => {
+    const count = sortedLevels.length;
+    const newCoords: Record<string, Coords> = {};
+
+    if (type === 'snake') {
+      sortedLevels.forEach((lv, i) => {
+        const ratio = count > 1 ? i / (count - 1) : 0.5;
+        const y = Math.round(80 - ratio * 60);
+        const x = Math.round(50 + Math.sin(ratio * Math.PI * 3) * 32);
+        newCoords[lv.id] = { x, y };
+      });
+      setPortalCoords({ x: 50, y: 10 });
+      setPortalStartCoords({ x: 50, y: 90 });
+    } else if (type === 'spiral') {
+      sortedLevels.forEach((lv, i) => {
+        const ratio = count > 0 ? i / count : 0.5;
+        const angle = ratio * Math.PI * 4;
+        const radius = 6 + ratio * 32;
+        const x = Math.round(50 + Math.cos(angle) * radius);
+        const y = Math.round(55 + Math.sin(angle) * radius);
+        newCoords[lv.id] = { x, y };
+      });
+      setPortalStartCoords({ x: 50, y: 55 }); // Center spiral entry
+      const portalAngle = 1.05 * Math.PI * 4;
+      const portalRadius = 6 + 1.05 * 32;
+      setPortalCoords({
+        x: Math.max(5, Math.min(95, Math.round(50 + Math.cos(portalAngle) * portalRadius))),
+        y: Math.max(5, Math.min(95, Math.round(55 + Math.sin(portalAngle) * portalRadius)))
+      });
+    } else if (type === 'circle') {
+      sortedLevels.forEach((lv, i) => {
+        const angle = (i / (count + 1)) * Math.PI * 1.6 - Math.PI * 0.8;
+        const x = Math.round(50 + Math.cos(angle) * 32);
+        const y = Math.round(50 + Math.sin(angle) * 32);
+        newCoords[lv.id] = { x, y };
+      });
+      setPortalStartCoords({ x: 50, y: 90 });
+      setPortalCoords({ x: 50, y: 10 });
+    }
+
+    setLevelCoords(newCoords);
+  };
+
+  const handlePointerDown = (id: string, e: React.PointerEvent) => {
+    e.preventDefault();
+    setActiveDragId(id);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!activeDragId || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = Math.max(2, Math.min(98, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
+    const y = Math.max(2, Math.min(98, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
+
+    if (activeDragId === 'portal') {
+      setPortalCoords({ x, y });
+    } else if (activeDragId === 'portalStart') {
+      setPortalStartCoords({ x, y });
+    } else {
+      setLevelCoords(prev => ({ ...prev, [activeDragId]: { x, y } }));
+    }
+  };
+
+  const handlePointerUp = (id: string, e: React.PointerEvent) => {
+    if (activeDragId) {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      setActiveDragId(null);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { updatePartMapLayout } = await import('@/app/src/lib/firebase/admin');
+      
+      const levelCoordsSave: Record<string, { mapX: number; mapY: number }> = {};
+      Object.entries(levelCoords).forEach(([levelId, c]) => {
+        levelCoordsSave[levelId] = { mapX: c.x, mapY: c.y };
+      });
+
+      await updatePartMapLayout(
+        part.partId,
+        levelCoordsSave,
+        {
+          portalX: portalCoords.x,
+          portalY: portalCoords.y,
+          portalStartX: portalStartCoords.x,
+          portalStartY: portalStartCoords.y
+        },
+        mapTheme
+      );
+      
+      onSave(
+        part.partId,
+        levelCoordsSave,
+        {
+          portalX: portalCoords.x,
+          portalY: portalCoords.y,
+          portalStartX: portalStartCoords.x,
+          portalStartY: portalStartCoords.y
+        },
+        mapTheme
+      );
+      onClose();
+    } catch (err) {
+      console.error('[MapDesigner]', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Organic B-Spline smooth winding path calculation
+  const svgPathData = useMemo(() => {
+    const points: Array<Coords> = [];
+    points.push({ x: portalStartCoords.x, y: portalStartCoords.y });
+    sortedLevels.forEach((lv) => {
+      const c = levelCoords[lv.id];
+      if (c) points.push({ x: c.x, y: c.y });
+    });
+    points.push({ x: portalCoords.x, y: portalCoords.y });
+
+    if (points.length < 2) return '';
+    let path = `M ${points[0].x}% ${points[0].y}%`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i];
+      const p1 = points[i + 1];
+      const mx = (p0.x + p1.x) / 2;
+      const my = (p0.y + p1.y) / 2;
+      path += ` Q ${p0.x}% ${p0.y}%, ${mx}% ${my}%`;
+    }
+    path += ` L ${points[points.length - 1].x}% ${points[points.length - 1].y}%`;
+    return path;
+  }, [sortedLevels, levelCoords, portalCoords, portalStartCoords]);
+
+  const activeThemeColor = getThemeColor();
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(3,7,18,0.92)', backdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 16, boxSizing: 'border-box'
+      }}
+    >
+      <div
+        style={{
+          background: '#070a13',
+          border: `1px solid ${activeThemeColor}40`,
+          borderRadius: 16,
+          width: '100%',
+          maxWidth: 960,
+          maxHeight: '92vh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: `0 0 50px ${activeThemeColor}15`
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#fff', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            {t('admin.designer_title')} <span style={{ color: activeThemeColor }}>· {part.name}</span>
+          </h2>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 20, cursor: 'pointer' }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', flexWrap: 'wrap-reverse' }}>
+          
+          <div style={{ width: '100%', maxWidth: 300, padding: 24, borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 20, boxSizing: 'border-box', overflowY: 'auto' }}>
+            
+            <div>
+              <label style={{ display: 'block', fontSize: 10, fontWeight: 900, color: '#64748b', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>
+                {t('admin.designer_theme')}
+              </label>
+              <select
+                value={mapTheme}
+                onChange={(e) => setMapTheme(e.target.value)}
+                style={{
+                  width: '100%', background: '#0a0f1d', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: 8, padding: '8px 12px', fontSize: 12, outline: 'none'
+                }}
+              >
+                <option value="cyber-grid">{t('admin.designer_theme_cyber')}</option>
+                <option value="star-nebula">{t('admin.designer_theme_star')}</option>
+                <option value="cosmic-vortex">{t('admin.designer_theme_cosmic')}</option>
+                <option value="retro-matrix">{t('admin.designer_theme_retro')}</option>
+                <option value="neon-abyss">{t('admin.designer_theme_abyss')}</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 10, fontWeight: 900, color: '#64748b', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>
+                {t('admin.designer_preset')}
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button
+                  onClick={() => generatePreset('snake')}
+                  style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 11, cursor: 'pointer', textAlign: 'left', fontWeight: 600, transition: 'all 0.2s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                >
+                  📈 {t('admin.designer_preset_snake')}
+                </button>
+                <button
+                  onClick={() => generatePreset('spiral')}
+                  style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 11, cursor: 'pointer', textAlign: 'left', fontWeight: 600, transition: 'all 0.2s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                >
+                  🌀 {t('admin.designer_preset_spiral')}
+                </button>
+                <button
+                  onClick={() => generatePreset('circle')}
+                  style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 11, cursor: 'pointer', textAlign: 'left', fontWeight: 600, transition: 'all 0.2s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                >
+                  ◯ {t('admin.designer_preset_circle')}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 'auto', background: `${activeThemeColor}06`, border: `1px solid ${activeThemeColor}15`, borderRadius: 8, padding: 12 }}>
+              <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
+                💡 <strong>How to design:</strong> Drag the numbered level nodes and portals. 🌀 (orange border) is Exit, 🟢 (green border) is Entry Portal.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button
+                onClick={handleSave} disabled={saving}
+                style={{ flex: 1, padding: '10px 16px', background: saving ? 'rgba(0,255,136,0.3)' : '#00ff88', border: 'none', color: '#030712', fontWeight: 800, borderRadius: 8, fontSize: 12, cursor: saving ? 'not-allowed' : 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase', boxShadow: saving ? 'none' : '0 0 16px rgba(0,255,136,0.3)' }}
+              >
+                {saving ? '...' : t('admin.designer_save')}
+              </button>
+              <button
+                onClick={onClose} disabled={saving}
+                style={{ padding: '10px 14px', background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}
+              >
+                {t('admin.designer_cancel')}
+              </button>
+            </div>
+
+          </div>
+
+          <div style={{ flex: 1, padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#03050a', boxSizing: 'border-box' }}>
+            <div
+              ref={canvasRef}
+              style={{
+                width: '100%',
+                maxWidth: 420,
+                aspectRatio: '1 / 1.5',
+                position: 'relative',
+                borderRadius: 16,
+                border: '1px solid rgba(255,255,255,0.06)',
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+                ...getThemeBackground(),
+                transition: 'all 0.3s ease'
+              }}
+            >
+              {svgPathData && (
+                <svg
+                  style={{
+                    position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1
+                  }}
+                >
+                  {/* Thick glowing organic rope backing */}
+                  <path
+                    d={svgPathData}
+                    fill="none"
+                    stroke={activeThemeColor}
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ opacity: 0.18, filter: 'blur(5px)' }}
+                  />
+                  <path
+                    d={svgPathData}
+                    fill="none"
+                    stroke={activeThemeColor}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ opacity: 0.55 }}
+                  />
+                </svg>
+              )}
+
+              {/* Entry Portal (Green border, bottom portal) */}
+              <div
+                onPointerDown={(e) => handlePointerDown('portalStart', e)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={(e) => handlePointerUp('portalStart', e)}
+                style={{
+                  position: 'absolute',
+                  left: `${portalStartCoords.x}%`,
+                  top: `${portalStartCoords.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  width: 38,
+                  height: 38,
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle, #10b981 0%, #064e3b 100%)',
+                  border: '2px solid #34d399',
+                  boxShadow: '0 0 15px rgba(16, 185, 129, 0.6)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 18,
+                  fontWeight: 900,
+                  cursor: 'move',
+                  zIndex: 10,
+                  userSelect: 'none',
+                  touchAction: 'none'
+                }}
+                title="Entry Portal"
+              >
+                🌀
+              </div>
+
+              {/* Exit Portal (Yellow border, top portal) */}
+              <div
+                onPointerDown={(e) => handlePointerDown('portal', e)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={(e) => handlePointerUp('portal', e)}
+                style={{
+                  position: 'absolute',
+                  left: `${portalCoords.x}%`,
+                  top: `${portalCoords.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  width: 38,
+                  height: 38,
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle, #f59e0b 0%, #b45309 100%)',
+                  border: '2px solid #ffd700',
+                  boxShadow: '0 0 15px rgba(245, 158, 11, 0.6)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 18,
+                  fontWeight: 900,
+                  cursor: 'move',
+                  zIndex: 10,
+                  userSelect: 'none',
+                  touchAction: 'none'
+                }}
+                title="Exit Portal"
+              >
+                🌀
+              </div>
+
+              {/* Level Nodes */}
+              {sortedLevels.map((lv) => {
+                const coords = levelCoords[lv.id] || { x: 50, y: 50 };
+                return (
+                  <div
+                    key={lv.id}
+                    onPointerDown={(e) => handlePointerDown(lv.id, e)}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={(e) => handlePointerUp(lv.id, e)}
+                    style={{
+                      position: 'absolute',
+                      left: `${coords.x}%`,
+                      top: `${coords.y}%`,
+                      transform: 'translate(-50%, -50%)',
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: '#0a0f1d',
+                      border: `2px solid ${activeThemeColor}`,
+                      boxShadow: `0 0 8px ${activeThemeColor}40`,
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: 'move',
+                      zIndex: 5,
+                      userSelect: 'none',
+                      touchAction: 'none'
+                    }}
+                  >
+                    {(lv.position ?? 0) + 1}
+                  </div>
+                );
+              })}
+
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
+

@@ -114,13 +114,14 @@ export default function PrivacyPage() {
         >
           {isTr ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <p><strong>Son Güncelleme: 22 Mayıs 2026</strong></p>
+              <p><strong>Son Güncelleme: 25 Mayıs 2026</strong></p>
               <p>Syncron, oyun severlere eğlenceli ve güvenli bir ortam sunmayı amaçlar. Bu Gizlilik Politikası, topladığımız bilgileri, bunları nasıl kullandığımızı ve gizliliğinizi korumak için aldığımız önlemleri açıklar.</p>
               
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>1. Hangi Verileri Topluyoruz?</h2>
               <p>Hizmet kalitemizi korumak amacıyla aşağıdaki verileri toplamaktayız:</p>
               <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <li><strong>Kimlik ve İletişim Bilgileri:</strong> Bir hesap oluşturduğunuzda veya Google hesabınızı bağladığınızda e-posta adresiniz, kullanıcı adınız ve profil resminiz.</li>
+                <li><strong>Destek Talepleri ve İletişim Geçmişi:</strong> Destek sistemi üzerinden oluşturduğunuz biletler, ilettiğiniz mesajlar, ek notlar ve admin yanıt geçmişi.</li>
                 <li><strong>Oyun İlerleyişi ve İstatistikleri:</strong> Çözdüğünüz bulmacalar, skorlarınız, hamle sayılarınız, harcadığınız süreler ve tasarladığınız özel leveller.</li>
                 <li><strong>Teknik Veriler:</strong> Cihaz türünüz, işletim sisteminiz ve Google Analytics 4 (GA4) üzerinden toplanan anonim kullanım analitikleri.</li>
               </ul>
@@ -131,6 +132,7 @@ export default function PrivacyPage() {
                 <li>Oyun ilerlemenizi cihazlar arasında eşitlemek.</li>
                 <li>Liderlik tablolarını (Skor Tablosu) oluşturmak ve güncellemek.</li>
                 <li>Hile tespit sistemlerimizi ve oyun doğrulama algoritmalarımızı çalıştırmak.</li>
+                <li>Destek taleplerinizi yanıtlamak, hesap sorunlarınızı çözmek ve teknik yardım sunmak.</li>
                 <li>Level editöründe oluşturduğunuz levelleri topluluğun beğenisine sunmak.</li>
               </ul>
 
@@ -145,13 +147,14 @@ export default function PrivacyPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <p><strong>Last Updated: May 22, 2026</strong></p>
+              <p><strong>Last Updated: May 25, 2026</strong></p>
               <p>At Syncron, we are committed to protecting the privacy of our players. This Privacy Policy details the types of information we collect, how we use it, and the security measures we deploy to safeguard your data.</p>
               
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>1. What Data We Collect</h2>
               <p>We process the following information to keep the game functional and engaging:</p>
               <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <li><strong>Account Credentials:</strong> Your email address, profile display name, and avatar when registering via Google Auth or email.</li>
+                <li><strong>Support Tickets and Interaction Logs:</strong> Detailed tickets created via the support system, submitted messages, attachments, and administrator reply logs.</li>
                 <li><strong>Gameplay and Performance:</strong> Ratios of solved levels, total score points, move sequences, solved timings, and level submissions created by you.</li>
                 <li><strong>Device and Analytical Information:</strong> Browser type, operating system, and anonymous usage telemetry collected via Google Analytics 4 (GA4).</li>
               </ul>
@@ -162,6 +165,7 @@ export default function PrivacyPage() {
                 <li>Sync your gameplay levels and solutions across different devices.</li>
                 <li>Render public game leaderboards and assign score rankings.</li>
                 <li>Validate level solutions on the backend to prevent leaderboard manipulation.</li>
+                <li>Address and resolve your support tickets, manage account issues, and provide technical assistance.</li>
                 <li>Associate your designed levels with your personal account and unique tag identifier.</li>
               </ul>
 

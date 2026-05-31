@@ -6,7 +6,12 @@ import { DIRECTION_DELTA } from '../types';
 export const playerBehavior: EntityBehavior = {
 
     onTick: (self) => {
-        const intents = [];
+        const intents: any[] = [];
+
+        // If player is locked, they generate absolutely no movement intents.
+        if (self.customData.isLocked) {
+            return [];
+        }
 
         // Hareket: force > 0 ise mevcut yönde bir adım at
         if (self.physics.force > 0) {

@@ -1,0 +1,100 @@
+Created At: 2026-05-26T08:06:10Z
+Completed At: 2026-05-26T08:06:11Z
+File Path: `file:///c:/Users/ahmet/Desktop/Projects/myReactApps/know-and-conquer/app/admin/users/%5Buid%5D/page.tsx`
+Total Lines: 1032
+Total Bytes: 46545
+Showing lines 1 to 90
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: 'use client';
+2: 
+3: import { useParams, useRouter } from 'next/navigation';
+4: import { useEffect, useState } from 'react';
+5: import { motion, AnimatePresence } from 'framer-motion';
+6: import { useLanguage } from '@/app/src/contexts/LanguageContext';
+7: import { AdminGuard } from '@/app/src/components/AdminGuard';
+8: import { fetchAdminApi } from '@/app/src/lib/api/adminClient';
+9: 
+10: // Types derived from Worker API endpoints
+11: type UserProfileData = {
+12:   uid: string;
+13:   email?: string | null;
+14:   displayName?: string | null;
+15:   tag?: string | null;
+16:   role: string;
+17:   authProvider: string;
+18:   totalScore: number;
+19:   completedCount: number;
+20:   createdAt?: string | null;
+21:   acceptedTermsAt?: string | null;
+22: };
+23: 
+24: type AuditLogStat = {
+25:   category: 'game' | 'support' | 'account' | 'payment' | 'admin';
+26:   count: number;
+27: };
+28: 
+29: type AuditLogEntry = {
+30:   id: string;
+31:   uid: string;
+32:   action: string;
+33:   category: 'game' | 'support' | 'account' | 'payment' | 'admin';
+34:   metadata: any;
+35:   created_at: string;
+36: };
+37: 
+38: type PlayedLevelEntry = {
+39:   levelId: string;
+40:   stars: number;
+41:   moveCount: number | null;
+42:   timeSpent: number | null;
+43:   completedAt: string | null;
+44:   updatedAt: string | null;
+45: };
+46: 
+47: const CATEGORY_DETAILS = {
+48:   game: { label: { tr: 'Oyun', en: 'Game' }, color: '#00ff88', glow: '0 0 10px #00ff88' },
+49:   support: { label: { tr: 'Destek', en: 'Support' }, color: '#ffd700', glow: '0 0 10px #ffd700' },
+50:   a
+<truncated 89 bytes>
+f' },
+51:   payment: { label: { tr: 'Ödeme', en: 'Payment' }, color: '#fb923c', glow: '0 0 10px #fb923c' },
+52:   admin: { label: { tr: 'Admin', en: 'Admin' }, color: '#ec4899', glow: '0 0 10px #ec4899' },
+53: };
+54: 
+55: export default function AdminUserProfileWorkspace() {
+56:   const router = useRouter();
+57:   const { lang } = useLanguage();
+58:   const isTr = lang === 'tr';
+59:   const { uid } = useParams() as { uid: string };
+60: 
+61:   // Core profile data states
+62:   const [profile, setProfile] = useState<UserProfileData | null>(null);
+63:   const [stats, setStats] = useState<AuditLogStat[]>([]);
+64:   const [lastActivity, setLastActivity] = useState<string | null>(null);
+65:   const [playedLevels, setPlayedLevels] = useState<PlayedLevelEntry[]>([]);
+66:   const [playedSort, setPlayedSort] = useState<'date' | 'stars' | 'time'>('date');
+67: 
+68:   // Logs states
+69:   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+70:   const [logsOffset, setLogsOffset] = useState(0);
+71:   const [logsHasMore, setLogsHasMore] = useState(true);
+72:   const [logsLoadingMore, setLogsLoadingMore] = useState(false);
+73: 
+74:   // Logs filters
+75:   const [activeCategory, setActiveCategory] = useState<string>('all');
+76:   const [actionQuery, setActionQuery] = useState('');
+77:   const [debouncedActionQuery, setDebouncedActionQuery] = useState('');
+78:   const [dateAfter, setDateAfter] = useState('');
+79:   const [dateBefore, setDateBefore] = useState('');
+80: 
+81:   // Skeletons and Loadings
+82:   const [loadingProfile, setLoadingProfile] = useState(true);
+83:   const [loadingLogs, setLoadingLogs] = useState(true);
+84: 
+85:   // Debouncing Action search filter
+86:   useEffect(() => {
+87:     const t = setTimeout(() => setDebouncedActionQuery(actionQuery.trim()), 400);
+88:     return () => clearTimeout(t);
+89:   }, [actionQuery]);
+90: 
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

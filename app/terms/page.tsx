@@ -124,10 +124,11 @@ export default function TermsPage() {
               <p>Level editörümüzü kullanarak tasarladığınız ve gönderdiğiniz bulmaca levelleri topluluk tarafından erişilebilir hale gelecektir. Gönderdiğiniz içeriklerin telif haklarını koruduğunuzu, ancak bu içerikleri Syncron platformunda süresiz, ücretsiz ve dünya genelinde yayınlama hakkını platformumuza verdiğinizi kabul edersiniz. Uygunsuz, hakaret içeren, saldırgan veya platformu manipüle etmeye çalışan içerikler önceden bildirilmeksizin adminler tarafından kaldırılabilir.</p>
 
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>3. Kurallar ve Davranış İlkeleri</h2>
-              <p>Platformumuzu kullanırken aşağıdaki kurallara uymayı taahhüt edersiniz:</p>
+              <p>Platformumuzu ve canlı destek bilet sistemini kullanırken aşağıdaki kurallara uymayı taahhüt edersiniz:</p>
               <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <li>Hile yapmak, skor tablolarını manipüle etmek ve oyun mekaniklerini kötüye kullanmak yasaktır.</li>
                 <li>Diğer kullanıcılara hakaret etmek veya taciz edici taglar (kullanıcı adları) seçmek yasaktır.</li>
+                <li>Destek sistemini spamlamak, asılsız talepler açmak veya destek görevlilerine hakaret içerikli mesajlar göndermek yasaktır. Destek sisteminde dakikada maksimum 2 bilet limiti uygulanmaktadır.</li>
                 <li>Bulut sunucularımıza veya işleyişimize zarar verecek siber saldırılarda bulunmak yasaktır.</li>
               </ul>
 
@@ -144,15 +145,16 @@ export default function TermsPage() {
               
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>1. Account Registration and Security</h2>
               <p>To save your progress and design custom levels, you can register via email or connect with your Google account. You are responsible for safeguarding your account details. Children under 13 must use our services under parent or guardian supervision.</p>
-
+              
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>2. User Generated Content (Level Editor)</h2>
               <p>Bulding and submitting grid levels using our level editor allows other players to play your designs. You retain your ownership of such levels, but you grant Syncron an irrevocable, royalty-free, worldwide license to host, display, and distribute this content. Admin moderators reserve the right to remove any level request that is offensive, unplayable, or violates our community standards.</p>
-
+              
               <h2 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 700, marginTop: '12px' }}>3. Code of Conduct</h2>
-              <p>When playing Syncron, you agree not to:</p>
+              <p>When playing Syncron and using the live support system, you agree not to:</p>
               <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <li>Exploit game mechanics or cheat to achieve fraudulent high scores on leaderboards.</li>
                 <li>Harass other players or choose offensive tags (usernames).</li>
+                <li>Abuse or spam the ticket support system, submit fraudulent support tickets, or use inappropriate language with support agents. A strict rate-limit of 2 tickets per minute per user is enforced.</li>
                 <li>Engage in any cyberattacks or actions that disrupt our database and cloud functions.</li>
               </ul>
 

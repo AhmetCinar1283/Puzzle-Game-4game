@@ -4,6 +4,13 @@ export interface Env {
   ALLOWED_ORIGIN: string;
   /** Service account JSON string — set via `wrangler secret put GOOGLE_SERVICE_ACCOUNT` */
   GOOGLE_SERVICE_ACCOUNT: string;
+  /** HMAC-SHA256 shared secret for Firebase Functions → Worker internal calls.
+   *  Set via `wrangler secret put LOG_SECRET` (never commit to source control). */
+  LOG_SECRET: string;
+  /** Cloudflare D1 database binding for audit logs */
+  AUDIT_DB: D1Database;
+  /** Cloudflare R2 bucket binding for log archive cold storage */
+  syncron_audit_archive: R2Bucket;
 }
 
 export interface CompleteLevelRequest {
@@ -69,4 +76,16 @@ export interface CreateTicketResponse {
   /** Present on failure */
   error?: string;
 }
+
+export type AppContext = {
+  Variables: {
+    uid: string;
+    /** Caller's role — set by adminAuth middleware ('admin' | 'moderator') */
+    role: string;
+    /** Pre-parsed JSON body — set by hmacAuth middleware for /internal/log */
+    parsedBody: unknown;
+  };
+  Bindings: Env;
+};
+
 

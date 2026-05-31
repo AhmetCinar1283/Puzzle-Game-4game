@@ -4,3 +4,5 @@ export * from './config';
 export * from './firestore';
 export * from './admin';
 export * from './sync';
+export * from './support';
+export * from './supportTypes';

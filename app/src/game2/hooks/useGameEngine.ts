@@ -35,9 +35,10 @@ interface UseGameEngineOptions {
     initialEntities: Entity[];
     initialGrid: Cell[][];
     levelEdges?: LevelEdges;
+    trailCollision?: boolean;
 }
 
-export function useGameEngine({ initialEntities, initialGrid, levelEdges }: UseGameEngineOptions) {
+export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailCollision }: UseGameEngineOptions) {
     const entitiesRef = useRef<Entity[]>(initialEntities);
     const gridRef = useRef<Cell[][]>(initialGrid);
     const isGameOverRef = useRef(false);
@@ -59,11 +60,12 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges }: UseG
         if (isGameOverRef.current) return;
 
         // Grid boyutlarından level bounds hesapla
-        const levelBounds: LevelBounds | undefined = levelEdges ? {
+        const levelBounds: LevelBounds = {
             rows: gridRef.current.length,
             cols: gridRef.current[0]?.length ?? 0,
-            edges: levelEdges,
-        } : undefined;
+            edges: levelEdges ?? { top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' },
+            trailCollision: !!trailCollision,
+        };
 
         const collectedSnapshots: TickSnapshot[] = [];
         const collectedUi: UIEvent[] = [];
@@ -143,7 +145,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges }: UseG
         if (collectedSnapshots.length > 1) {
             setIsAnimating(true);
         }
-    }, [levelEdges]);
+    }, [levelEdges, trailCollision]);
 
     const onAnimationEnd = useCallback(() => {
         setIsAnimating(false);

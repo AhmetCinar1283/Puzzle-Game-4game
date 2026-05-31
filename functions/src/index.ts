@@ -2,15 +2,25 @@ import * as functions from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import { defineSecret } from 'firebase-functions/params';
 import { sendSupportReplyEmail } from './email';
-
+import { sendLogToWorker } from './logClient';
 
 admin.initializeApp();
 const db = admin.firestore();
 
-// Secret — provision once with: firebase functions:secrets:set RESEND_API_KEY
-// For local dev, add to functions/.secret.local: RESEND_API_KEY=re_xxxxxxxx
-const resendApiKey = defineSecret('RESEND_API_KEY');
+// ─── Secrets ──────────────────────────────────────────────────────────────────
+// Provision each once with:
+//   firebase functions:secrets:set RESEND_API_KEY
+//   firebase functions:secrets:set WORKER_URL
+//   firebase functions:secrets:set LOG_SECRET
+//
+// For local dev, add to functions/.secret.local:
+//   RESEND_API_KEY=re_xxxxxxxx
+//   WORKER_URL=https://syncron-worker.xxx.workers.dev
+//   LOG_SECRET=your-shared-hmac-secret
 
+const resendApiKey = defineSecret('RESEND_API_KEY');
+const workerUrl    = defineSecret('WORKER_URL');
+const logSecret    = defineSecret('LOG_SECRET');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,7 +78,10 @@ async function assignUniqueTag(uid: string): Promise<string> {
 // Fires when any user doc is first created. Anonymous users are skipped.
 
 export const onUserCreated = functions.firestore.onDocumentCreated(
-    'users/{uid}',
+    {
+        document: 'users/{uid}',
+        secrets: [workerUrl, logSecret],
+    },
     async (event) => {
         const uid = event.params.uid;
         const data = event.data?.data();
@@ -77,12 +90,27 @@ export const onUserCreated = functions.firestore.onDocumentCreated(
         if (data.authProvider === 'anonymous') return; // no tag for anonymous users
         if (data.tag) return; // guard against re-trigger
 
+        // 1. Assign tag (primary logic — must succeed)
         try {
             await assignUniqueTag(uid);
             functions.logger.info(`[onUserCreated] Tag assigned to ${uid}`);
         } catch (err) {
             functions.logger.error(`[onUserCreated] Failed to assign tag to ${uid}:`, err);
+            // Do not return here — still attempt to log the account creation event
         }
+
+        // 2. Audit log — fire-and-forget, non-fatal
+        await sendLogToWorker(
+            'account.create',
+            'account',
+            uid,
+            {
+                authProvider: data.authProvider ?? 'unknown',
+                hasEmail:     !!data.email,
+            },
+            workerUrl.value(),
+            logSecret.value(),
+        );
     },
 );
 
@@ -90,23 +118,40 @@ export const onUserCreated = functions.firestore.onDocumentCreated(
 // The onUserCreated trigger won't fire on upgrade (same UID, doc already exists).
 
 export const onUserUpgraded = functions.firestore.onDocumentUpdated(
-    'users/{uid}',
+    {
+        document: 'users/{uid}',
+        secrets: [workerUrl, logSecret],
+    },
     async (event) => {
         const uid = event.params.uid;
         const before = event.data?.before.data();
-        const after = event.data?.after.data();
+        const after  = event.data?.after.data();
 
         if (!before || !after) return;
         if (before.authProvider !== 'anonymous') return; // only care about upgrades
         if (after.authProvider === 'anonymous') return;  // not actually upgraded
         if (after.tag) return;                           // tag already present
 
+        // 1. Assign tag (primary logic — must succeed)
         try {
             await assignUniqueTag(uid);
             functions.logger.info(`[onUserUpgraded] Tag assigned to upgraded user ${uid}`);
         } catch (err) {
             functions.logger.error(`[onUserUpgraded] Failed to assign tag to ${uid}:`, err);
         }
+
+        // 2. Audit log — fire-and-forget, non-fatal
+        await sendLogToWorker(
+            'account.upgrade',
+            'account',
+            uid,
+            {
+                from: 'anonymous',
+                to:   after.authProvider ?? 'unknown',
+            },
+            workerUrl.value(),
+            logSecret.value(),
+        );
     },
 );
 
@@ -115,7 +160,10 @@ export const onUserUpgraded = functions.firestore.onDocumentUpdated(
 // checks uniqueness, then atomically assigns.
 
 export const requestNewTag = functions.https.onCall(
-    { region: 'europe-west3' },
+    {
+        region: 'europe-west3',
+        secrets: [workerUrl, logSecret],
+    },
     async (request) => {
         const uid = request.auth?.uid;
         if (!uid) {
@@ -144,7 +192,7 @@ export const requestNewTag = functions.https.onCall(
             }
         }
 
-        const userRef = db.collection('users').doc(uid);
+        const userRef  = db.collection('users').doc(uid);
         const userSnap = await userRef.get();
         if (!userSnap.exists) {
             throw new functions.https.HttpsError('not-found', 'User document not found.');
@@ -180,6 +228,7 @@ export const requestNewTag = functions.https.onCall(
             }
         }
 
+        const previousTag: string | undefined = userData.tag;
         const tagRef = db.collection('tags').doc(tag);
 
         // Atomically verify uniqueness + assign
@@ -208,6 +257,23 @@ export const requestNewTag = functions.https.onCall(
         }
 
         functions.logger.info(`[requestNewTag] Tag ${tag} assigned to ${uid}`);
+
+        // Audit log — fire-and-forget, non-fatal
+        // Note: HttpsError has already been thrown above if anything failed,
+        // so reaching here means the transaction succeeded.
+        await sendLogToWorker(
+            'account.tag_change',
+            'account',
+            uid,
+            {
+                newTag:      tag,
+                previousTag: previousTag ?? null,
+                changeCount: changeCount + 1,
+            },
+            workerUrl.value(),
+            logSecret.value(),
+        );
+
         return { tag };
     },
 );
@@ -233,7 +299,7 @@ export const onTicketMessageCreated = functions.firestore.onDocumentCreated(
     {
         document: 'supportTickets/{ticketId}/messages/{messageId}',
         region: 'europe-west3',
-        secrets: [resendApiKey],
+        secrets: [resendApiKey, workerUrl, logSecret],
     },
     async (event) => {
         const messageData = event.data?.data();
@@ -247,6 +313,7 @@ export const onTicketMessageCreated = functions.firestore.onDocumentCreated(
 
         const { ticketId, messageId } = event.params;
         const senderType = messageData.senderType as string | undefined;
+        const senderUid  = messageData.senderUid  as string | undefined;
 
         // Fetch the parent ticket document
         const ticketRef = db.collection('supportTickets').doc(ticketId);
@@ -306,23 +373,22 @@ export const onTicketMessageCreated = functions.firestore.onDocumentCreated(
                 functions.logger.error(
                     `[onTicketMessage] Ticket ${ticketId} has no email address — cannot send notification.`,
                 );
-                return; // Cannot send email without a recipient
-            }
-
-            try {
-                await sendSupportReplyEmail(
-                    { to: recipientEmail, displayName, ticketId, subject, messageBody },
-                    resendApiKey.value(),
-                );
-                functions.logger.info(
-                    `[onTicketMessage] Notification email sent to ${recipientEmail} for ticket ${ticketId}`,
-                );
-            } catch (err) {
-                // Email failure is NON-FATAL — the message is already saved in Firestore.
-                // The admin can still be reached through the in-app conversation.
-                functions.logger.error(
-                    `[onTicketMessage] Failed to send notification email for ticket ${ticketId}:`, err,
-                );
+                // Fall through to audit log even if email cannot be sent
+            } else {
+                try {
+                    await sendSupportReplyEmail(
+                        { to: recipientEmail, displayName, ticketId, subject, messageBody },
+                        resendApiKey.value(),
+                    );
+                    functions.logger.info(
+                        `[onTicketMessage] Notification email sent to ${recipientEmail} for ticket ${ticketId}`,
+                    );
+                } catch (err) {
+                    // Email failure is NON-FATAL — the message is already saved in Firestore.
+                    functions.logger.error(
+                        `[onTicketMessage] Failed to send notification email for ticket ${ticketId}:`, err,
+                    );
+                }
             }
 
         } else if (senderType === 'user') {
@@ -349,6 +415,25 @@ export const onTicketMessageCreated = functions.firestore.onDocumentCreated(
                 `in ticket ${ticketId}. No action taken.`,
             );
         }
+
+        // ── Audit log (runs for both admin and user messages) ─────────────────
+        // We only log user-sent messages (admin actions are tracked elsewhere).
+        // senderUid is present only on user messages — skip if missing.
+        if (senderType === 'user' && senderUid) {
+            await sendLogToWorker(
+                'ticket.message',
+                'support',
+                senderUid,
+                {
+                    ticketId,
+                    messageId,
+                    // ticketCategory and ticketSubject from parent ticket for context
+                    ticketCategory: ticketData.category ?? null,
+                    ticketSubject:  ticketData.subject  ?? null,
+                },
+                workerUrl.value(),
+                logSecret.value(),
+            );
+        }
     },
 );
-

@@ -14,6 +14,7 @@ export interface LevelBounds {
     rows: number;
     cols: number;
     edges: LevelEdges;
+    trailCollision?: boolean;
 }
 
 export function getNextTopologyPosition(

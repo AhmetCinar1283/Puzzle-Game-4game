@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
-import type { LevelEdges, CellType, LevelObjectDef, LevelTargetDef, BoxDef, Position, ConveyorCellConfig, LauncherCellConfig, TrampolineCellConfig } from '../../games/types';
+import type { LevelEdges, CellType, LevelObjectDef, LevelTargetDef, BoxDef, Position, ConveyorCellConfig, TrampolineCellConfig } from '../../games/types';
+export type LauncherCellConfig = any;
 
 // ─── Stored Types ─────────────────────────────────────────────────────────────
 

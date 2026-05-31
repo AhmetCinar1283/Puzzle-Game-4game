@@ -80,3 +80,32 @@ export async function moveLevelsInPart(
   }
   await updateDoc(doc(db, 'levelParts', partId), update);
 }
+
+/** Updates coordinates for all levels inside a part, along with optional portal coordinates and map theme. */
+export async function updatePartMapLayout(
+  partId: string,
+  levelCoords: Record<string, { mapX: number; mapY: number }>,
+  portalCoords?: { portalX?: number; portalY?: number; portalStartX?: number; portalStartY?: number },
+  mapTheme?: string,
+): Promise<void> {
+  const update: Record<string, unknown> = { updatedAt: serverTimestamp() };
+
+  for (const [levelId, coords] of Object.entries(levelCoords)) {
+    update[`order.${levelId}.mapX`] = coords.mapX;
+    update[`order.${levelId}.mapY`] = coords.mapY;
+  }
+
+  if (portalCoords) {
+    if (portalCoords.portalX !== undefined) update['portalX'] = portalCoords.portalX;
+    if (portalCoords.portalY !== undefined) update['portalY'] = portalCoords.portalY;
+    if (portalCoords.portalStartX !== undefined) update['portalStartX'] = portalCoords.portalStartX;
+    if (portalCoords.portalStartY !== undefined) update['portalStartY'] = portalCoords.portalStartY;
+  }
+
+  if (mapTheme !== undefined) {
+    update['mapTheme'] = mapTheme;
+  }
+
+  await updateDoc(doc(db, 'levelParts', partId), update);
+}
+

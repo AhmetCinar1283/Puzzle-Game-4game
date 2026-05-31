@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { useUserStorage } from '@/app/src/lib/userStorage';
 import { useSelector } from 'react-redux';
 import { selectUser } from './src/store/userSlice';
-import { useT } from './src/contexts/LanguageContext';
+import { useT, useLanguage } from './src/contexts/LanguageContext';
 
 const NEON_TYPES = [
   { color: '#00ff88', glow: '0 0 6px #00ff88, 0 0 18px rgba(0,255,136,0.3)' },
@@ -81,6 +81,8 @@ function NavButton({ label, sub, color, onClick }: { label: string; sub: string;
 
 export default function Home() {
   const t = useT();
+  const { lang } = useLanguage();
+  const isTr = lang === 'tr';
   const router = useRouter();
   const { getItem: storageGet } = useUserStorage();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -297,6 +299,84 @@ export default function Home() {
             </a>
             .
           </p>
+
+          {/* Footer links */}
+          <footer
+            style={{
+              marginTop: 24,
+              display: 'flex',
+              gap: 16,
+              justifyContent: 'center',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              borderTop: '1px solid rgba(0, 255, 136, 0.1)',
+              paddingTop: 16,
+            }}
+          >
+            <a
+              href="/support"
+              style={{
+                color: '#00ff8888',
+                textDecoration: 'none',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#00ff88')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#00ff8888')}
+            >
+              {isTr ? 'DESTEK' : 'SUPPORT'}
+            </a>
+            <span style={{ color: '#1e3a5f', fontSize: 10 }}>•</span>
+            <a
+              href="/privacy"
+              style={{
+                color: '#00ff8888',
+                textDecoration: 'none',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#00ff88')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#00ff8888')}
+            >
+              {isTr ? 'GİZLİLİK' : 'PRIVACY'}
+            </a>
+            <span style={{ color: '#1e3a5f', fontSize: 10 }}>•</span>
+            <a
+              href="/terms"
+              style={{
+                color: '#00ff8888',
+                textDecoration: 'none',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#00ff88')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#00ff8888')}
+            >
+              {isTr ? 'KOŞULLAR' : 'TERMS'}
+            </a>
+            <span style={{ color: '#1e3a5f', fontSize: 10 }}>•</span>
+            <a
+              href="/kvkk"
+              style={{
+                color: '#00ff8888',
+                textDecoration: 'none',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#00ff88')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#00ff8888')}
+            >
+              {isTr ? 'KVKK BEYANI' : 'KVKK'}
+            </a>
+          </footer>
         </section>
       </main>
     </>

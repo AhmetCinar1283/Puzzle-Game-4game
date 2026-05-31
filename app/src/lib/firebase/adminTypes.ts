@@ -28,6 +28,8 @@ export interface LevelOrderEntry {
   updatedAt: Timestamp | number;
   /** Display order within the part — integer, 0-based. Sort ascending. */
   position: number;
+  mapX?: number;
+  mapY?: number;
 }
 
 export interface LevelPart {
@@ -36,6 +38,11 @@ export interface LevelPart {
   unlockRequirement: number;
   order: Record<string, LevelOrderEntry>;  // was LevelOrderEntry[] — now changed
   updatedAt: number;
+  portalX?: number;
+  portalY?: number;
+  portalStartX?: number;
+  portalStartY?: number;
+  mapTheme?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

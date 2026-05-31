@@ -11,7 +11,7 @@ import type {
   BoxDef,
   Position,
   CellType,
-} from '../../app/src/games/types';
+} from '../../../app/src/games/types';
 
 // ─── Firestore value types ────────────────────────────────────────────────────
 

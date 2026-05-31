@@ -43,7 +43,7 @@ export type PushResponse =
 // EntityBehavior arayüzü burada yaşamaya devam eder;
 // sadece Entity'nin içine gömülmez — registry'de kullanılır.
 export interface EntityBehavior {
-  onPushed?: (self: Entity, pusher: Entity, appliedForce: number) => PushResponse;
+  onPushed?: (self: Entity, pusher: Entity, appliedForce: number, direction?: Direction) => PushResponse;
   onCrushed?: (self: Entity, crusher: Entity) => ActionIntent[] | null;
   onTick?: (self: Entity) => ActionIntent[];
   onLanded?: (self: Entity, entities: Entity[]) => ActionIntent[] | null;

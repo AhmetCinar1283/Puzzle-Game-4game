@@ -62,9 +62,9 @@ electron/
 /.agent
 /.continue
 /android
-/functions
+# /functions
 /electron
 
 /docs/
-/syncron-worker
+# /syncron-worker
 /.firebaserc

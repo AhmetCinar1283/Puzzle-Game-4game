@@ -12,6 +12,7 @@ import { WinResultOverlay } from './components/WinResultOverlay';
 import type { UIButtonType, Direction } from '@/app/src/game2/logic/types';
 import type { Entity } from '@/app/src/game2/logic/entityTypes';
 import type { Cell } from '@/app/src/game2/logic/cellTypes';
+import type { LevelEdges } from '@/app/src/game2/logic/engine/getNextTopologyPosition';
 
 
 // ─── Worker tipi (docs/scoring.md) ──────────────────────────────────────────
@@ -53,7 +54,9 @@ function PlayContent() {
     const [levelName, setLevelName] = useState<string>('');
     const [firestoreId, setFirestoreId] = useState<string | undefined>();
     const [game2State, setGame2State] = useState<{ entities: Entity[]; grid: Cell[][] } | null>(null);
+    const [levelEdges, setLevelEdges] = useState<LevelEdges | undefined>();
     const [nextLevelId, setNextLevelId] = useState<number | null>(null);
+    const [trailCollision, setTrailCollision] = useState<boolean>(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
 
@@ -86,6 +89,7 @@ function PlayContent() {
 
         setLoading(true);
         setGame2State(null);
+        setLevelEdges(undefined);
         setNextLevelId(null);
         setError(false);
         setShowWin(false);
@@ -142,7 +146,9 @@ function PlayContent() {
                 if (cancelled) return;
                 setLevelName(stored.name ?? '');
                 setFirestoreId(stored.firestoreId);
+                setTrailCollision(!!stored.trailCollision);
                 setGame2State(convertToGame2State(stored));
+                setLevelEdges(stored.edges as LevelEdges | undefined);
                 setNextLevelId(nextId);
             } catch (err) {
                 console.error('[Play] Level load error:', err);
@@ -171,9 +177,18 @@ function PlayContent() {
         const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000);
 
         try {
+            // Get Firebase ID Token for authorization
+            const { auth } = await import('@/app/src/lib/firebase/config');
+            const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const res = await fetch(`${WORKER_URL}/complete-level`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     levelId: firestoreId,
                     moves: moveHistoryRef.current,
@@ -262,6 +277,8 @@ function PlayContent() {
                 levelName={levelName}
                 initialEntities={game2State.entities}
                 initialGrid={game2State.grid}
+                levelEdges={levelEdges}
+                trailCollision={trailCollision}
                 onMoveExecuted={handleMoveExecuted}
                 onButtonPressed={handleButtonPressed}
             />

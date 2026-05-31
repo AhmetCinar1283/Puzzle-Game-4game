@@ -1,7 +1,10 @@
 'use client';
+
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/app/src/hooks/useAuth';
+import { subscribeToAllTickets } from '@/app/src/lib/firebase/support';
 
 // Admin paneline özel, biraz daha "sistem" hissiyatı veren renkler
 const NEON_TYPES = [
@@ -31,13 +34,15 @@ function AdminCard({
   sub, 
   icon, 
   color, 
-  onClick 
+  onClick,
+  unreadCount
 }: { 
   label: string; 
   sub: string; 
   icon: string; 
   color: string; 
-  onClick: () => void 
+  onClick: () => void;
+  unreadCount?: number;
 }) {
   return (
     <button
@@ -58,6 +63,7 @@ function AdminCard({
         boxShadow: `0 0 18px ${color}18`,
         transition: 'all 0.2s ease-in-out',
         padding: 16,
+        position: 'relative',
       }}
       onMouseEnter={(e) => {
         const el = e.currentTarget;
@@ -83,13 +89,60 @@ function AdminCard({
           {sub}
         </span>
       </div>
+
+      {/* Dynamic unread bubble indicator */}
+      {unreadCount !== undefined && unreadCount > 0 && (
+        <span
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            background: '#fbbf24',
+            color: '#030712',
+            fontSize: '11px',
+            fontWeight: 900,
+            padding: '3px 8px',
+            borderRadius: '10px',
+            boxShadow: '0 0 10px #fbbf24, 0 0 20px #fbbf24',
+            border: '1.5px solid #030712',
+            zIndex: 10,
+          }}
+        >
+          {unreadCount}
+        </span>
+      )}
     </button>
   );
 }
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { role, loading } = useAuth();
+  
   const [particles, setParticles] = useState<Particle[]>([]);
+  const [unreadTicketsCount, setUnreadTicketsCount] = useState(0);
+
+  // Authentication security check
+  useEffect(() => {
+    if (!loading && role !== 'admin') {
+      router.replace('/');
+    }
+  }, [role, loading, router]);
+
+  // Subscribe to support tickets for dynamic unread counter bubble
+  useEffect(() => {
+    if (loading || role !== 'admin') return;
+
+    try {
+      const unsubscribe = subscribeToAllTickets((tickets) => {
+        const unread = tickets.filter((t) => t.hasUnreadAdmin === true).length;
+        setUnreadTicketsCount(unread);
+      });
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn('[AdminDashboard] Failed to subscribe to support tickets count:', err);
+    }
+  }, [role, loading]);
 
   useEffect(() => {
     const vw = window.innerWidth;
@@ -113,6 +166,14 @@ export default function AdminDashboard() {
     setParticles(list);
   }, []);
 
+  if (loading || role !== 'admin') {
+    return (
+      <main style={{ minHeight: '100dvh', background: '#030712', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ color: '#00ff88', fontSize: 12, letterSpacing: '0.1em' }}>LOADING...</span>
+      </main>
+    );
+  }
+
   const adminModules = [
     {
       path: '/admin/level-parts',
@@ -127,6 +188,14 @@ export default function AdminDashboard() {
       sub: 'Review user submitted levels',
       icon: '⧖', // Hourglass/Pending unicode
       color: '#ffd700' // Gold
+    },
+    {
+      path: '/admin/support',
+      label: 'Support',
+      sub: 'Manage support tickets',
+      icon: '✉', // Mail/Message unicode
+      color: '#fbbf24', // Amber/Orange
+      unreadCount: unreadTicketsCount
     },
     {
       path: '/admin/reports',
@@ -254,6 +323,7 @@ export default function AdminDashboard() {
               icon={mod.icon}
               color={mod.color}
               onClick={() => router.push(mod.path)}
+              unreadCount={mod.unreadCount}
             />
           ))}
         </div>

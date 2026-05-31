@@ -8,7 +8,7 @@ import { Entity } from '../logic/entityTypes';
 import { Cell } from '../logic/cellTypes';
 import { ActionIntent, Direction, UIEvent, UIButtonType } from '../logic/types';
 import { LevelEdges } from '../logic/engine/getNextTopologyPosition';
-import { useSoundManager } from '@/app/src/games/hooks/useSoundManager';
+import { useSoundManager } from '../hooks/useSoundManager';
 import { useT } from '@/app/src/contexts/LanguageContext';
 
 // Native hücre boyutu — GameBoard ve PhysicsWrapper bunu sabit 64px kullanır.
@@ -52,6 +52,7 @@ interface PlayScreenProps {
     initialEntities: Entity[];
     initialGrid: Cell[][];
     levelEdges?: LevelEdges;
+    trailCollision?: boolean;
     onMoveExecuted?: (direction: Direction) => void;
     onButtonPressed?: (buttonType: UIButtonType) => void;
 }
@@ -61,6 +62,7 @@ export function PlayScreen({
     initialEntities,
     initialGrid,
     levelEdges,
+    trailCollision,
     onMoveExecuted,
     onButtonPressed,
 }: PlayScreenProps) {
@@ -78,7 +80,7 @@ export function PlayScreen({
         onAnimationEnd,
         clearUiEvents,
         getEntities,
-    } = useGameEngine({ initialEntities, initialGrid, levelEdges });
+    } = useGameEngine({ initialEntities, initialGrid, levelEdges, trailCollision });
 
     const isAnimatingRef = useRef(isAnimating);
     const isGameOverRef  = useRef(isGameOver);
@@ -128,7 +130,7 @@ export function PlayScreen({
     // ── Klavye kontrolü ────────────────────────────────────────────────────
     const triggerMove = useCallback((rawDirection: Direction) => {
         const intents: ActionIntent[] = getEntities()
-            .filter(ent => ent.type === 'player')
+            .filter(ent => ent.type === 'player' && !ent.customData.isLocked)
             .map(ent => {
                 const mode = (ent.customData.mode as string) ?? 'normal';
                 const direction = mode === 'reversed'
@@ -411,6 +413,57 @@ export function PlayScreen({
                 </div>
             </div>
 
+            {/* ── Seviye Özellikleri Göstergesi (Rules Panel) ──────────────── */}
+            <div
+                style={{
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 16,
+                    padding: '6px 16px',
+                    background: 'rgba(3, 7, 18, 0.6)',
+                    borderBottom: '1px solid rgba(0, 255, 136, 0.08)',
+                    backdropFilter: 'blur(10px)',
+                }}
+            >
+                {/* Trail Collision Badge */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trail Collision:</span>
+                    <span style={{
+                        fontSize: 9,
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        backgroundColor: trailCollision ? 'rgba(0, 255, 136, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        color: trailCollision ? '#00ff88' : '#ef4444',
+                        border: `1px solid ${trailCollision ? 'rgba(0, 255, 136, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                        boxShadow: trailCollision ? '0 0 6px rgba(0, 255, 136, 0.2)' : 'none',
+                    }}>
+                        {trailCollision ? 'ON' : 'OFF'}
+                    </span>
+                </div>
+
+                {/* Target Locking Badge */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Target Locking:</span>
+                    <span style={{
+                        fontSize: 9,
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        backgroundColor: initialEntities.some(ent => ent.type === 'player' && ent.customData.lockOnTarget) ? 'rgba(0, 196, 255, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        color: initialEntities.some(ent => ent.type === 'player' && ent.customData.lockOnTarget) ? '#00c4ff' : '#ef4444',
+                        border: `1px solid ${initialEntities.some(ent => ent.type === 'player' && ent.customData.lockOnTarget) ? 'rgba(0, 196, 255, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                        boxShadow: initialEntities.some(ent => ent.type === 'player' && ent.customData.lockOnTarget) ? '0 0 6px rgba(0, 196, 255, 0.2)' : 'none',
+                    }}>
+                        {initialEntities.some(ent => ent.type === 'player' && ent.customData.lockOnTarget) ? 'ENABLED' : 'DISABLED'}
+                    </span>
+                </div>
+            </div>
+
             {/* ── Board alanı — kalan tüm yükseklik, swipe alıcısı ───────────── */}
             <div
                 ref={boardAreaRef}
@@ -444,6 +497,7 @@ export function PlayScreen({
                 >
                     <GameBoard
                         snapshots={snapshots.length > 0 ? snapshots : null}
+                        levelEdges={levelEdges}
                         onAnimationEnd={handleAnimationEnd}
                     />
 

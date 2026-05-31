@@ -61,6 +61,9 @@ export interface EditorContextValue {
   submitDialogOpen: boolean; setSubmitDialogOpen: (v: boolean) => void;
   submitNote: string; setSubmitNote: (v: string) => void;
   submitStatus: string; submitError: string;
+  generatorDialogOpen: boolean; setGeneratorDialogOpen: (v: boolean) => void;
+  optimalSolution: string[] | null;
+  optimalSolutionMoves: number;
   // Admin / Firestore
   parts: LevelPart[]; selectedPartId: string; setSelectedPartId: (v: string) => void;
   firestoreLevels: FirestoreLevel[];
@@ -85,6 +88,7 @@ export interface EditorContextValue {
   handleLoadLevel: (stored: StoredLevel & { id: number }) => void;
   handleNewLevel: () => void;
   handleTest: () => void;
+  doGenerateLevel: (filters: import('./components/EditorDialogs').GeneratorFiltersUI) => void;
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null);

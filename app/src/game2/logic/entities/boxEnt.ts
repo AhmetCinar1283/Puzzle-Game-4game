@@ -1,7 +1,7 @@
 // entities/boxEnt.ts
 
 import { EntityBehavior } from '../entityTypes';
-import { DIRECTION_DELTA } from '../types';
+import { DIRECTION_DELTA, Direction } from '../types';
 
 export const boxBehavior: EntityBehavior = {
 
@@ -36,15 +36,23 @@ export const boxBehavior: EntityBehavior = {
         return intents;
     },
 
-    onPushed: (self, pusher, appliedForce) => {
+    onPushed: (self, pusher, appliedForce, direction?: Direction) => {
         if (self.traits.has('heavy'))                           return { status: 'reject' };
         if (appliedForce <= 0)                                  return { status: 'reject' };
         if (self.customData.requiresPower && !self.customData.isPowered) return { status: 'reject' };
 
         // İtme yönü pozisyon farkından hesaplanır — pusher'ın physics.direction'ına
         // güvenilmez çünkü zincir iterken pusher başka yöne bakıyor olabilir.
-        const dr = self.position.row - pusher.position.row;
-        const dc = self.position.col - pusher.position.col;
+        let dr = 0;
+        let dc = 0;
+        if (direction) {
+            const delta = DIRECTION_DELTA[direction];
+            dr = delta.row;
+            dc = delta.col;
+        } else {
+            dr = self.position.row - pusher.position.row;
+            dc = self.position.col - pusher.position.col;
+        }
         return {
             status: 'accept',
             resultingIntent: {
