@@ -177,13 +177,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 3. Google linking
   const linkWithGoogle = useCallback(async () => {
     if (!user) throw new Error('No active session.');
-    const provider = new GoogleAuthProvider();
+    let credential: ReturnType<typeof GoogleAuthProvider.credential> | null = null;
 
     try {
       if (isNativePlatform()) {
-        // Capacitor: redirect flow — page reloads, getRedirectResult picks up result
-        await linkWithRedirect(user, provider);
+        const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+        try {
+          await GoogleAuth.initialize({
+            clientId: process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID || '1041986277726-9otkut2eqcl61rs3rokmgcqn184g42pu.apps.googleusercontent.com',
+            scopes: ['profile', 'email'],
+            grantOfflineAccess: true,
+          });
+        } catch { /* ignore if already initialized */ }
+
+        const googleUser = await GoogleAuth.signIn();
+        const idToken = googleUser.authentication.idToken;
+        if (!idToken) throw new Error('Google Sign-in failed: No ID Token returned.');
+
+        credential = GoogleAuthProvider.credential(idToken);
       } else {
+        const provider = new GoogleAuthProvider();
         await linkWithPopup(user, provider);
         // Force immediate state update (onAuthStateChanged may delay for same-UID link)
         const current = auth.currentUser!;
@@ -197,7 +210,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             authProvider: resolveAuthProvider(current),
           }),
         );
+        return;
       }
+
+      // If we got here on native platform, we have a native credential. Link it!
+      await linkWithCredential(user, credential);
+
+      const current = auth.currentUser!;
+      setUser(current);
+      dispatch(
+        setAuthUser({
+          uid: current.uid,
+          email: current.email,
+          displayName: current.displayName,
+          isAnonymous: false,
+          authProvider: resolveAuthProvider(current),
+        }),
+      );
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
       if (
@@ -205,11 +234,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         code === 'auth/email-already-in-use'
       ) {
         // Google account already registered — sign in to that account instead
-        const credential = GoogleAuthProvider.credentialFromError(
+        const finalCredential = credential || GoogleAuthProvider.credentialFromError(
           err as Parameters<typeof GoogleAuthProvider.credentialFromError>[0],
         );
-        if (credential) {
-          await signInWithCredential(auth, credential);
+        if (finalCredential) {
+          await signInWithCredential(auth, finalCredential);
           // onAuthStateChanged fires here (UID changes)
         }
       } else {

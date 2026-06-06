@@ -99,6 +99,7 @@ export interface LevelData {
   /** Firestore document ID — set for preset levels, undefined for user-created levels. */
   firestoreId?: string;
   name: string;
+  lockedCells?: Record<string, boolean>;
   width: number;
   height: number;
   edges: LevelEdges;

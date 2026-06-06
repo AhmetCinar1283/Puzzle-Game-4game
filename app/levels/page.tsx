@@ -11,6 +11,7 @@ import { useAppSelector } from '@/app/src/store/hooks';
 import { selectUser } from '@/app/src/store/userSlice';
 import type { LevelPart } from '@/app/src/lib/firebase/adminTypes';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useGamepad } from '@/app/src/hooks/useGamepad';
 
 type LevelEntry = StoredLevel & { id: number };
 
@@ -353,6 +354,150 @@ function LevelsPageContent() {
       behavior: 'smooth',
     });
   }, [selectedPartId, partsMap, filteredPresets, lockedSet, playedMap]);
+
+  const [gamepadSelectedNodeIndex, setGamepadSelectedNodeIndex] = useState<number | null>(null);
+
+  const defaultActiveIdx = useMemo(() => {
+    const idx = filteredPresets.findIndex((lv) => {
+      const isCompleted = lv.firestoreId ? playedMap.has(lv.firestoreId) : false;
+      const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
+      return !isLocked && !isCompleted;
+    });
+    return idx !== -1 ? idx : 0;
+  }, [filteredPresets, playedMap, lockedSet]);
+
+  useEffect(() => {
+    setGamepadSelectedNodeIndex(activeTab === 'campaign' ? defaultActiveIdx : 0);
+  }, [activeTab, viewMode, defaultActiveIdx]);
+
+  const centerNodeAtIndex = useCallback((idx: number) => {
+    if (!mapRef.current || !selectedPartId) return;
+    const activePart = partsMap.get(selectedPartId);
+    if (!activePart) return;
+
+    const lv = filteredPresets[idx];
+    if (!lv) return;
+
+    const entry = lv.firestoreId ? activePart.order[lv.firestoreId] : undefined;
+    let x = entry?.mapX;
+    let y = entry?.mapY;
+
+    if (x === undefined || y === undefined) {
+      const count = filteredPresets.length;
+      const ratio = count > 1 ? idx / (count - 1) : 0.5;
+      y = Math.round(85 - ratio * 70);
+      x = Math.round(50 + Math.sin(ratio * Math.PI * 3.5) * 35);
+    }
+
+    const container = mapRef.current;
+    const scrollWidth = container.scrollWidth;
+    const scrollHeight = container.scrollHeight;
+    const clientWidth = container.clientWidth;
+    const clientHeight = container.clientHeight;
+
+    const pixelX = (x / 100) * scrollWidth;
+    const pixelY = (y / 100) * scrollHeight;
+
+    container.scrollTo({
+      left: pixelX - clientWidth / 2,
+      top: pixelY - clientHeight / 2,
+      behavior: 'smooth',
+    });
+  }, [selectedPartId, partsMap, filteredPresets]);
+
+  useEffect(() => {
+    if (activeTab === 'campaign' && viewMode === 'map' && gamepadSelectedNodeIndex !== null) {
+      centerNodeAtIndex(gamepadSelectedNodeIndex);
+    }
+  }, [gamepadSelectedNodeIndex, activeTab, viewMode, centerNodeAtIndex]);
+
+  useGamepad({
+    onMove: (dir) => {
+      if (activeTab === 'campaign' && viewMode === 'map') {
+        if (dir === 'left') {
+          setGamepadSelectedNodeIndex((prev) => {
+            const current = prev !== null ? prev : defaultActiveIdx;
+            return (current - 1 + filteredPresets.length) % filteredPresets.length;
+          });
+        } else if (dir === 'right') {
+          setGamepadSelectedNodeIndex((prev) => {
+            const current = prev !== null ? prev : defaultActiveIdx;
+            return (current + 1) % filteredPresets.length;
+          });
+        } else if (dir === 'up') {
+          const currentIdx = parts.findIndex((p) => p.id === selectedPartId);
+          if (currentIdx > 0) {
+            setIsWarping(true);
+            setTimeout(() => {
+              setSelectedPartId(parts[currentIdx - 1].id);
+              setIsWarping(false);
+            }, 1100);
+          }
+        } else if (dir === 'down') {
+          const currentIdx = parts.findIndex((p) => p.id === selectedPartId);
+          if (currentIdx !== -1 && currentIdx < parts.length - 1) {
+            setIsWarping(true);
+            setTimeout(() => {
+              setSelectedPartId(parts[currentIdx + 1].id);
+              setIsWarping(false);
+            }, 1100);
+          }
+        }
+      } else {
+        const listLength = activeTab === 'campaign' ? filteredPresets.length : userLevels.length;
+        if (listLength === 0) return;
+
+        if (dir === 'up') {
+          setGamepadSelectedNodeIndex((prev) => {
+            const current = prev !== null ? prev : 0;
+            return (current - 1 + listLength) % listLength;
+          });
+        } else if (dir === 'down') {
+          setGamepadSelectedNodeIndex((prev) => {
+            const current = prev !== null ? prev : 0;
+            return (current + 1) % listLength;
+          });
+        } else if (dir === 'left' || dir === 'right') {
+          setActiveTab((prev) => (prev === 'campaign' ? 'custom' : 'campaign'));
+        }
+      }
+    },
+    onConfirm: () => {
+      if (activeTab === 'campaign' && viewMode === 'map') {
+        const idx = gamepadSelectedNodeIndex !== null ? gamepadSelectedNodeIndex : defaultActiveIdx;
+        const lv = filteredPresets[idx];
+        if (lv) {
+          const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
+          if (!isLocked) {
+            router.push(`/play?id=${lv.id}&source=preset`);
+          }
+        }
+      } else if (activeTab === 'campaign' && viewMode === 'list') {
+        const idx = gamepadSelectedNodeIndex !== null ? gamepadSelectedNodeIndex : 0;
+        const lv = filteredPresets[idx];
+        if (lv) {
+          const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
+          if (!isLocked) {
+            router.push(`/play?id=${lv.id}&source=preset`);
+          }
+        }
+      } else if (activeTab === 'custom') {
+        const idx = gamepadSelectedNodeIndex !== null ? gamepadSelectedNodeIndex : 0;
+        const lv = userLevels[idx];
+        if (lv) {
+          router.push(`/play?id=${lv.id}`);
+        }
+      }
+    },
+    onMenu: () => {
+      router.push('/');
+    },
+    onRestart: () => {
+      if (activeTab === 'campaign') {
+        setViewMode((prev) => (prev === 'map' ? 'list' : 'map'));
+      }
+    }
+  });
 
   useEffect(() => {
     if (!loading && activeTab === 'campaign' && viewMode === 'map' && filteredPresets.length > 0) {
@@ -882,7 +1027,7 @@ function LevelsPageContent() {
                   x = Math.round(50 + Math.sin(ratio * Math.PI * 3.5) * 35);
                 }
 
-                return (
+                 return (
                   <div
                     key={lv.id}
                     className={`map-node-btn ${isCurrent ? 'active-floating-node' : ''}`}
@@ -890,6 +1035,7 @@ function LevelsPageContent() {
                       if (isLocked) return;
                       router.push(`/play?id=${lv.id}&source=preset`);
                     }}
+                    onMouseEnter={() => setGamepadSelectedNodeIndex(idx)}
                     style={{
                       position: 'absolute',
                       left: `${x}%`,
@@ -913,6 +1059,22 @@ function LevelsPageContent() {
                           border: `2px solid ${activeColor}`,
                           animation: 'pulseRing 1.5s cubic-bezier(0.215, 0.610, 0.355, 1) infinite',
                           pointerEvents: 'none'
+                        }}
+                      />
+                    )}
+
+                    {gamepadSelectedNodeIndex === idx && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          width: 44,
+                          height: 44,
+                          borderRadius: '50%',
+                          border: `2.5px solid #ffd700`,
+                          boxShadow: '0 0 15px #ffd700',
+                          animation: 'pulseRing 1.2s ease-in-out infinite',
+                          pointerEvents: 'none',
+                          zIndex: 6
                         }}
                       />
                     )}
@@ -1027,6 +1189,7 @@ function LevelsPageContent() {
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: 10 }}
                           transition={{ delay: Math.min(idx * 0.03, 0.35) }}
+                          onMouseEnter={() => setGamepadSelectedNodeIndex(idx)}
                         >
                           <LevelRow
                             level={lv} index={idx} total={filteredPresets.length}
@@ -1040,6 +1203,7 @@ function LevelsPageContent() {
                             onEdit={() => lv.firestoreId ? router.push(`/editor?firestoreId=${lv.firestoreId}`) : undefined}
                             onDelete={() => handleDeletePreset(lv)}
                             onMoveUp={() => { }} onMoveDown={() => { }}
+                            gamepadSelected={gamepadSelectedNodeIndex === idx}
                           />
                         </motion.div>
                       );
@@ -1082,6 +1246,7 @@ function LevelsPageContent() {
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 10 }}
                             transition={{ delay: Math.min(idx * 0.03, 0.35) }}
+                            onMouseEnter={() => setGamepadSelectedNodeIndex(idx)}
                           >
                             <LevelRow
                               level={lv} index={idx} total={userLevels.length}
@@ -1090,6 +1255,7 @@ function LevelsPageContent() {
                               onEdit={() => router.push(`/editor?id=${lv.id}`)}
                               onDelete={() => handleDelete(lv.id)}
                               onMoveUp={() => move(idx, -1)} onMoveDown={() => move(idx, 1)}
+                              gamepadSelected={gamepadSelectedNodeIndex === idx}
                             />
                           </motion.div>
                         ))}

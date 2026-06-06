@@ -200,6 +200,7 @@ export function processSingleTick(
                         if (other.position.col !== entity.position.col) continue;
                         other.customData._destroyed = true;
                         if (other.type === 'player') {
+                            other.customData.deathReason = 'crushed';
                             collectedUi.push(
                                 { kind: 'text',   textType: 'error', message: 'Oyun bitti! Ezildiniz.' },
                                 { kind: 'button', buttonType: 'restart', label: 'Yeniden Başla' },
@@ -262,6 +263,7 @@ export function processSingleTick(
                     const currentPlayerIndex = (entity.customData.playerIndex as number) ?? 0;
                     if (trailPlayerIndex !== currentPlayerIndex) {
                         entity.customData._destroyed = true;
+                        entity.customData.deathReason = 'trail';
                         collectedUi.push(
                             { kind: 'text', textType: 'error', message: 'Oyun bitti! Diğer oyuncunun izine bastınız.' },
                             { kind: 'button', buttonType: 'restart', label: 'Yeniden Başla' },
@@ -403,7 +405,8 @@ function resolveDependencyChains(
                             // Lav — entity yok edilir
                             if (me.type === 'player') {
                                 approved.push(
-                                    { entityId: me.id, type: 'destroy', uiEvent: { kind: 'text', textType: 'error', message: 'Oyun bitti!' } },
+                                    { entityId: me.id, type: 'mutate_entity', customDataPatch: { deathReason: 'lava_edge' } },
+                                    { entityId: me.id, type: 'destroy', uiEvent: { kind: 'text', textType: 'error', message: 'Oyun bitti! Lava düştünüz.' } },
                                     { entityId: me.id, type: 'mutate_entity', uiEvent: { kind: 'button', buttonType: 'restart', label: 'Yeniden Başla' } },
                                 );
                             } else {
@@ -525,10 +528,79 @@ function resolveDependencyChains(
     const approvedMoveIds = new Set(
         approved.filter(a => a.type === 'move').map(a => a.entityId)
     );
+
+    const mutualFilteredIds = new Set(
+        unfilteredIntents
+            .filter(ui => ui.type === 'move' && !intents.some(i => i.entityId === ui.entityId))
+            .map(ui => ui.entityId)
+    );
+
     for (const intent of unfilteredIntents) {
         if (intent.type !== 'move') continue;
         if (approvedMoveIds.has(intent.entityId)) continue;
-        approved.push({ entityId: intent.entityId, type: 'mutate_entity', newForce: 0 });
+
+        const me = entities.find(e => e.id === intent.entityId);
+        if (!me) continue;
+
+        let bumpReason = 'wall';
+        const dir = intent.newDirection ?? me.physics.direction ?? 'up';
+
+        if (mutualFilteredIds.has(me.id)) {
+            bumpReason = 'collision';
+        } else {
+            // Konveyör ters akış engeli mi?
+            const currentCell = grid[me.position.row]?.[me.position.col];
+            let conveyorBlock = false;
+            if (currentCell && currentCell.type === 'conveyor' && me.physics.z === 0 && intent.targetPos) {
+                const convDir = currentCell.customData.direction as Direction;
+                if (convDir) {
+                    const moveDir = inferMoveDirection(me.position, intent.targetPos, levelBounds);
+                    const opposite: Record<Direction, Direction> = {
+                        up: 'down', down: 'up', left: 'right', right: 'left'
+                    };
+                    if (moveDir === opposite[convDir]) {
+                        conveyorBlock = true;
+                    }
+                }
+            }
+
+            if (conveyorBlock) {
+                bumpReason = 'conveyor';
+            } else if (intent.targetPos) {
+                const targetCell = grid[intent.targetPos.row]?.[intent.targetPos.col];
+                if (!targetCell) {
+                    bumpReason = 'wall';
+                } else if (!targetCell.def.isWalkable) {
+                    bumpReason = 'wall';
+                } else {
+                    const blocker = entities.find(e =>
+                        e.id !== me.id &&
+                        e.position.row === intent.targetPos!.row &&
+                        e.position.col === intent.targetPos!.col &&
+                        e.def.isSolid &&
+                        getDestinationZ(e.id, e.physics.z, unfilteredIntents) === 0
+                    );
+                    if (blocker) {
+                        if (blocker.type === 'box') {
+                            bumpReason = 'blocked_push';
+                        } else {
+                            bumpReason = 'wall';
+                        }
+                    }
+                }
+            }
+        }
+
+        approved.push({
+            entityId: intent.entityId,
+            type: 'mutate_entity',
+            newForce: 0,
+            customDataPatch: {
+                bumpDirection: dir,
+                bumpReason: bumpReason,
+            },
+            vfxTriggers: ['sound_boing'],
+        });
     }
 
     return approved;

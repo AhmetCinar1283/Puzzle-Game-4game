@@ -3,6 +3,7 @@
 import type { StoredLevel } from '@/app/src/lib/db';
 import type { FirestoreLevel } from '@/app/src/lib/firebase/admin';
 import { useT } from '@/app/src/contexts/LanguageContext';
+import { useEditorContext } from '../EditorContext';
 
 interface EditorLeftPanelProps {
   editId: number | null;
@@ -27,6 +28,8 @@ export default function EditorLeftPanel({
   onLoadLevel, onNewLevel, onLoadFirestoreLevel, isMobile, visible,
 }: EditorLeftPanelProps) {
   const t = useT();
+  const { generatedCandidates, activeCandidateIndex, doGenerateLevel } = useEditorContext();
+
   return (
     <div style={{
       width: isMobile ? '100%' : 170, flexShrink: 0,
@@ -34,6 +37,40 @@ export default function EditorLeftPanel({
       display: isMobile ? (visible ? 'flex' : 'none') : 'flex',
       flexDirection: 'column', overflow: 'hidden',
     }}>
+      {generatedCandidates.length > 0 && (
+        <div style={{ flexShrink: 0, borderBottom: '1px solid rgba(30,58,95,0.4)', paddingBottom: 6 }}>
+          <div style={{ padding: '10px 12px 6px' }}>
+            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#00c4ff', textShadow: '0 0 6px rgba(0,196,255,0.3)' }}>
+              Alternatif Seviyeler
+            </span>
+          </div>
+          <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {generatedCandidates.map((cand, idx) => {
+              const active = activeCandidateIndex === idx;
+              return (
+                <button
+                  key={idx}
+                  onClick={() => doGenerateLevel(cand.level, cand.solution, cand.moveCount, undefined, idx)}
+                  style={{
+                    width: '100%', padding: '6px 8px', textAlign: 'left',
+                    background: active ? 'rgba(0,196,255,0.1)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${active ? '#00c4ff' : 'rgba(255,255,255,0.06)'}`,
+                    color: active ? '#00c4ff' : '#64748b',
+                    borderRadius: 6, cursor: 'pointer', fontSize: 11,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <span style={{ fontWeight: 'bold' }}>Seçenek {idx + 1}</span>
+                  <span style={{ fontSize: 9, color: active ? '#00ff88' : '#1e3a5f', display: 'block', marginTop: 1 }}>
+                    Hamle: {cand.moveCount}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ flexShrink: 0, padding: '10px 12px 6px', borderBottom: '1px solid rgba(30,58,95,0.3)' }}>
         <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#1e3a5f' }}>{t('editor.saved_levels')}</span>
       </div>

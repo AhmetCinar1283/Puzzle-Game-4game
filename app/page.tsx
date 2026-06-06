@@ -1,11 +1,12 @@
 'use client';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useUserStorage } from '@/app/src/lib/userStorage';
 import { useSelector } from 'react-redux';
 import { selectUser } from './src/store/userSlice';
 import { useT, useLanguage } from './src/contexts/LanguageContext';
+import { useGamepad } from './src/hooks/useGamepad';
 
 const NEON_TYPES = [
   { color: '#00ff88', glow: '0 0 6px #00ff88, 0 0 18px rgba(0,255,136,0.3)' },
@@ -39,7 +40,11 @@ function useNavLower(t: ReturnType<typeof useT>) {
   ];
 }
 
-function NavButton({ label, sub, color, onClick }: { label: string; sub: string; color: string; onClick: () => void }) {
+function NavButton({
+  label, sub, color, onClick, isSelected, onMouseEnter
+}: {
+  label: string; sub: string; color: string; onClick: () => void; isSelected?: boolean; onMouseEnter?: () => void
+}) {
   return (
     <button
       onClick={onClick}
@@ -50,12 +55,12 @@ function NavButton({ label, sub, color, onClick }: { label: string; sub: string;
         fontWeight: 700,
         letterSpacing: '0.1em',
         textTransform: 'uppercase',
-        background: `${color}0d`,
-        border: `1px solid ${color}50`,
+        background: isSelected ? `${color}18` : `${color}0d`,
+        border: isSelected ? `1px solid ${color}` : `1px solid ${color}50`,
         color,
         borderRadius: 10,
         cursor: 'pointer',
-        boxShadow: `0 0 18px ${color}18`,
+        boxShadow: isSelected ? `0 0 26px ${color}2e` : `0 0 18px ${color}18`,
         transition: 'all 0.2s',
         display: 'flex',
         flexDirection: 'column',
@@ -63,14 +68,19 @@ function NavButton({ label, sub, color, onClick }: { label: string; sub: string;
         gap: 4,
       }}
       onMouseEnter={(e) => {
+        onMouseEnter?.();
         const el = e.currentTarget;
         el.style.background = `${color}18`;
         el.style.boxShadow = `0 0 26px ${color}2e`;
+        el.style.border = `1px solid ${color}`;
       }}
       onMouseLeave={(e) => {
-        const el = e.currentTarget;
-        el.style.background = `${color}0d`;
-        el.style.boxShadow = `0 0 18px ${color}18`;
+        if (!isSelected) {
+          const el = e.currentTarget;
+          el.style.background = `${color}0d`;
+          el.style.boxShadow = `0 0 18px ${color}18`;
+          el.style.border = `1px solid ${color}50`;
+        }
       }}
     >
       <span>{label}</span>
@@ -136,7 +146,10 @@ export default function Home() {
     // };
   }, []);
 
-  function handlePlayClick() {
+  const [activeMenuIndex, setActiveMenuIndex] = useState(0);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handlePlayClick = useCallback(() => {
     const id = storageGet('lastPlayedLevelId');
     const src = storageGet('lastPlayedSource');
     if (id) {
@@ -144,7 +157,33 @@ export default function Home() {
       return;
     }
     router.push('/levels');
-  }
+  }, [router, storageGet]);
+
+  const options = useMemo(() => {
+    const opts = [
+      { id: 'play', label: t('home.play'), sub: t('home.play_sub'), color: '#00ff88', onClick: handlePlayClick },
+      { id: 'levels', label: t('home.levels'), sub: t('home.levels_sub'), color: '#ffd700', onClick: () => router.push('/levels') },
+      { id: 'editor', label: t('home.editor'), sub: t('home.editor_sub'), color: '#00c4ff', onClick: () => router.push('/editor') },
+      { id: 'controls', label: t('home.controls'), sub: t('home.controls_sub'), color: '#fbbf24', onClick: () => router.push('/controls') },
+    ];
+    if (user?.role === 'admin') {
+      opts.push({ id: 'admin', label: t('home.admin'), sub: t('home.admin_sub'), color: '#00ff88', onClick: () => router.push('/admin') });
+    }
+    return opts;
+  }, [t, user?.role, router, handlePlayClick]);
+
+  useGamepad({
+    onMove: (dir) => {
+      if (dir === 'up') {
+        setActiveMenuIndex((prev) => (prev - 1 + options.length) % options.length);
+      } else if (dir === 'down') {
+        setActiveMenuIndex((prev) => (prev + 1) % options.length);
+      }
+    },
+    onConfirm: () => {
+      options[activeMenuIndex]?.onClick();
+    },
+  });
 
   return (
     <>
@@ -223,27 +262,17 @@ export default function Home() {
 
         {/* Nav buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', width: '100%', maxWidth: 260 }}>
-          <NavButton
-            label={t('home.play')}
-            sub={t('home.play_sub')}
-            color="#00ff88"
-            onClick={handlePlayClick}
-          />
-          {NAV_LOWER.map(({ href, label, color, sub }) => (
+          {options.map((opt, idx) => (
             <NavButton
-              key={href}
-              label={label}
-              sub={sub}
-              color={color}
-              onClick={() => router.push(href)}
+              key={opt.id}
+              label={opt.label}
+              sub={opt.sub}
+              color={opt.color}
+              onClick={opt.onClick}
+              isSelected={activeMenuIndex === idx}
+              onMouseEnter={() => setActiveMenuIndex(idx)}
             />
           ))}
-          {user.role == 'admin' && (<NavButton
-            label={t('home.admin')}
-            sub={t('home.admin_sub')}
-            color="#00ff88"
-            onClick={() => { router.push('/admin') }}
-          />)}
         </div>
 
         {/* How To Play — semantic content for SEO */}

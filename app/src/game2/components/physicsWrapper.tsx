@@ -8,6 +8,7 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Entity } from '../logic/entityTypes';
 import { CellTypes } from '../logic/cellTypes';
+import { Direction } from '../logic/types';
 
 const CELL_SIZE = 64;
 
@@ -71,6 +72,42 @@ export const PhysicsWrapper = ({ entity, prevEntity, currentCellType, frameMs, c
     // Parçacıkların kayma yönünün tersine akması için yön CSS sınıfı
     const particleClass = isSliding ? `ice-trail-${direction}` : '';
 
+    // Özel animasyonların (çarpışma, engellenme, ölüm, zafer) tespiti
+    const bumpDirection = entity.customData.bumpDirection as Direction | undefined;
+    const bumpReason = entity.customData.bumpReason as string | undefined;
+    const deathReason = entity.customData.deathReason as string | undefined;
+    const isVictory = entity.customData.isVictory as boolean | undefined;
+
+    let customAnimation = undefined;
+    if (deathReason) {
+        if (deathReason === 'forbidden') {
+            customAnimation = 'death-forbidden 800ms ease-in-out forwards';
+        } else if (deathReason === 'crushed') {
+            customAnimation = 'death-crushed 800ms cubic-bezier(0.25, 1, 0.2, 1) forwards';
+        } else if (deathReason === 'lava_edge') {
+            customAnimation = 'death-lava 800ms ease-in forwards';
+        } else if (deathReason === 'trail') {
+            customAnimation = 'death-trail 800ms ease-in-out forwards';
+        }
+    } else if (isVictory) {
+        customAnimation = 'victory-spin 800ms ease-in-out infinite';
+    } else if (bumpDirection) {
+        const duration = `${frameMs}ms`;
+        if (bumpReason === 'collision') {
+            customAnimation = `collision-shake ${duration} ease-in-out`;
+        } else if (bumpReason === 'blocked_push') {
+            customAnimation = `blocked-push-${bumpDirection} ${duration} cubic-bezier(0.25, 1, 0.5, 1)`;
+        } else if (bumpReason === 'conveyor') {
+            customAnimation = `conveyor-reject-${bumpDirection} ${duration} ease-in-out`;
+        } else {
+            customAnimation = `bump-${bumpDirection} ${duration} cubic-bezier(0.25, 1.1, 0.5, 1.1)`;
+        }
+    } else if (isTeleporting) {
+        customAnimation = `teleportInEffect ${frameMs}ms ease-out forwards`;
+    } else if (isLanded) {
+        customAnimation = 'landingSquashEffect 220ms ease-in-out';
+    }
+
     return (
         <div
             style={{
@@ -90,11 +127,7 @@ export const PhysicsWrapper = ({ entity, prevEntity, currentCellType, frameMs, c
                     height: '100%',
                     transform: `scale(${baseScale * stretchX}, ${baseScale * stretchY}) ${skew}`,
                     filter: isSliding ? 'brightness(1.15) contrast(1.05)' : undefined,
-                    animation: isTeleporting
-                        ? `teleportInEffect ${frameMs}ms ease-out forwards`
-                        : isLanded
-                        ? 'landingSquashEffect 220ms ease-in-out'
-                        : undefined,
+                    animation: customAnimation,
                 }}
             >
                 {/* Dinamik Animasyon Keyframes ve Buz Parçacık Trail Stilleri */}

@@ -29,7 +29,6 @@ function EditorInner() {
   const [isMobile, setIsMobile] = useState(false);
   const [activeTab, setActiveTab] = useState<'levels' | 'grid' | 'settings'>('grid');
   const [cellSize, setCellSize] = useState(44);
-  const [selection, setSelection] = useState<SelectionRect | null>(null);
 
   useEffect(() => {
     function check() { setIsMobile(window.innerWidth < 900); }
@@ -81,7 +80,6 @@ function EditorInner() {
   const ctxValue: EditorContextValue = {
     ...s,
     cellSize,
-    selection, setSelection,
     ...gridOps,
   };
 

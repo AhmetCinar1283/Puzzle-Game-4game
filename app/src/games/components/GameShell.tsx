@@ -11,6 +11,8 @@ import WinOverlay from './WinOverlay';
 import LostOverlay from './LostOverlay';
 import { trackLevelStart, trackLevelComplete, trackLevelFail } from '../../lib/analytics';
 import { useAuthContext } from '../../contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useGamepad } from '@/app/src/hooks/useGamepad';
 
 interface GameShellProps {
   level: LevelData;
@@ -39,7 +41,38 @@ export default function GameShell({ level, onNextLevel, source }: GameShellProps
   const userRef = useRef(user);
   useEffect(() => { userRef.current = user; }, [user]);
 
+  const router = useRouter();
+
   const [workerResult, setWorkerResult] = useState<WorkerResult | null>(null);
+
+  // Gamepad controller support
+  useGamepad({
+    onMove: (dir) => {
+      if (state.phase === 'won' || state.phase === 'lost') return;
+      move(dir);
+    },
+    onRestart: () => {
+      restart();
+    },
+    onMenu: () => {
+      router.push('/levels');
+    },
+  });
+
+  // Keyboard shortcuts (R for restart, Escape for menu)
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        restart();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        router.push('/levels');
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [restart, router]);
 
   // ── Analytics: level start ────────────────────────────────────────────────
   const startTimeRef = useRef(Date.now());

@@ -30,6 +30,9 @@ export interface EditorContextValue {
   setEdges: React.Dispatch<React.SetStateAction<Record<'top' | 'bottom' | 'left' | 'right', EdgeBehavior>>>;
   grid: CellType[][];
   setGrid: React.Dispatch<React.SetStateAction<CellType[][]>>;
+  lockedCells: Record<string, boolean>;
+  setLockedCells: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  optimalSolutionTrajectory: { player1: Position[]; player2: Position[] } | null;
   objects: ObjConfig[]; setObjects: React.Dispatch<React.SetStateAction<ObjConfig[]>>;
   boxes: BoxConfig[]; setBoxes: React.Dispatch<React.SetStateAction<BoxConfig[]>>;
   activePlacingBoxId: number | null; setActivePlacingBoxId: (id: number | null) => void;
@@ -88,7 +91,18 @@ export interface EditorContextValue {
   handleLoadLevel: (stored: StoredLevel & { id: number }) => void;
   handleNewLevel: () => void;
   handleTest: () => void;
-  doGenerateLevel: (filters: import('./components/EditorDialogs').GeneratorFiltersUI) => void;
+  // Generated options
+  generatedCandidates: { level: LevelData; solution: string[] | null; moveCount: number }[];
+  setGeneratedCandidates: React.Dispatch<React.SetStateAction<{ level: LevelData; solution: string[] | null; moveCount: number }[]>>;
+  activeCandidateIndex: number | null;
+  setActiveCandidateIndex: React.Dispatch<React.SetStateAction<number | null>>;
+  doGenerateLevel: (
+    level: LevelData,
+    solution: string[] | null,
+    moveCount: number,
+    allCandidates?: { level: LevelData; solution: string[] | null; moveCount: number }[],
+    selectedIndex?: number
+  ) => void;
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null);

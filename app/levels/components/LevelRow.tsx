@@ -128,11 +128,12 @@ export interface RowProps {
   onDelete: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  gamepadSelected?: boolean;
 }
 
 export function LevelRow({
   level, index, total, isPreset, isAdmin, isMobile, playedLevel, isLocked,
-  onPlay, onEdit, onDelete, onMoveUp, onMoveDown,
+  onPlay, onEdit, onDelete, onMoveUp, onMoveDown, gamepadSelected,
 }: RowProps) {
   const t = useT();
   const [hovered, setHovered] = useState(false);
@@ -195,19 +196,23 @@ export function LevelRow({
           padding: isMobile ? '13px 12px' : '14px 16px',
           background: locked
             ? 'rgba(255,255,255,0.01)'
-            : hovered 
-              ? `rgba(${level.difficulty === 1 ? '0, 255, 136' : level.difficulty === 2 ? '251, 191, 36' : level.difficulty === 3 ? '249, 115, 22' : level.difficulty === 4 ? '239, 68, 68' : '0, 255, 136'}, 0.07)` 
-              : 'rgba(8, 12, 28, 0.45)',
+            : gamepadSelected
+              ? `rgba(${level.difficulty === 1 ? '0, 255, 136' : level.difficulty === 2 ? '251, 191, 36' : level.difficulty === 3 ? '249, 115, 22' : level.difficulty === 4 ? '239, 68, 68' : '0, 255, 136'}, 0.12)`
+              : hovered 
+                ? `rgba(${level.difficulty === 1 ? '0, 255, 136' : level.difficulty === 2 ? '251, 191, 36' : level.difficulty === 3 ? '249, 115, 22' : level.difficulty === 4 ? '239, 68, 68' : '0, 255, 136'}, 0.07)` 
+                : 'rgba(8, 12, 28, 0.45)',
           border: `1px solid ${locked
             ? 'rgba(30,58,95,0.18)'
-            : hovered 
-              ? (level.difficulty ? DIFF_COLOR[level.difficulty] : '#00ff88')
-              : 'rgba(255, 255, 255, 0.06)'}`,
+            : gamepadSelected
+              ? '#ffd700'
+              : hovered 
+                ? (level.difficulty ? DIFF_COLOR[level.difficulty] : '#00ff88')
+                : 'rgba(255, 255, 255, 0.06)'}`,
           borderRadius: 12, 
-          boxShadow: !locked && hovered 
+          boxShadow: !locked && (gamepadSelected || hovered) 
             ? `0 6px 20px rgba(${level.difficulty === 1 ? '0, 255, 136' : level.difficulty === 2 ? '251, 191, 36' : level.difficulty === 3 ? '249, 115, 22' : level.difficulty === 4 ? '239, 68, 68' : '0, 255, 136'}, 0.15), inset 0 0 10px rgba(255,255,255,0.02)` 
             : '0 4px 12px rgba(0,0,0,0.2)',
-          transform: !locked && hovered ? 'scale(1.01) translateY(-1px)' : 'scale(1)',
+          transform: !locked && (gamepadSelected || hovered) ? 'scale(1.01) translateY(-1px)' : 'scale(1)',
           transition: 'all 0.22s cubic-bezier(0.25, 0.8, 0.25, 1)',
           opacity: locked ? 0.45 : 1,
           cursor: locked ? 'default' : 'pointer',

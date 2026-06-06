@@ -18,6 +18,7 @@ import { CELL_RENDERERS } from './cells/CELL_RENDERERS';
 import { ENTITY_RENDERERS } from './entities/ENTITY_RENDERERS';
 import { PhysicsWrapper } from './physicsWrapper';
 import { LevelEdges } from '../logic/engine/getNextTopologyPosition';
+import { GAME_ANIMATION_KEYFRAMES } from './effects/animationStyles';
 
 const CELL_SIZE = 64;
 
@@ -106,7 +107,19 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
         if (snapshots.length === 1) return; // Başlangıç durumu: animasyon yok
 
         if (currentFrame >= snapshots.length - 1) {
-            onAnimationEndRef.current?.();
+            // Son frame'e ulaşıldı. Bu frame'de bir ölüm veya zafer varsa animasyonunun tamamlanması için bekle
+            const finalSnapshot = snapshots[snapshots.length - 1];
+            const hasDeath = finalSnapshot?.entities.some(e => e.customData.deathReason) ?? false;
+            const hasVictory = finalSnapshot?.entities.some(e => e.customData.isVictory) ?? false;
+
+            if (hasDeath || hasVictory) {
+                const timer = setTimeout(() => {
+                    onAnimationEndRef.current?.();
+                }, 800); // 800ms ölüm/zafer animasyonu için bekle
+                return () => clearTimeout(timer);
+            } else {
+                onAnimationEndRef.current?.();
+            }
             return;
         }
 
@@ -218,9 +231,11 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
     const boardWidth  = cols * CELL_SIZE;
     const boardHeight = rows * CELL_SIZE;
 
+    const combinedStyles = edgeStyles + GAME_ANIMATION_KEYFRAMES;
+
     return (
         <div style={{ position: 'relative', width: boardWidth, height: boardHeight }}>
-            <style dangerouslySetInnerHTML={{ __html: edgeStyles }} />
+            <style dangerouslySetInnerHTML={{ __html: combinedStyles }} />
 
             {/* Edge neon border strips & animated labels */}
             {levelEdges && (

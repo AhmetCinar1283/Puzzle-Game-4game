@@ -1,5 +1,5 @@
 import { solvePuzzle } from './solver';
-import type { LevelData, CellType, LevelEdges, EdgeBehavior, Position, LevelObjectDef, LevelTargetDef, ConveyorCellConfig, TrampolineCellConfig } from '../types';
+import type { LevelData, CellType, LevelEdges, EdgeBehavior, Position, LevelObjectDef, LevelTargetDef, ConveyorCellConfig, TrampolineCellConfig, BoxDef } from '../types';
 
 export interface GeneratorFilters {
   width: number;
@@ -26,6 +26,16 @@ export interface GeneratorFilters {
   forbiddenDensity: number;
   toggleDensity: number;
   teleporterCount: number; // Number of teleporter pairs (0 to 3)
+
+  // Interactive enhancements
+  lockedCells?: Record<string, boolean>;
+  mutationRate?: number;
+  originalGrid?: CellType[][];
+  originalObjects?: LevelObjectDef[];
+  originalTargets?: LevelTargetDef[];
+  originalBoxes?: BoxDef[];
+  originalConveyorConfig?: ConveyorCellConfig[];
+  originalTrampolineConfig?: TrampolineCellConfig[];
 }
 
 /** Helper to generate a random number in range [min, max] inclusive */
@@ -60,6 +70,11 @@ function manhattanDistance(p1: Position, p2: Position): number {
 function buildCandidate(filters: GeneratorFilters, attemptId: number): LevelData {
   const { width, height, playerCount, edgeBehavior } = filters;
 
+  const locked = filters.lockedCells ?? {};
+  const isLocked = (r: number, c: number) => !!locked[`${r},${c}`];
+  const mutationRate = filters.mutationRate ?? 1.0;
+  const isMutating = filters.originalGrid !== undefined;
+
   // 1. Determine Edge Behaviors
   let edges: LevelEdges;
   const behaviors: EdgeBehavior[] = ['wall', 'portal', 'lava'];
@@ -82,12 +97,23 @@ function buildCandidate(filters: GeneratorFilters, attemptId: number): LevelData
     right: getEdgeForSide(filters.edgeRightAllowed, edgeBehavior),
   };
 
-  // 2. Initialize Empty Grid
-  const grid: CellType[][] = Array.from({ length: height }, () =>
-    Array(width).fill('empty')
-  );
+  // 2. Initialize Grid (Resize/Crop to target height/width if mutating)
+  let grid: CellType[][];
+  if (filters.originalGrid) {
+    const resized: CellType[][] = [];
+    for (let r = 0; r < height; r++) {
+      const row: CellType[] = [];
+      for (let c = 0; c < width; c++) {
+        row.push(filters.originalGrid[r]?.[c] ?? 'empty');
+      }
+      resized.push(row);
+    }
+    grid = resized;
+  } else {
+    grid = Array.from({ length: height }, () => Array(width).fill('empty'));
+  }
 
-  // 3. Select Walkable Cells for Players & Targets
+  // 3. Preserve or clear cells based on locks/mutation
   const allPositions: Position[] = [];
   for (let r = 0; r < height; r++) {
     for (let c = 0; c < width; c++) {
@@ -95,7 +121,21 @@ function buildCandidate(filters: GeneratorFilters, attemptId: number): LevelData
     }
   }
 
-  const shuffledPositions = shuffleArray(allPositions);
+  const preservedCells = new Set<string>();
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      if (isLocked(r, c)) {
+        preservedCells.add(`${r},${c}`);
+      } else if (isMutating) {
+        if (Math.random() >= mutationRate) {
+          preservedCells.add(`${r},${c}`);
+        } else {
+          grid[r][c] = 'empty';
+        }
+      }
+    }
+  }
+
   const initialObjects: LevelObjectDef[] = [];
   const targets: LevelTargetDef[] = [];
 
@@ -116,10 +156,47 @@ function buildCandidate(filters: GeneratorFilters, attemptId: number): LevelData
   };
 
   // Place Player 1 & Target 1
-  const p1Pos = shuffledPositions.pop()!;
-  let t1Idx = shuffledPositions.findIndex((p) => manhattanDistance(p, p1Pos) >= Math.min(3, width - 1));
-  if (t1Idx === -1) t1Idx = 0;
-  const t1Pos = shuffledPositions.splice(t1Idx, 1)[0];
+  let p1Pos: Position | null = null;
+  let t1Pos: Position | null = null;
+
+  const origP1 = filters.originalObjects?.find((o) => o.id === 1);
+  const origT1 = filters.originalTargets?.find((t) => t.objectId === 1);
+
+  if (origP1 && origT1 && origP1.position.row < height && origP1.position.col < width && origT1.position.row < height && origT1.position.col < width) {
+    const p1Locked = isLocked(origP1.position.row, origP1.position.col);
+    const t1Locked = isLocked(origT1.position.row, origT1.position.col);
+    if (p1Locked || t1Locked || Math.random() >= mutationRate) {
+      p1Pos = origP1.position;
+      t1Pos = origT1.position;
+    }
+  }
+
+  // Find remaining walkable positions that are NOT locked or preserved
+  const availablePool = allPositions.filter((p) => !preservedCells.has(`${p.row},${p.col}`));
+  let shuffledPositions = shuffleArray(availablePool);
+
+  if (!p1Pos) {
+    if (shuffledPositions.length > 0) {
+      p1Pos = shuffledPositions.pop()!;
+    } else if (origP1) {
+      p1Pos = origP1.position;
+    } else {
+      p1Pos = { row: 0, col: 0 };
+    }
+  }
+
+  if (!t1Pos) {
+    shuffledPositions = shuffledPositions.filter(p => !posEqual(p, p1Pos!));
+    let t1Idx = shuffledPositions.findIndex((p) => manhattanDistance(p, p1Pos!) >= Math.min(3, width - 1));
+    if (t1Idx === -1) t1Idx = 0;
+    if (shuffledPositions.length > 0) {
+      t1Pos = shuffledPositions.splice(t1Idx, 1)[0];
+    } else if (origT1) {
+      t1Pos = origT1.position;
+    } else {
+      t1Pos = { row: height - 1, col: width - 1 };
+    }
+  }
 
   initialObjects.push({
     id: 1,
@@ -135,15 +212,47 @@ function buildCandidate(filters: GeneratorFilters, attemptId: number): LevelData
 
   // Place Player 2 & Target 2 (if enabled)
   if (playerCount === 2) {
-    const p2Pos = shuffledPositions.pop()!;
-    let t2Idx = shuffledPositions.findIndex(
-      (p) =>
-        manhattanDistance(p, p2Pos) >= Math.min(3, width - 1) &&
-        !posEqual(p, p1Pos) &&
-        !posEqual(p, t1Pos)
-    );
-    if (t2Idx === -1) t2Idx = 0;
-    const t2Pos = shuffledPositions.splice(t2Idx, 1)[0];
+    let p2Pos: Position | null = null;
+    let t2Pos: Position | null = null;
+
+    const origP2 = filters.originalObjects?.find((o) => o.id === 2);
+    const origT2 = filters.originalTargets?.find((t) => t.objectId === 2);
+
+    if (origP2 && origT2 && origP2.position.row < height && origP2.position.col < width && origT2.position.row < height && origT2.position.col < width) {
+      const p2Locked = isLocked(origP2.position.row, origP2.position.col);
+      const t2Locked = isLocked(origT2.position.row, origT2.position.col);
+      if (p2Locked || t2Locked || Math.random() >= mutationRate) {
+        p2Pos = origP2.position;
+        t2Pos = origT2.position;
+      }
+    }
+
+    if (!p2Pos) {
+      shuffledPositions = shuffledPositions.filter(p => !posEqual(p, p1Pos!) && !posEqual(p, t1Pos!));
+      if (shuffledPositions.length > 0) {
+        p2Pos = shuffledPositions.pop()!;
+      } else if (origP2) {
+        p2Pos = origP2.position;
+      } else {
+        p2Pos = { row: 0, col: width - 1 };
+      }
+    }
+
+    if (!t2Pos) {
+      shuffledPositions = shuffledPositions.filter(p => !posEqual(p, p2Pos!) && !posEqual(p, p1Pos!) && !posEqual(p, t1Pos!));
+      let t2Idx = shuffledPositions.findIndex(
+        (p) =>
+          manhattanDistance(p, p2Pos!) >= Math.min(3, width - 1)
+      );
+      if (t2Idx === -1) t2Idx = 0;
+      if (shuffledPositions.length > 0) {
+        t2Pos = shuffledPositions.splice(t2Idx, 1)[0];
+      } else if (origT2) {
+        t2Pos = origT2.position;
+      } else {
+        t2Pos = { row: height - 1, col: 0 };
+      }
+    }
 
     initialObjects.push({
       id: 2,
@@ -162,6 +271,7 @@ function buildCandidate(filters: GeneratorFilters, attemptId: number): LevelData
   const reserved = new Set<string>();
   initialObjects.forEach((o) => reserved.add(`${o.position.row},${o.position.col}`));
   targets.forEach((t) => reserved.add(`${t.position.row},${t.position.col}`));
+  preservedCells.forEach((c) => reserved.add(c));
 
   // 4. Carve Walkways (DFS Path) to Guarantee Basic Solvability
   const pathCells = new Set<string>();
@@ -185,7 +295,6 @@ function buildCandidate(filters: GeneratorFilters, attemptId: number): LevelData
   });
 
   // 5. Populate Remaining Grid with Special Tiles
-  // Gradually relax obstacle density if many attempts fail
   const obstacleDensity = Math.max(0.02, filters.obstacleDensity - attemptId * 0.001);
   const iceDensity = filters.iceDensity;
   const conveyorDensity = filters.conveyorDensity;
@@ -210,7 +319,7 @@ function buildCandidate(filters: GeneratorFilters, attemptId: number): LevelData
     const rand = Math.random();
     let cumulative = 0;
 
-    // Obstacles: placed only off main path to maximize solver chances
+    // Obstacles
     if (!onMainPath && rand < (cumulative += obstacleDensity)) {
       grid[pos.row][pos.col] = 'obstacle';
       continue;
@@ -275,19 +384,38 @@ function buildCandidate(filters: GeneratorFilters, attemptId: number): LevelData
   for (let r = 0; r < height; r++) {
     for (let c = 0; c < width; c++) {
       const cell = grid[r][c];
+      const posKey = `${r},${c}`;
+
       if (cell && cell.startsWith('conveyor_')) {
-        const steps = conveyorStepsVal === 'random' ? randomInt(1, 3) : conveyorStepsVal;
-        conveyorConfig.push({ position: { row: r, col: c }, steps });
+        const orig = filters.originalConveyorConfig?.find(cfg => cfg.position.row === r && cfg.position.col === c);
+        if (orig && preservedCells.has(posKey)) {
+          conveyorConfig.push(orig);
+        } else {
+          const steps = conveyorStepsVal === 'random' ? randomInt(1, 3) : conveyorStepsVal;
+          conveyorConfig.push({ position: { row: r, col: c }, steps });
+        }
       } else if (cell && cell.startsWith('trampoline_')) {
-        const steps = trampolineStepsVal === 'random' ? randomInt(2, 4) : trampolineStepsVal;
-        trampolineConfig.push({ position: { row: r, col: c }, steps });
+        const orig = filters.originalTrampolineConfig?.find(cfg => cfg.position.row === r && cfg.position.col === c);
+        if (orig && preservedCells.has(posKey)) {
+          trampolineConfig.push(orig);
+        } else {
+          const steps = trampolineStepsVal === 'random' ? randomInt(2, 4) : trampolineStepsVal;
+          trampolineConfig.push({ position: { row: r, col: c }, steps });
+        }
       }
     }
   }
 
+  const initialBoxes = (filters.originalBoxes ?? []).filter(
+    (b) => b.position.row < height && b.position.col < width
+  );
+  const conveyorPowerRequired = ((filters as any).conveyorPowerRequired ?? []).filter(
+    (pos: Position) => pos.row < height && pos.col < width
+  );
+
   return {
-    id: randomInt(1000, 9999),
-    name: `Procedural Level ${randomInt(1, 999)}`,
+    id: (filters as any).id ?? randomInt(1000, 9999),
+    name: (filters as any).name ?? `Procedural Level ${randomInt(1, 999)}`,
     width,
     height,
     edges,
@@ -295,6 +423,8 @@ function buildCandidate(filters: GeneratorFilters, attemptId: number): LevelData
     initialObjects,
     targets,
     trailCollision: getTrailCollision(),
+    initialBoxes: initialBoxes.length > 0 ? initialBoxes.map(b => ({ id: b.id, position: b.position, requiresPower: b.requiresPower })) : undefined,
+    conveyorPowerRequired: conveyorPowerRequired.length > 0 ? conveyorPowerRequired : undefined,
     conveyorConfig: conveyorConfig.length > 0 ? conveyorConfig : undefined,
     trampolineConfig: trampolineConfig.length > 0 ? trampolineConfig : undefined,
   };

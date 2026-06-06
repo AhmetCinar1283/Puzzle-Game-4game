@@ -16,6 +16,11 @@ export const forbiddenBehavior: CellBehavior = {
             return [
                 {
                     entityId: entity.id,
+                    type: 'mutate_entity',
+                    customDataPatch: { deathReason: 'forbidden' },
+                },
+                {
+                    entityId: entity.id,
                     type: 'destroy',
                     uiEvent: { kind: 'text', textType: 'error', message: 'Oyun bitti!' },
                 },

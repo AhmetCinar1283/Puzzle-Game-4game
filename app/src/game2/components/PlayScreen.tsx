@@ -10,6 +10,7 @@ import { ActionIntent, Direction, UIEvent, UIButtonType } from '../logic/types';
 import { LevelEdges } from '../logic/engine/getNextTopologyPosition';
 import { useSoundManager } from '../hooks/useSoundManager';
 import { useT } from '@/app/src/contexts/LanguageContext';
+import { useGamepad } from '@/app/src/hooks/useGamepad';
 
 // Native hücre boyutu — GameBoard ve PhysicsWrapper bunu sabit 64px kullanır.
 // Biz bunu CSS scale ile ölçekliyoruz, bu dosyalar DEĞİŞMEZ.
@@ -92,12 +93,15 @@ export function PlayScreen({
     // ── Ses tetikleyicileri ─────────────────────────────────────────────────
     const prevIsGameOver = useRef(false);
     useEffect(() => {
-        if (isGameOver && !prevIsGameOver.current) {
+        if (isGameOver && !isAnimating && !prevIsGameOver.current) {
             const hasSuccess = uiEvents.some(e => e.kind === 'text' && e.textType === 'success');
             play(hasSuccess ? 'win' : 'lose');
+            prevIsGameOver.current = true;
         }
-        prevIsGameOver.current = isGameOver;
-    }, [isGameOver, uiEvents, play]);
+        if (!isGameOver) {
+            prevIsGameOver.current = false;
+        }
+    }, [isGameOver, isAnimating, uiEvents, play]);
 
     // ── Responsive board scale hesabı ───────────────────────────────────────
     // Grid boyutlarını initial grid'den hesaplıyoruz
@@ -127,6 +131,16 @@ export function PlayScreen({
         return () => ro.disconnect();
     }, [boardPixelW, boardPixelH]);
 
+    // ── UI Button Handler ───────────────────────────────────────────────────
+    const handleButtonPress = useCallback((buttonType: UIButtonType) => {
+        clearUiEvents();
+        bufferedInputRef.current = null;
+        if (buttonType === 'restart') {
+            setMoveCount(0);
+        }
+        onButtonPressed?.(buttonType);
+    }, [clearUiEvents, onButtonPressed]);
+
     // ── Klavye kontrolü ────────────────────────────────────────────────────
     const triggerMove = useCallback((rawDirection: Direction) => {
         const intents: ActionIntent[] = getEntities()
@@ -153,6 +167,17 @@ export function PlayScreen({
     }, [getEntities, executeTurn, onMoveExecuted, play]);
 
     const handleKey = useCallback((e: KeyboardEvent) => {
+        if (e.key === 'r' || e.key === 'R') {
+            e.preventDefault();
+            handleButtonPress('restart');
+            return;
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            handleButtonPress('menu');
+            return;
+        }
+
         if (isGameOverRef.current) return;
         const rawDirection = KEY_TO_DIRECTION[e.key];
         if (!rawDirection) return;
@@ -163,7 +188,7 @@ export function PlayScreen({
         }
         bufferedInputRef.current = null;
         triggerMove(rawDirection);
-    }, [triggerMove]);
+    }, [triggerMove, handleButtonPress]);
 
     const handleAnimationEnd = useCallback(() => {
         onAnimationEnd();
@@ -178,6 +203,25 @@ export function PlayScreen({
         window.addEventListener('keydown', handleKey);
         return () => window.removeEventListener('keydown', handleKey);
     }, [handleKey]);
+
+    // Gamepad controller support
+    useGamepad({
+        onMove: useCallback((dir: Direction) => {
+            if (isGameOverRef.current) return;
+            if (isAnimatingRef.current) {
+                bufferedInputRef.current = dir;
+                return;
+            }
+            bufferedInputRef.current = null;
+            triggerMove(dir);
+        }, [triggerMove]),
+        onRestart: useCallback(() => {
+            handleButtonPress('restart');
+        }, [handleButtonPress]),
+        onMenu: useCallback(() => {
+            handleButtonPress('menu');
+        }, [handleButtonPress]),
+    });
 
     // ── Swipe (Touch) Kontrolü ─────────────────────────────────────────────
     // Bütün touch area'yı dinleyerek swipe yönünü tespit ediyoruz.
@@ -220,15 +264,6 @@ export function PlayScreen({
 
     // ── UI Button Handler ───────────────────────────────────────────────────
     const pendingUi = uiEvents.length > 0 ? uiEvents[uiEvents.length - 1] : null;
-
-    const handleButtonPress = useCallback((buttonType: UIButtonType) => {
-        clearUiEvents();
-        bufferedInputRef.current = null;
-        if (buttonType === 'restart') {
-            setMoveCount(0);
-        }
-        onButtonPressed?.(buttonType);
-    }, [clearUiEvents, onButtonPressed]);
 
     // ── Kazanma sonrası otomatik tetikleme ─────────────────────────────────
     // next_level eventi geldiğinde direkt onButtonPressed çağrılır,
@@ -517,14 +552,14 @@ export function PlayScreen({
             </div>
 
             {/* Overlay'ler — scale wrapper DİŞİNDA, position:fixed ile tam ekran */}
-            {pendingUi && pendingUi.kind === 'button' && pendingUi.buttonType === 'restart' && (
+            {!isAnimating && pendingUi && pendingUi.kind === 'button' && pendingUi.buttonType === 'restart' && (
                 <UIOverlay
                     event={pendingUi}
                     uiEvents={uiEvents}
                     onButtonPress={handleButtonPress}
                 />
             )}
-            {pendingUi && pendingUi.kind === 'text' && (
+            {!isAnimating && pendingUi && pendingUi.kind === 'text' && (
                 <UIOverlay
                     event={pendingUi}
                     uiEvents={uiEvents}

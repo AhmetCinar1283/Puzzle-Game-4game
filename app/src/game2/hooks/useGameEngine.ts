@@ -59,6 +59,14 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
     const executeTurn = useCallback((startingIntents: ActionIntent[]) => {
         if (isGameOverRef.current) return;
 
+        // Her tur başlangıcında geçici animasyon ve durum verilerini temizle
+        for (const ent of entitiesRef.current) {
+            delete ent.customData.bumpDirection;
+            delete ent.customData.bumpReason;
+            delete ent.customData.deathReason;
+            delete ent.customData.isVictory;
+        }
+
         // Grid boyutlarından level bounds hesapla
         const levelBounds: LevelBounds = {
             rows: gridRef.current.length,
@@ -100,6 +108,9 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
 
             tickNumber++;
 
+            // Yok edilen entity'leri grid'den silmeden önce klonla (animasyonun doğru karede görünmesi için)
+            const snapshotEntities = cloneEntities(entitiesRef.current);
+
             entitiesRef.current = entitiesRef.current.filter(
                 e => !e.customData._destroyed
             );
@@ -108,6 +119,15 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
             const playerDestroyed = playerCountAfter < playerCountBefore;
 
             const isWin = checkWinCondition(entitiesRef.current, gridRef.current);
+
+            if (isWin) {
+                for (const ent of entitiesRef.current) {
+                    if (ent.type === 'player') ent.customData.isVictory = true;
+                }
+                for (const ent of snapshotEntities) {
+                    if (ent.type === 'player') ent.customData.isVictory = true;
+                }
+            }
 
             const tickUiEvents: UIEvent[] = [...result.uiEvents];
 
@@ -121,7 +141,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
             collectedSnapshots.push({
                 tickNumber,
                 grid: cloneGrid(gridRef.current),
-                entities: cloneEntities(entitiesRef.current),
+                entities: snapshotEntities,
                 vfxEvents: result.vfxEvents,
                 uiEvents: tickUiEvents,
             });

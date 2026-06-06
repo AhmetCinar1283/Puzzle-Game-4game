@@ -7,6 +7,7 @@ export type LauncherCellConfig = any;
 export interface StoredLevel {
   id?: number;           // auto-increment Dexie ID
   firestoreId?: string;  // Firestore document ID (preset levels only)
+  lockedCells?: Record<string, boolean>;
   name: string;
   width: number;
   height: number;

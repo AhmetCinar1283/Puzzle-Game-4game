@@ -162,6 +162,15 @@ export default function ToolPalette({ isMobile }: { isMobile: boolean }) {
         <span style={{ fontSize: small ? 14 : 18, color: activeTool === 'select' ? '#00c4ff' : '#334155' }}>▣</span>
       </ToolBtn>
 
+      {/* Lock */}
+      <ToolBtn
+        tool="lock" active={activeTool === 'lock'}
+        color="#fbbf24" label="Lock / Unlock Cell"
+        onClick={() => setActiveTool('lock')} small={small}
+      >
+        <span style={{ fontSize: small ? 14 : 18, color: activeTool === 'lock' ? '#fbbf24' : '#334155' }}>🔒</span>
+      </ToolBtn>
+
       <Divider small={small} />
 
       {/* Players */}

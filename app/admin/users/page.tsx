@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '@/app/src/hooks/useAuth';
 import { useLanguage } from '@/app/src/contexts/LanguageContext';
 import { AdminGuard } from '@/app/src/components/AdminGuard';
 import { db } from '@/app/src/lib/firebase';

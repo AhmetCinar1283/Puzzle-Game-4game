@@ -5,7 +5,7 @@ import type { Entity } from '@/app/src/game2/logic/entityTypes';
 import type { Cell } from '@/app/src/game2/logic/cellTypes';
 import type { ActionIntent } from '@/app/src/game2/logic/types';
 import type { LevelBounds } from '@/app/src/game2/logic/engine/getNextTopologyPosition';
-import type { LevelData, Direction } from '../types';
+import type { LevelData, Direction, Position } from '../types';
 
 export interface SolverResult {
   solvable: boolean;
@@ -237,3 +237,42 @@ export function solvePuzzle(
     moveCount: 0,
   };
 }
+
+export function getSolutionTrajectories(
+  level: LevelData,
+  solution: Direction[]
+): { player1: Position[]; player2: Position[] } {
+  const game2State = convertToGame2State(level as any);
+  
+  const levelBounds: LevelBounds | undefined = {
+    rows: game2State.grid.length,
+    cols: game2State.grid[0]?.length ?? 0,
+    edges: level.edges as any,
+    trailCollision: !!level.trailCollision,
+  };
+
+  const p1Path: Position[] = [];
+  const p2Path: Position[] = [];
+
+  const recordPositions = (entities: Entity[]) => {
+    const p1 = entities.find((e) => e.type === 'player' && e.id === 1);
+    const p2 = entities.find((e) => e.type === 'player' && e.id === 2);
+    if (p1) p1Path.push({ row: p1.position.row, col: p1.position.col });
+    if (p2) p2Path.push({ row: p2.position.row, col: p2.position.col });
+  };
+
+  recordPositions(game2State.entities);
+
+  let currentEntities = game2State.entities;
+  let currentGrid = game2State.grid;
+
+  for (const dir of solution) {
+    const next = transition(currentEntities, currentGrid, dir, levelBounds);
+    currentEntities = next.entities;
+    currentGrid = next.grid;
+    recordPositions(currentEntities);
+  }
+
+  return { player1: p1Path, player2: p2Path };
+}
+

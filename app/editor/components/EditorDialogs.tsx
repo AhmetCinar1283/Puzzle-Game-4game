@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import type { User } from 'firebase/auth';
 import type { StoredLevel } from '@/app/src/lib/db';
-import type { EdgeBehavior } from '@/app/src/games/types';
+import type { EdgeBehavior, LevelData, CellType, Position, LevelTargetDef } from '@/app/src/games/types';
+import { useEditorContext } from '../EditorContext';
 import { Modal, NBtn, iStyle, Lbl } from './EditorUI';
 import { DIFFICULTY_COLORS } from '../editorConfig';
 import { useT } from '@/app/src/contexts/LanguageContext';
+import GameCell from '@/app/src/games/components/GameCell';
 
 export interface GeneratorFiltersUI {
   width: number;
@@ -30,6 +32,7 @@ export interface GeneratorFiltersUI {
   forbiddenDensity: number;
   toggleDensity: number;
   teleporterCount: number;
+  mutationRate?: number;
 }
 
 interface EditorDialogsProps {
@@ -56,7 +59,13 @@ interface EditorDialogsProps {
   // Generator dialog
   generatorDialogOpen: boolean;
   onGeneratorClose: () => void;
-  onGenerate: (filters: GeneratorFiltersUI) => void;
+  onGenerate: (
+    level: LevelData,
+    solution: string[] | null,
+    moveCount: number,
+    allCandidates?: { level: LevelData; solution: string[] | null; moveCount: number }[],
+    selectedIndex?: number
+  ) => void;
 }
 
 interface StoredPreset {
@@ -70,10 +79,18 @@ function GeneratorModal({
   onGenerate,
 }: {
   onClose: () => void;
-  onGenerate: (filters: GeneratorFiltersUI) => void;
+  onGenerate: (
+    level: LevelData,
+    solution: string[] | null,
+    moveCount: number,
+    allCandidates?: { level: LevelData; solution: string[] | null; moveCount: number }[],
+    selectedIndex?: number
+  ) => void;
 }) {
-  const [width, setWidth] = useState(6);
-  const [height, setHeight] = useState(6);
+  const { grid, objects, boxes, conveyorConfig, trampolineConfig, lockedCells } = useEditorContext();
+
+  const [width, setWidth] = useState(grid[0]?.length ?? 6);
+  const [height, setHeight] = useState(grid.length ?? 6);
   const [difficulty, setDifficulty] = useState<1 | 2 | 3 | 4>(2);
   const [playerCount, setPlayerCount] = useState<1 | 2>(1);
   const [edgeTopAllowed, setEdgeTopAllowed] = useState<EdgeBehavior[]>(['wall']);
@@ -92,6 +109,11 @@ function GeneratorModal({
   const [forbiddenDensity, setForbiddenDensity] = useState(0.0);
   const [toggleDensity, setToggleDensity] = useState(0.0);
   const [teleporterCount, setTeleporterCount] = useState(0);
+
+  // Enhancements
+  const [mutationRate, setMutationRate] = useState(1.0);
+  const [candidates, setCandidates] = useState<{ level: LevelData; solution: string[] | null; moveCount: number }[] | null>(null);
+  const [selectedCandidateIndex, setSelectedCandidateIndex] = useState<number | null>(null);
 
   const [presets, setPresets] = useState<StoredPreset[]>([]);
   const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | 'default' | 'last_used'>('default');
@@ -131,6 +153,7 @@ function GeneratorModal({
     if (f.forbiddenDensity !== undefined) setForbiddenDensity(f.forbiddenDensity);
     if (f.toggleDensity !== undefined) setToggleDensity(f.toggleDensity);
     if (f.teleporterCount !== undefined) setTeleporterCount(f.teleporterCount);
+    if (f.mutationRate !== undefined) setMutationRate(f.mutationRate);
 
     // Support legacy presets having legacy edgeBehavior
     if (f.edgeBehavior !== undefined) {
@@ -186,7 +209,7 @@ function GeneratorModal({
         playerMode, playerLock, trailCollision,
         obstacleDensity, iceDensity, conveyorDensity, trampolineDensity,
         forbiddenDensity, toggleDensity, teleporterCount,
-        conveyorSteps, trampolineSteps
+        conveyorSteps, trampolineSteps, mutationRate
       }
     };
     const updated = [...presets, newPreset];
@@ -214,6 +237,7 @@ function GeneratorModal({
     setConveyorDensity(0); setTrampolineDensity(0); setForbiddenDensity(0);
     setToggleDensity(0); setTeleporterCount(0);
     setConveyorSteps(1); setTrampolineSteps(3);
+    setMutationRate(1.0);
   };
 
   const handlePresetSelect = (val: string) => {
@@ -229,6 +253,7 @@ function GeneratorModal({
       setConveyorDensity(0); setTrampolineDensity(0); setForbiddenDensity(0);
       setToggleDensity(0); setTeleporterCount(0);
       setConveyorSteps(1); setTrampolineSteps(3);
+      setMutationRate(1.0);
     } else if (val === 'last_used') {
       setSelectedPresetIndex('last_used');
       const lastUsed = localStorage.getItem('generator_last_used');
@@ -252,16 +277,155 @@ function GeneratorModal({
       playerMode, playerLock, trailCollision,
       obstacleDensity, iceDensity, conveyorDensity, trampolineDensity,
       forbiddenDensity, toggleDensity, teleporterCount,
-      conveyorSteps, trampolineSteps
+      conveyorSteps, trampolineSteps, mutationRate
     };
     
     // Persist as last-used in localStorage
     localStorage.setItem('generator_last_used', JSON.stringify(filters));
 
-    setTimeout(() => {
-      onGenerate(filters);
-      setGenerating(false);
+    setTimeout(async () => {
+      try {
+        const { generateProceduralLevel } = await import('@/app/src/games/logic/generator');
+
+        // Extract targets from grid
+        const originalTargets: LevelTargetDef[] = [];
+        for (let r = 0; r < grid.length; r++) {
+          for (let c = 0; c < grid[r].length; c++) {
+            if (grid[r]?.[c] === 'target_1') originalTargets.push({ objectId: 1, position: { row: r, col: c } });
+            if (grid[r]?.[c] === 'target_2') originalTargets.push({ objectId: 2, position: { row: r, col: c } });
+          }
+        }
+
+        const generatorFilters = {
+          width, height, difficulty, playerCount,
+          edgeTopAllowed, edgeBottomAllowed, edgeLeftAllowed, edgeRightAllowed,
+          playerMode, playerLock, trailCollision,
+          obstacleDensity, iceDensity, conveyorDensity, trampolineDensity,
+          forbiddenDensity, toggleDensity, teleporterCount,
+          conveyorSteps, trampolineSteps,
+
+          lockedCells,
+          mutationRate,
+          originalGrid: grid,
+          originalObjects: objects.filter(o => o.row !== null).map(o => ({ id: o.id, position: { row: o.row!, col: o.col! }, mode: o.mode, lockOnTarget: o.lockOnTarget })),
+          originalTargets,
+          originalBoxes: boxes.filter(b => b.row !== null).map(b => ({ id: b.id, position: { row: b.row!, col: b.col! }, requiresPower: b.requiresPower })),
+          originalConveyorConfig: conveyorConfig,
+          originalTrampolineConfig: trampolineConfig,
+        };
+
+        const results = [];
+        for (let i = 0; i < 3; i++) {
+          results.push(generateProceduralLevel(generatorFilters));
+        }
+        setCandidates(results);
+        setSelectedCandidateIndex(0);
+      } catch (err) {
+        console.error('Generation failed:', err);
+      } finally {
+        setGenerating(false);
+      }
     }, 80);
+  };
+
+  const MiniPreview = ({ level }: { level: LevelData }) => {
+    const miniCellSize = Math.max(12, Math.min(20, Math.floor(100 / Math.max(level.width, level.height))));
+    const boardWidth = level.width * miniCellSize;
+    const boardHeight = level.height * miniCellSize;
+
+    return (
+      <div style={{
+        position: 'relative',
+        width: boardWidth,
+        height: boardHeight,
+        background: '#040914',
+        border: '1.5px solid rgba(0,196,255,0.25)',
+        borderRadius: 4,
+        overflow: 'hidden',
+        boxSizing: 'content-box',
+        alignSelf: 'center'
+      }}>
+        {/* Cells Grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${level.width}, ${miniCellSize}px)`,
+          gridTemplateRows: `repeat(${level.height}, ${miniCellSize}px)`,
+        }}>
+          {level.grid.map((row, r) =>
+            row.map((cell, c) => (
+              <GameCell key={`${r}-${c}`} cellType={cell} cellSize={miniCellSize} />
+            ))
+          )}
+        </div>
+
+        {/* Boxes */}
+        {(level.initialBoxes || []).map((box) => {
+          const pad = Math.round(miniCellSize * 0.1);
+          const size = miniCellSize - pad * 2;
+          const isPowered = false;
+          const isUnpowered = box.requiresPower && !isPowered;
+
+          return (
+            <div
+              key={`box-${box.id}`}
+              style={{
+                position: 'absolute',
+                top: box.position.row * miniCellSize + pad,
+                left: box.position.col * miniCellSize + pad,
+                width: size,
+                height: size,
+                borderRadius: 2,
+                background: isUnpowered ? 'rgba(30, 40, 55, 0.9)' : 'rgba(15, 23, 35, 0.95)',
+                border: `${Math.max(1, Math.round(miniCellSize * 0.06))}px solid ${isUnpowered ? 'rgba(71, 85, 105, 0.5)' : '#f97316'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10,
+                pointerEvents: 'none',
+              }}
+            >
+              <span style={{ fontSize: size * 0.55, color: isUnpowered ? '#334155' : '#f97316', fontWeight: 'bold', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                ▣
+              </span>
+            </div>
+          );
+        })}
+
+        {/* Players */}
+        {level.initialObjects.map((obj) => {
+          const pad = Math.round(miniCellSize * 0.12);
+          const size = miniCellSize - pad * 2;
+          const isPlayer1 = obj.id === 1;
+          const bg = isPlayer1 ? '#00ff88' : '#00c4ff';
+          const textColor = isPlayer1 ? '#003320' : '#002233';
+
+          return (
+            <div
+              key={`player-${obj.id}`}
+              style={{
+                position: 'absolute',
+                top: obj.position.row * miniCellSize + pad,
+                left: obj.position.col * miniCellSize + pad,
+                width: size,
+                height: size,
+                borderRadius: '50%',
+                backgroundColor: bg,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10,
+                pointerEvents: 'none',
+                boxShadow: `0 0 ${Math.max(2, Math.round(miniCellSize * 0.2))}px ${bg}aa`,
+              }}
+            >
+              <span style={{ fontSize: size * 0.6, color: textColor, fontWeight: 'bold', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {obj.mode === 'reversed' ? '⬇' : '⬆'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -277,12 +441,76 @@ function GeneratorModal({
               width: 36, height: 36, border: '3px solid rgba(0,196,255,0.1)', borderTop: '3px solid #00c4ff', borderRadius: '50%',
               animation: 'spin 0.8s linear infinite'
             }} />
-            <span style={{ fontSize: 11, color: '#00c4ff', letterSpacing: '0.06em' }}>GENERATING LEVEL...</span>
+            <span style={{ fontSize: 11, color: '#00c4ff', letterSpacing: '0.06em' }}>GENERATING LEVELS...</span>
             <span style={{ fontSize: 9, color: '#475569' }}>Calibrating physics & searching solution paths</span>
             <style dangerouslySetInnerHTML={{ __html: `
               @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
             `}} />
           </div>
+        ) : candidates ? (
+          <>
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 14 }}>
+              <span style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>
+                We have generated 3 different level candidates. Please select one to apply:
+              </span>
+              <div style={{ display: 'flex', gap: 10, padding: '10px 0', overflowX: 'auto', justifyContent: 'center' }}>
+                {candidates.map((cand, idx) => {
+                  const active = selectedCandidateIndex === idx;
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => setSelectedCandidateIndex(idx)}
+                      style={{
+                        flex: '0 0 130px',
+                        border: `2px solid ${active ? '#00c4ff' : 'rgba(30,58,95,0.4)'}`,
+                        borderRadius: 10,
+                        padding: 10,
+                        background: active ? 'rgba(0,196,255,0.08)' : 'rgba(6,13,26,0.5)',
+                        boxShadow: active ? '0 0 15px rgba(0,196,255,0.2)' : 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                        transition: 'all 0.2s',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <span style={{ fontSize: 10, fontWeight: 'bold', color: active ? '#00c4ff' : '#64748b' }}>
+                        Option {idx + 1}
+                      </span>
+                      <MiniPreview level={cand.level} />
+                      <span style={{ fontSize: 9, color: '#94a3b8' }}>
+                        Moves: <strong style={{ color: '#00ff88' }}>{cand.moveCount}</strong>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Sticky Actions Footer */}
+            <div style={{ flexShrink: 0, display: 'flex', gap: 8, borderTop: '1px solid rgba(30,58,95,0.3)', paddingTop: 10 }}>
+              <NBtn
+                onClick={() => {
+                  if (selectedCandidateIndex !== null && candidates[selectedCandidateIndex]) {
+                    const sel = candidates[selectedCandidateIndex];
+                    onGenerate(sel.level, sel.solution, sel.moveCount, candidates, selectedCandidateIndex);
+                  }
+                }}
+                color="#00c4ff"
+                active
+                style={{ flex: 2, padding: '8px 20px', fontSize: 12, fontWeight: 700 }}
+              >
+                ✓ APPLY SELECTED
+              </NBtn>
+              <NBtn onClick={handleGenerateClick} style={{ flex: 1, padding: '8px 10px', fontSize: 11 }}>
+                🔁 REGENERATE
+              </NBtn>
+              <NBtn onClick={() => setCandidates(null)} style={{ flex: 1, padding: '8px 10px', fontSize: 11 }}>
+                ◀ BACK
+              </NBtn>
+            </div>
+          </>
         ) : (
           <>
             {/* Scrollable contents */}
@@ -327,6 +555,23 @@ function GeneratorModal({
                     Save Current
                   </button>
                 </div>
+              </div>
+
+              {/* Mutation Rate / Fine-Tuning */}
+              <div style={{ background: '#040914', border: '1px solid rgba(30,58,95,0.3)', borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: '#00c4ff', textTransform: 'uppercase' }}>Fine-Tuning / Mutation</span>
+                  <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 'bold' }}>{Math.round(mutationRate * 100)}%</span>
+                </div>
+                <p style={{ fontSize: 9, color: '#475569', margin: '0 0 4px', lineHeight: 1.3 }}>
+                  Lower rates mutate fewer cells from the current grid, keeping the layout mostly intact.
+                </p>
+                <input
+                  type="range" min={10} max={100} step={10}
+                  value={mutationRate * 100}
+                  onChange={(e) => setMutationRate(Number(e.target.value) / 100)}
+                  style={{ width: '100%', accentColor: '#00c4ff' }}
+                />
               </div>
 
               {/* Grid Dimensions */}

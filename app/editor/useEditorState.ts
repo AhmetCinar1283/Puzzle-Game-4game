@@ -9,6 +9,7 @@ import { useAuth } from '@/app/src/hooks/useAuth';
 import { useSelector } from 'react-redux';
 import type { RootState } from '@/app/src/store';
 import { makeGrid, resizeGrid, type ToolType, type ObjConfig, type BoxConfig } from './editorConfig';
+import type { SelectionRect } from './useGridOperations';
 
 const DEFAULT_OBJS: ObjConfig[] = [
   { id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true },
@@ -33,12 +34,19 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const savedIdForSubmitRef = useRef<number | null>(null);
   const [edges, setEdges] = useState<Record<'top' | 'bottom' | 'left' | 'right', EdgeBehavior>>({ top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' });
   const [grid, setGrid] = useState<CellType[][]>(() => makeGrid(5, 5));
+  const [lockedCells, setLockedCells] = useState<Record<string, boolean>>({});
+  const [optimalSolutionTrajectory, setOptimalSolutionTrajectory] = useState<{ player1: Position[]; player2: Position[] } | null>(null);
   const [objects, setObjects] = useState<ObjConfig[]>(DEFAULT_OBJS);
   const [boxes, setBoxes] = useState<BoxConfig[]>([]);
   const [activePlacingBoxId, setActivePlacingBoxId] = useState<number | null>(null);
   const [conveyorPowerRequired, setConveyorPowerRequired] = useState<Position[]>([]);
   const [conveyorConfig, setConveyorConfig] = useState<ConveyorCellConfig[]>([]);
   const [trampolineConfig, setTrampolineConfig] = useState<TrampolineCellConfig[]>([]);
+
+  // Selection & Generated Candidates
+  const [selection, setSelection] = useState<SelectionRect | null>(null);
+  const [generatedCandidates, setGeneratedCandidates] = useState<{ level: LevelData; solution: string[] | null; moveCount: number }[]>([]);
+  const [activeCandidateIndex, setActiveCandidateIndex] = useState<number | null>(null);
 
   // Tool — wrap setActiveTool to track previous tool for restoring after box placement
   const [activeTool, _setActiveTool] = useState<ToolType>('obstacle');
@@ -53,21 +61,29 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   }, []);
   const paintMode = useRef<'paint' | 'erase'>('paint');
 
-  // Undo history — stores grid snapshots (max 40)
-  const historyRef = useRef<CellType[][][]>([]);
+  // Undo history — stores grid and lock snapshots (max 40)
+  interface HistorySnapshot {
+    grid: CellType[][];
+    lockedCells: Record<string, boolean>;
+  }
+  const historyRef = useRef<HistorySnapshot[]>([]);
   const [historyLen, setHistoryLen] = useState(0);
 
   const pushGridHistory = useCallback(() => {
-    historyRef.current = [...historyRef.current.slice(-39), grid.map((r) => [...r])];
+    historyRef.current = [
+      ...historyRef.current.slice(-39),
+      { grid: grid.map((r) => [...r]), lockedCells: { ...lockedCells } }
+    ];
     setHistoryLen(historyRef.current.length);
-  }, [grid]);
+  }, [grid, lockedCells]);
 
   const undo = useCallback(() => {
     if (historyRef.current.length === 0) return;
     const prev = historyRef.current[historyRef.current.length - 1];
     historyRef.current = historyRef.current.slice(0, -1);
     setHistoryLen(historyRef.current.length);
-    setGrid(prev);
+    setGrid(prev.grid);
+    setLockedCells(prev.lockedCells);
   }, []);
 
   // Saved levels
@@ -131,6 +147,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setPendingW(stored.width); setPendingH(stored.height);
     setEdges(stored.edges as typeof edges);
     setGrid(stored.grid as CellType[][]);
+    setLockedCells((stored as any).lockedCells ?? {});
     setTrailCollision(!!stored.trailCollision);
     setDifficulty((stored.difficulty != undefined ? stored.difficulty : 2) as 1 | 2 | 3 | 4);
     setSavedRequestId(stored.requestId ?? null);
@@ -145,10 +162,16 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setConveyorConfig(stored.conveyorConfig ?? []);
     setTrampolineConfig(stored.trampolineConfig ?? []);
     setActivePlacingBoxId(null);
+
+    setSelection(null);
+    setGeneratedCandidates([]);
+    setActiveCandidateIndex(null);
   }, []);
 
   useEffect(() => { reloadLevels(); }, [reloadLevels]);
   useEffect(() => { if (editId !== null) loadForEdit(editId); }, [editId, loadForEdit]);
+
+
 
   const applyResize = useCallback(() => {
     const newW = Math.max(3, Math.min(16, pendingW));
@@ -160,9 +183,25 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setConveyorPowerRequired((cpr) => cpr.filter((p) => p.row < newH && p.col < newW));
     setConveyorConfig((cc) => cc.filter((c) => c.position.row < newH && c.position.col < newW));
     setTrampolineConfig((tc) => tc.filter((c) => c.position.row < newH && c.position.col < newW));
+
+    setSelection(null);
+    setLockedCells((prev) => {
+      const filtered: Record<string, boolean> = {};
+      for (const [key, value] of Object.entries(prev)) {
+        const [rStr, cStr] = key.split(',');
+        const r = parseInt(rStr, 10);
+        const c = parseInt(cStr, 10);
+        if (r < newH && c < newW) {
+          filtered[key] = value;
+        }
+      }
+      return filtered;
+    });
+    setActiveCandidateIndex(null);
   }, [pendingW, pendingH]);
 
   const paintCell = useCallback((r: number, c: number, isDrag: boolean) => {
+    setActiveCandidateIndex(null);
     if (!isDrag) pushGridHistory();
     if (activeTool === 'place_obj1') { setObjects((os) => os.map((o) => o.id === 1 ? { ...o, row: r, col: c } : o)); return; }
     if (activeTool === 'place_obj2') { setObjects((os) => os.map((o) => o.id === 2 ? { ...o, row: r, col: c } : o)); return; }
@@ -174,6 +213,29 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     }
     // BUG FIX: if still in place_box mode but no box to place, do nothing
     if (activeTool === 'place_box') return;
+    if (activeTool === 'lock') {
+      setLockedCells((prev) => {
+        const key = `${r},${c}`;
+        const next = { ...prev };
+        if (isDrag) {
+          if (paintMode.current === 'erase') {
+            delete next[key];
+          } else {
+            next[key] = true;
+          }
+        } else {
+          if (next[key]) {
+            paintMode.current = 'erase';
+            delete next[key];
+          } else {
+            paintMode.current = 'paint';
+            next[key] = true;
+          }
+        }
+        return next;
+      });
+      return;
+    }
     // 'select' tool paints nothing
     if (activeTool === 'select') return;
     const cellType: CellType = activeTool === 'erase' ? 'empty' : (activeTool as CellType);
@@ -221,10 +283,43 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         ...(conveyorPowerRequired.length > 0 ? { conveyorPowerRequired } : {}),
         ...(conveyorConfig.length > 0 ? { conveyorConfig } : {}),
         ...(trampolineConfig.length > 0 ? { trampolineConfig } : {}),
+        ...(Object.keys(lockedCells).length > 0 ? { lockedCells } : {}),
       },
       error: null,
     };
-  }, [editId, levelName, width, height, edges, grid, objects, trailCollision, boxes, conveyorPowerRequired, conveyorConfig, trampolineConfig]);
+  }, [editId, levelName, width, height, edges, grid, objects, trailCollision, boxes, conveyorPowerRequired, conveyorConfig, trampolineConfig, lockedCells]);
+
+  // Live Path Solver effect (debounced)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      const { level, error } = generateLevelData();
+      if (error || !level) {
+        setOptimalSolution(null);
+        setOptimalSolutionMoves(0);
+        setOptimalSolutionTrajectory(null);
+        return;
+      }
+      try {
+        const { solvePuzzle, getSolutionTrajectories } = await import('@/app/src/games/logic/solver');
+        // Limit search depth to 26 to keep it fast while resolving Hard/Expert levels
+        const result = solvePuzzle(level, 26, 2000);
+        if (result.solvable && result.solution) {
+          setOptimalSolution(result.solution);
+          setOptimalSolutionMoves(result.moveCount);
+          const traj = getSolutionTrajectories(level, result.solution);
+          setOptimalSolutionTrajectory(traj);
+        } else {
+          setOptimalSolution(null);
+          setOptimalSolutionMoves(0);
+          setOptimalSolutionTrajectory(null);
+        }
+      } catch (err) {
+        console.error('Live solver error:', err);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [grid, width, height, objects, boxes, edges, trailCollision, conveyorPowerRequired, conveyorConfig, trampolineConfig, generateLevelData]);
 
   const buildPayload = useCallback((level: LevelData): Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt'> => ({
     name: level.name, width: level.width, height: level.height, edges: level.edges,
@@ -234,6 +329,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     conveyorConfig: level.conveyorConfig,
     trampolineConfig: level.trampolineConfig,
     difficulty,
+    lockedCells: level.lockedCells,
     ...(savedRequestId ? { requestId: savedRequestId } : {}),
     position: savedLevels.length
   }), [difficulty, savedRequestId, savedLevels.length]);
@@ -336,6 +432,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       setPendingW(parsed.width); setPendingH(parsed.height);
       if (parsed.edges) setEdges(parsed.edges as typeof edges);
       setGrid(parsed.grid as CellType[][]);
+      setLockedCells((parsed as any).lockedCells ?? {});
       setTrailCollision(!!parsed.trailCollision);
       setBoxes((parsed.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
       setConveyorPowerRequired(parsed.conveyorPowerRequired ?? []);
@@ -375,6 +472,10 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setConveyorConfig(fl.conveyorConfig ?? []);
     setTrampolineConfig(fl.trampolineConfig ?? []);
     setActivePlacingBoxId(null);
+
+    setSelection(null);
+    setGeneratedCandidates([]);
+    setActiveCandidateIndex(null);
   }, []);
 
   const doPublish = useCallback(async () => {
@@ -423,39 +524,23 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setGrid(makeGrid(5, 5)); setTrailCollision(false); setDifficulty(2);
     setSavedRequestId(null); savedIdForSubmitRef.current = null;
     setObjects([...DEFAULT_OBJS.map((o) => ({ ...o }))]);
-    setBoxes([]); setConveyorPowerRequired([]); setConveyorConfig([]); setTrampolineConfig([]); setActivePlacingBoxId(null); setFirestoreEditId(null);
+    setBoxes([]); setLockedCells({}); setConveyorPowerRequired([]); setConveyorConfig([]); setTrampolineConfig([]); setActivePlacingBoxId(null); setFirestoreEditId(null);
+
+    setSelection(null);
+    setGeneratedCandidates([]);
+    setActiveCandidateIndex(null);
   }, [router]);
 
   const [generatorDialogOpen, setGeneratorDialogOpen] = useState(false);
 
-  const doGenerateLevel = useCallback(async (filtersUI: import('./components/EditorDialogs').GeneratorFiltersUI) => {
+  const doGenerateLevel = useCallback((
+    level: LevelData,
+    solution: string[] | null,
+    moveCount: number,
+    allCandidates?: { level: LevelData; solution: string[] | null; moveCount: number }[],
+    selectedIndex?: number
+  ) => {
     pushGridHistory();
-    const { generateProceduralLevel } = await import('@/app/src/games/logic/generator');
-    
-    const { level, solution, moveCount } = generateProceduralLevel({
-      width: filtersUI.width,
-      height: filtersUI.height,
-      difficulty: filtersUI.difficulty,
-      playerCount: filtersUI.playerCount,
-      edgeBehavior: filtersUI.edgeBehavior,
-      edgeTopAllowed: filtersUI.edgeTopAllowed,
-      edgeBottomAllowed: filtersUI.edgeBottomAllowed,
-      edgeLeftAllowed: filtersUI.edgeLeftAllowed,
-      edgeRightAllowed: filtersUI.edgeRightAllowed,
-      conveyorSteps: filtersUI.conveyorSteps,
-      trampolineSteps: filtersUI.trampolineSteps,
-      playerMode: filtersUI.playerMode,
-      playerLock: filtersUI.playerLock,
-      trailCollision: filtersUI.trailCollision,
-      obstacleDensity: filtersUI.obstacleDensity,
-      iceDensity: filtersUI.iceDensity,
-      conveyorDensity: filtersUI.conveyorDensity,
-      trampolineDensity: filtersUI.trampolineDensity,
-      forbiddenDensity: filtersUI.forbiddenDensity,
-      toggleDensity: filtersUI.toggleDensity,
-      teleporterCount: filtersUI.teleporterCount,
-    });
-
     setLevelName(level.name);
     setOptimalSolution(solution);
     setOptimalSolutionMoves(moveCount);
@@ -481,6 +566,27 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setTrampolineConfig(level.trampolineConfig ?? []);
     setActivePlacingBoxId(null);
     setGeneratorDialogOpen(false);
+
+    setSelection(null);
+    setLockedCells((prev) => {
+      const filtered: Record<string, boolean> = {};
+      for (const [key, value] of Object.entries(prev)) {
+        const [rStr, cStr] = key.split(',');
+        const r = parseInt(rStr, 10);
+        const c = parseInt(cStr, 10);
+        if (r < level.height && c < level.width) {
+          filtered[key] = value;
+        }
+      }
+      return filtered;
+    });
+
+    if (allCandidates) {
+      setGeneratedCandidates(allCandidates);
+    }
+    if (selectedIndex !== undefined) {
+      setActiveCandidateIndex(selectedIndex);
+    }
   }, [pushGridHistory]);
 
   const handleTest = useCallback(() => {
@@ -518,6 +624,10 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     showFirestoreLevels, setShowFirestoreLevels, publishStatus, firestoreEditId, setFirestoreEditId,
     // Undo
     undo, canUndo: historyLen > 0, pushGridHistory,
+    lockedCells, setLockedCells, optimalSolutionTrajectory, setOptimalSolutionTrajectory,
+    selection, setSelection,
+    generatedCandidates, setGeneratedCandidates,
+    activeCandidateIndex, setActiveCandidateIndex,
     // Handlers
     applyResize, paintCell, generateLevelData,
     doSave, handleSaveClick,
