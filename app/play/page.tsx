@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import type { StoredLevel } from '@/app/src/lib/db';
 import { useUserStorage } from '@/app/src/lib/userStorage';
 import { PlayScreen } from '@/app/src/game2/components/PlayScreen';
-import { convertToGame2State } from './converter';
+import { convertToGame2State } from '@/app/src/game2/logic/converter';
 import { LoadingScreen } from './components/LoadingScreen';
 import { ErrorScreen } from './components/ErrorScreen';
 import { WinResultOverlay } from './components/WinResultOverlay';
@@ -223,6 +223,9 @@ function PlayContent() {
                         console.warn('[Play] Dexie local save failed:', e);
                     }
                 }
+            } else {
+                console.warn('[Play] Worker verification failed with status:', res.status);
+                setWorkerResult({ success: false });
             }
         } catch (err) {
             console.warn('[Play] Worker call failed:', err);

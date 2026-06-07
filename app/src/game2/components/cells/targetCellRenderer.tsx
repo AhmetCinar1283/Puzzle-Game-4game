@@ -26,31 +26,12 @@ export const TargetCellRenderer = ({ cell }: { cell: Cell }) => {
             position: 'relative',
             overflow: 'hidden'
         }}>
-            <style>{`
-                @keyframes targetPulse {
-                    0% { transform: scale(0.9); opacity: 0.7; }
-                    50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 8px rgba(${rgb}, 0.95)); }
-                    100% { transform: scale(0.9); opacity: 0.7; }
-                }
-                @keyframes targetRotate {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                .target-pulse-anim {
-                    animation: targetPulse 2.2s infinite ease-in-out;
-                }
-                .target-rotate-anim {
-                    position: absolute;
-                    width: 48px;
-                    height: 48px;
-                    border: 1.5px dashed rgba(${rgb}, 0.45);
-                    border-radius: 50%;
-                    animation: targetRotate 8s infinite linear;
-                    pointer-events: none;
-                }
-            `}</style>
-            
-            <div className="target-rotate-anim" />
+            <div 
+                className="target-rotate-anim" 
+                style={{
+                    border: `1.5px dashed rgba(${rgb}, 0.45)`,
+                }}
+            />
 
             <span
                 className="target-pulse-anim"

@@ -35,30 +35,8 @@ export const IceCellRenderer = ({ cell, entityOnCell, prevEntityOnCell }: IceCel
                 transition: 'background 200ms ease, border-color 200ms ease, box-shadow 200ms ease',
             }}
         >
-            <style>{`
-                @keyframes iceGlint-${cell.id} {
-                    0% { transform: translateX(-150%) translateY(-150%) rotate(45deg); }
-                    25% { transform: translateX(150%) translateY(150%) rotate(45deg); }
-                    100% { transform: translateX(150%) translateY(150%) rotate(45deg); }
-                }
-                @keyframes icePulse-${cell.id} {
-                    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(165,243,252,0.9)); }
-                    50% { transform: scale(1.15); filter: drop-shadow(0 0 18px rgba(165,243,252,1)); }
-                }
-                #cell-${cell.id} .ice-glint-line {
-                    position: absolute;
-                    top: -50%; left: -50%; width: 200%; height: 200%;
-                    background: linear-gradient(rgba(255,255,255,0) 40%, rgba(255,255,255,0.45) 50%, rgba(255,255,255,0) 60%);
-                    animation: iceGlint-${cell.id} ${isOccupied ? '1.5s' : '5s'} infinite ease-in-out;
-                    pointer-events: none;
-                }
-                #cell-${cell.id} .ice-icon-animated {
-                    animation: ${isOccupied ? `icePulse-${cell.id} 1.2s infinite ease-in-out` : 'none'};
-                }
-            `}</style>
-            <div className="ice-glint-line" />
             <span 
-                className="ice-icon-animated"
+                className={isOccupied ? 'ice-icon-animated' : undefined}
                 style={{ 
                     fontSize: 22, 
                     color: '#cffafe', 

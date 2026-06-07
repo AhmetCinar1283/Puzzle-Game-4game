@@ -17,6 +17,11 @@ type LevelEntry = StoredLevel & { id: number };
 
 const SELECTED_PART_STORAGE_KEY = 'levelsPage:selectedPartId';
 
+function formatTime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
 function LevelsPageContent() {
   const t = useT();
   const router = useRouter();
@@ -77,6 +82,90 @@ function LevelsPageContent() {
   const handlePanUpOrLeave = () => {
     setIsPanning(false);
   };
+
+  // ── Physics Types & Setup ───────────────────────────────────────────
+  interface PhysicsNode {
+    id: string;
+    levelIndex?: number;
+    levelId?: number;
+    firestoreId?: string;
+    name?: string;
+    isPortal?: boolean;
+    portalType?: 'start' | 'end';
+    anchorX: number;
+    anchorY: number;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    mass: number;
+    isLocked: boolean;
+    isCompleted: boolean;
+    stars?: 1 | 2 | 3;
+    isDragging?: boolean;
+  }
+
+  const canvasWidth = 800;
+  const canvasHeight = 1050;
+
+  const nodesRef = useRef<PhysicsNode[]>([]);
+  const elementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const pathsRef = useRef<Map<string, SVGPathElement>>(new Map());
+  const bridgesRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const tunnelsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const initialScrolledRef = useRef(false);
+  const dragTargetRef = useRef({ x: 0, y: 0 });
+  const draggingNodeIdRef = useRef<string | null>(null);
+  const animationFrameId = useRef<number | null>(null);
+  const keyboardSelectedIdxRef = useRef<number | null>(null);
+
+  const handleNodePointerDown = useCallback((nodeId: string, e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    draggingNodeIdRef.current = nodeId;
+
+    const nodes = nodesRef.current;
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) {
+      node.isDragging = true;
+      const canvas = document.getElementById('physics-canvas');
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        dragTargetRef.current = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+      }
+    }
+  }, []);
+
+  const handleNodePointerMove = useCallback((nodeId: string, e: React.PointerEvent) => {
+    if (draggingNodeIdRef.current === nodeId) {
+      const canvas = document.getElementById('physics-canvas');
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        dragTargetRef.current = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+      }
+    }
+  }, []);
+
+  const handleNodePointerUp = useCallback((nodeId: string, e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    draggingNodeIdRef.current = null;
+
+    const nodes = nodesRef.current;
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) {
+      node.isDragging = false;
+    }
+  }, []);
+
+
 
   // ── Geri tuşu (popstate) ─────────────────────────────
   useEffect(() => {
@@ -308,52 +397,81 @@ function LevelsPageContent() {
   }, [parts, selectedPartId, partsMap, filteredPresets]);
 
   // Viewport Auto-Centering for Active Level
-  const centerActiveNode = useCallback(() => {
-    if (!mapRef.current || !selectedPartId) return;
-    const activePart = partsMap.get(selectedPartId);
-    if (!activePart) return;
-
-    // Find first unlocked level that is not completed
-    let activeLv = filteredPresets.find((lv) => {
-      const isCompleted = lv.firestoreId ? playedMap.has(lv.firestoreId) : false;
-      const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
-      return !isLocked && !isCompleted;
-    });
-
-    // Fallback to first level if none found or all completed
-    if (!activeLv && filteredPresets.length > 0) {
-      activeLv = filteredPresets[0];
+  const getSegmentState = useCallback((idx: number) => {
+    const nodes = nodesRef.current;
+    if (!nodes || idx < 0 || idx >= nodes.length - 1) return 'locked';
+    const targetNode = nodes[idx + 1];
+    if (!targetNode) return 'locked';
+    if (!targetNode.isPortal) {
+      if (targetNode.isCompleted) return 'completed';
+      if (!targetNode.isLocked) return 'current';
+      return 'locked';
+    } else {
+      if (targetNode.isCompleted) return 'completed';
+      return 'locked';
     }
+  }, []);
 
-    if (!activeLv) return;
-
-    const entry = activePart.order[activeLv.firestoreId!];
-    let x = entry?.mapX;
-    let y = entry?.mapY;
-
-    if (x === undefined || y === undefined) {
-      const idx = filteredPresets.findIndex((l) => l.id === activeLv!.id);
-      const count = filteredPresets.length;
-      const ratio = count > 1 ? idx / (count - 1) : 0.5;
-      y = Math.round(85 - ratio * 70);
-      x = Math.round(50 + Math.sin(ratio * Math.PI * 3.5) * 35);
-    }
+  const centerNodeAtIndex = useCallback((idx: number, force = false) => {
+    if (!mapRef.current) return;
+    const nodes = nodesRef.current;
+    const node = nodes.find(n => n.levelIndex === idx);
+    if (!node) return;
 
     const container = mapRef.current;
-    const scrollWidth = container.scrollWidth;
-    const scrollHeight = container.scrollHeight;
     const clientWidth = container.clientWidth;
     const clientHeight = container.clientHeight;
 
-    const pixelX = (x / 100) * scrollWidth;
-    const pixelY = (y / 100) * scrollHeight;
+    if (container.scrollHeight <= clientHeight && !force) {
+      return;
+    }
+
+    const maxScrollLeft = Math.max(0, container.scrollWidth - clientWidth);
+    const maxScrollTop = Math.max(0, container.scrollHeight - clientHeight);
+    const targetLeft = Math.max(0, Math.min(maxScrollLeft, node.x - clientWidth / 2));
+    const targetTop = Math.max(0, Math.min(maxScrollTop, node.y - clientHeight / 2));
 
     container.scrollTo({
-      left: pixelX - clientWidth / 2,
-      top: pixelY - clientHeight / 2,
+      left: targetLeft,
+      top: targetTop,
       behavior: 'smooth',
     });
-  }, [selectedPartId, partsMap, filteredPresets, lockedSet, playedMap]);
+  }, []);
+
+  const centerActiveNode = useCallback((force = false) => {
+    const nodes = nodesRef.current;
+    if (!nodes || nodes.length === 0) return;
+
+    let activeNode = nodes.find(n => !n.isPortal && !n.isLocked && !n.isCompleted);
+    if (!activeNode) {
+      activeNode = nodes.find(n => !n.isPortal);
+    }
+
+    if (!activeNode || !mapRef.current) return;
+
+    const container = mapRef.current;
+    const clientWidth = container.clientWidth;
+    const clientHeight = container.clientHeight;
+
+    if (container.scrollHeight <= clientHeight && !force) {
+      return;
+    }
+
+    const maxScrollLeft = Math.max(0, container.scrollWidth - clientWidth);
+    const maxScrollTop = Math.max(0, container.scrollHeight - clientHeight);
+    const targetLeft = Math.max(0, Math.min(maxScrollLeft, activeNode.x - clientWidth / 2));
+    const targetTop = Math.max(0, Math.min(maxScrollTop, activeNode.y - clientHeight / 2));
+
+    container.scrollTo({
+      left: targetLeft,
+      top: targetTop,
+      behavior: 'smooth',
+    });
+
+    if (!force) {
+      initialScrolledRef.current = true;
+    }
+  }, []);
 
   const [gamepadSelectedNodeIndex, setGamepadSelectedNodeIndex] = useState<number | null>(null);
 
@@ -370,46 +488,313 @@ function LevelsPageContent() {
     setGamepadSelectedNodeIndex(activeTab === 'campaign' ? defaultActiveIdx : 0);
   }, [activeTab, viewMode, defaultActiveIdx]);
 
-  const centerNodeAtIndex = useCallback((idx: number) => {
-    if (!mapRef.current || !selectedPartId) return;
-    const activePart = partsMap.get(selectedPartId);
-    if (!activePart) return;
-
-    const lv = filteredPresets[idx];
-    if (!lv) return;
-
-    const entry = lv.firestoreId ? activePart.order[lv.firestoreId] : undefined;
-    let x = entry?.mapX;
-    let y = entry?.mapY;
-
-    if (x === undefined || y === undefined) {
-      const count = filteredPresets.length;
-      const ratio = count > 1 ? idx / (count - 1) : 0.5;
-      y = Math.round(85 - ratio * 70);
-      x = Math.round(50 + Math.sin(ratio * Math.PI * 3.5) * 35);
-    }
-
-    const container = mapRef.current;
-    const scrollWidth = container.scrollWidth;
-    const scrollHeight = container.scrollHeight;
-    const clientWidth = container.clientWidth;
-    const clientHeight = container.clientHeight;
-
-    const pixelX = (x / 100) * scrollWidth;
-    const pixelY = (y / 100) * scrollHeight;
-
-    container.scrollTo({
-      left: pixelX - clientWidth / 2,
-      top: pixelY - clientHeight / 2,
-      behavior: 'smooth',
-    });
-  }, [selectedPartId, partsMap, filteredPresets]);
-
+  // Handle selected node kick (impulse) and centering when index changes
   useEffect(() => {
     if (activeTab === 'campaign' && viewMode === 'map' && gamepadSelectedNodeIndex !== null) {
-      centerNodeAtIndex(gamepadSelectedNodeIndex);
+      const targetNode = nodesRef.current.find(n => n.levelIndex === gamepadSelectedNodeIndex);
+      if (targetNode) {
+        targetNode.vx += (Math.random() - 0.5) * 16;
+        targetNode.vy += (Math.random() - 0.5) * 16;
+      }
+      // Delay centering slightly to let physics load
+      const timer = setTimeout(() => {
+        if (initialScrolledRef.current) {
+          centerNodeAtIndex(gamepadSelectedNodeIndex);
+        }
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [gamepadSelectedNodeIndex, activeTab, viewMode, centerNodeAtIndex]);
+
+  // Main Physics loop
+  const loop = useCallback(() => {
+    const nodes = nodesRef.current;
+    if (!nodes || nodes.length === 0) {
+      animationFrameId.current = requestAnimationFrame(loop);
+      return;
+    }
+
+    const k_rope = 0.032;
+    const rest_dist_factor = 0.88;
+    const count = nodes.length;
+
+    // 1. Spring forces between connected nodes
+    for (let i = 0; i < count - 1; i++) {
+      const nA = nodes[i];
+      const nB = nodes[i + 1];
+
+      const dx = nB.x - nA.x;
+      const dy = nB.y - nA.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+
+      const adx = nB.anchorX - nA.anchorX;
+      const ady = nB.anchorY - nA.anchorY;
+      const restLength = Math.sqrt(adx * adx + ady * ady) * rest_dist_factor;
+
+      const extension = dist - restLength;
+      const force = k_rope * extension;
+
+      const fx = force * (dx / dist);
+      const fy = force * (dy / dist);
+
+      if (!nA.isDragging) {
+        nA.vx += fx / nA.mass;
+        nA.vy += fy / nA.mass;
+      }
+      if (!nB.isDragging) {
+        nB.vx -= fx / nB.mass;
+        nB.vy -= fy / nB.mass;
+      }
+    }
+
+
+
+    // 3. Anchor pull, hover bounce, damping, integration
+    const k_anchor = 0.07;
+    const damping = 0.83;
+    const time = Date.now() * 0.0035;
+
+    for (let i = 0; i < count; i++) {
+      const n = nodes[i];
+
+      if (n.isDragging) {
+        n.x += (dragTargetRef.current.x - n.x) * 0.4;
+        n.y += (dragTargetRef.current.y - n.y) * 0.4;
+        n.vx = 0;
+        n.vy = 0;
+      } else {
+        const fax = -k_anchor * (n.x - n.anchorX);
+        const fay = -k_anchor * (n.y - n.anchorY);
+
+        n.vx += fax / n.mass;
+        n.vy += fay / n.mass;
+
+        // selection float
+        if (keyboardSelectedIdxRef.current === n.levelIndex && !n.isPortal) {
+          n.vx += Math.sin(time) * 0.16;
+          n.vy += Math.cos(time * 0.85) * 0.16;
+        }
+
+        n.vx *= damping;
+        n.vy *= damping;
+        n.x += n.vx;
+        n.y += n.vy;
+      }
+
+      const el = elementsRef.current.get(n.id);
+      if (el) {
+        el.style.transform = `translate3d(${n.x}px, ${n.y}px, 0) translate(-50%, -50%)`;
+      }
+    }
+
+    // 4. Update SVG paths and bridge/tunnel overlays in real-time
+    for (let i = 0; i < count - 1; i++) {
+      const nA = nodes[i];
+      const nB = nodes[i + 1];
+
+      const midX = (nA.x + nB.x) / 2;
+      const midY = (nA.y + nB.y) / 2;
+
+      const dx = nB.x - nA.x;
+      const dy = nB.y - nA.y;
+      const len = Math.sqrt(dx * dx + dy * dy) || 0.001;
+      const nx = -dy / len;
+      const ny = dx / len;
+
+      const sign = (i % 2 === 0) ? 1 : -1;
+      const bendAmount = len * 0.12 * sign;
+      const ctrlX = midX + nx * bendAmount;
+      const ctrlY = midY + ny * bendAmount;
+
+      const pathData = `M ${nA.x} ${nA.y} Q ${ctrlX} ${ctrlY}, ${nB.x} ${nB.y}`;
+
+      const pathGlow = pathsRef.current.get(`glow-${i}`);
+      if (pathGlow) pathGlow.setAttribute('d', pathData);
+
+      const pathCore = pathsRef.current.get(`core-${i}`);
+      if (pathCore) pathCore.setAttribute('d', pathData);
+
+      const pathBeam = pathsRef.current.get(`beam-${i}`);
+      if (pathBeam) pathBeam.setAttribute('d', pathData);
+
+      const bridge = bridgesRef.current.get(`bridge-${i}`);
+      if (bridge) {
+        const angle = Math.atan2(dy, dx);
+        bridge.style.transform = `translate3d(${midX + nx * bendAmount * 0.5}px, ${midY + ny * bendAmount * 0.5}px, 0) translate(-50%, -50%) rotate(${angle}rad)`;
+      }
+
+      const tunnel = tunnelsRef.current.get(`tunnel-${i}`);
+      if (tunnel) {
+        const angle = Math.atan2(dy, dx);
+        tunnel.style.transform = `translate3d(${midX + nx * bendAmount * 0.5}px, ${midY + ny * bendAmount * 0.5}px, 0) translate(-50%, -50%) rotate(${angle}rad)`;
+      }
+    }
+
+    // 5. Initial viewport centering on active node once dimensions are ready
+    if (!initialScrolledRef.current && mapRef.current && nodes.length > 0) {
+      const container = mapRef.current;
+      if (container.scrollHeight > container.clientHeight) {
+        centerActiveNode();
+      }
+    }
+
+    animationFrameId.current = requestAnimationFrame(loop);
+  }, [centerActiveNode]);
+
+  // Initialize and update nodesRef on level data changes
+  useEffect(() => {
+    if (viewMode !== 'map' || activeTab !== 'campaign') {
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+        animationFrameId.current = null;
+      }
+      return;
+    }
+
+    const activePart = partsMap.get(selectedPartId);
+    const currentIdx = parts.findIndex(p => p.id === selectedPartId);
+    const hasPortalStart = currentIdx > 0;
+    const nodesList: PhysicsNode[] = [];
+
+    // 1. Entry Portal (Portal Start)
+    if (hasPortalStart && activePart) {
+      const portalStartX = activePart.portalStartX !== undefined ? activePart.portalStartX : 50;
+      const portalStartY = activePart.portalStartY !== undefined ? activePart.portalStartY : 90;
+      
+      nodesList.push({
+        id: 'portal-start',
+        isPortal: true,
+        portalType: 'start',
+        anchorX: (portalStartX / 100) * canvasWidth,
+        anchorY: (portalStartY / 100) * canvasHeight,
+        x: (portalStartX / 100) * canvasWidth,
+        y: (portalStartY / 100) * canvasHeight,
+        vx: 0,
+        vy: 0,
+        mass: 1.8,
+        isLocked: false,
+        isCompleted: false,
+      });
+    }
+
+    // 2. Level Nodes
+    filteredPresets.forEach((lv, idx) => {
+      const entry = lv.firestoreId && activePart ? activePart.order[lv.firestoreId] : undefined;
+      let mapX = entry?.mapX;
+      let mapY = entry?.mapY;
+
+      if (mapX === undefined || mapY === undefined) {
+        const count = filteredPresets.length;
+        const ratio = count > 1 ? idx / (count - 1) : 0.5;
+        mapY = Math.round(85 - ratio * 70);
+        mapX = Math.round(50 + Math.sin(ratio * Math.PI * 3.5) * 35);
+      }
+
+      const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
+      const isCompleted = lv.firestoreId ? playedMap.has(lv.firestoreId) : false;
+      const playedData = lv.firestoreId ? playedMap.get(lv.firestoreId) : undefined;
+
+      nodesList.push({
+        id: `node-${lv.id}`,
+        levelIndex: idx,
+        levelId: lv.id,
+        firestoreId: lv.firestoreId,
+        name: lv.name,
+        isPortal: false,
+        anchorX: (mapX / 100) * canvasWidth,
+        anchorY: (mapY / 100) * canvasHeight,
+        x: (mapX / 100) * canvasWidth,
+        y: (mapY / 100) * canvasHeight,
+        vx: 0,
+        vy: 0,
+        mass: 1.0,
+        isLocked,
+        isCompleted,
+        stars: playedData?.score as 1 | 2 | 3,
+      });
+    });
+
+    // 3. Exit Portal (Portal End)
+    if (activePart) {
+      const portalX = activePart.portalX !== undefined ? activePart.portalX : 50;
+      const portalY = activePart.portalY !== undefined ? activePart.portalY : 10;
+      const isSessionCompleted = filteredPresets.length > 0 && filteredPresets.every(lv => lv.firestoreId && playedMap.has(lv.firestoreId));
+
+      nodesList.push({
+        id: 'portal-end',
+        isPortal: true,
+        portalType: 'end',
+        anchorX: (portalX / 100) * canvasWidth,
+        anchorY: (portalY / 100) * canvasHeight,
+        x: (portalX / 100) * canvasWidth,
+        y: (portalY / 100) * canvasHeight,
+        vx: 0,
+        vy: 0,
+        mass: 1.8,
+        isLocked: !isSessionCompleted,
+        isCompleted: isSessionCompleted,
+      });
+    }
+
+    nodesRef.current = nodesList;
+
+    if (!animationFrameId.current) {
+      animationFrameId.current = requestAnimationFrame(loop);
+    }
+
+    // Apply startup kick to make nodes float and settle
+    setTimeout(() => {
+      nodesRef.current.forEach(n => {
+        n.vx += (Math.random() - 0.5) * 8;
+        n.vy += (Math.random() - 0.5) * 8;
+      });
+    }, 100);
+
+    return () => {
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+        animationFrameId.current = null;
+      }
+    };
+  }, [filteredPresets, selectedPartId, viewMode, activeTab, partsMap, lockedSet, playedMap, loop]);
+
+  // Keyboard Navigation Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (activeTab === 'campaign' && viewMode === 'map') {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          setGamepadSelectedNodeIndex((prev) => {
+            const current = prev !== null ? prev : defaultActiveIdx;
+            return (current - 1 + filteredPresets.length) % filteredPresets.length;
+          });
+        } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          setGamepadSelectedNodeIndex((prev) => {
+            const current = prev !== null ? prev : defaultActiveIdx;
+            return (current + 1) % filteredPresets.length;
+          });
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const current = gamepadSelectedNodeIndex !== null ? gamepadSelectedNodeIndex : defaultActiveIdx;
+          const lv = filteredPresets[current];
+          if (lv) {
+            const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
+            if (!isLocked) {
+              router.push(`/play?id=${lv.id}&source=preset`);
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, viewMode, filteredPresets, gamepadSelectedNodeIndex, defaultActiveIdx, lockedSet, router]);
 
   useGamepad({
     onMove: (dir) => {
@@ -499,14 +884,10 @@ function LevelsPageContent() {
     }
   });
 
+  // Reset initial scroll flag when selected part changes
   useEffect(() => {
-    if (!loading && activeTab === 'campaign' && viewMode === 'map' && filteredPresets.length > 0) {
-      const timer = setTimeout(() => {
-        centerActiveNode();
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, [loading, activeTab, viewMode, selectedPartId, filteredPresets, centerActiveNode]);
+    initialScrolledRef.current = false;
+  }, [selectedPartId]);
 
   return (
     <div 
@@ -559,26 +940,18 @@ function LevelsPageContent() {
       {/* CSS Animation Overrides */}
       <style>{`
         .map-node-btn {
-          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          transition: filter 0.3s ease, z-index 0.3s ease;
         }
         .map-node-btn:hover {
-          transform: translate(-50%, -50%) scale(1.22) !important;
           filter: drop-shadow(0 0 15px currentColor);
           z-index: 15 !important;
         }
-        .map-node-btn:active {
-          transform: translate(-50%, -50%) scale(0.92) !important;
-        }
         .portal-btn {
-          transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+          transition: filter 0.3s ease, z-index 0.3s ease;
         }
         .portal-btn:hover {
-          transform: translate(-50%, -50%) scale(1.18) !important;
           filter: brightness(1.25) drop-shadow(0 0 20px currentColor);
           z-index: 15 !important;
-        }
-        .portal-btn:active {
-          transform: translate(-50%, -50%) scale(0.92) !important;
         }
         @keyframes march {
           to { stroke-dashoffset: -1000; }
@@ -588,17 +961,17 @@ function LevelsPageContent() {
           100% { transform: scale(1.4); opacity: 0; }
         }
         @keyframes portalSpin {
-          from { transform: translate(-50%, -50%) rotate(0deg); }
-          to { transform: translate(-50%, -50%) rotate(360deg); }
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
         @keyframes portalPulse {
           from { transform: scale(0.95); opacity: 0.85; }
           to { transform: scale(1.15); opacity: 1; }
         }
         @keyframes activeNodeFloat {
-          0% { transform: translate(-50%, -50%) translateY(0px); }
-          50% { transform: translate(-50%, -50%) translateY(-5px); }
-          100% { transform: translate(-50%, -50%) translateY(0px); }
+          0% { transform: translateY(0px); }
+          50% { transform: translateY(-5px); }
+          100% { transform: translateY(0px); }
         }
         .active-floating-node {
           animation: activeNodeFloat 3s ease-in-out infinite;
@@ -769,387 +1142,888 @@ function LevelsPageContent() {
       </div>
 
       {/* Full-Screen Campaign Map View */}
-      {activeTab === 'campaign' && viewMode === 'map' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', width: '100%', height: '100%' }}>
+      {activeTab === 'campaign' && viewMode === 'map' && (() => {
+        const activePart = partsMap.get(selectedPartId);
+        const mapTheme = activePart?.mapTheme || 'cyber-grid';
+        let activeColor = '#00ff88';
+        if (mapTheme === 'retro-matrix') activeColor = '#22c55e';
+        if (mapTheme === 'neon-abyss') activeColor = '#ec4899';
+        if (mapTheme === 'cosmic-vortex') activeColor = '#a855f7';
+        if (mapTheme === 'star-nebula') activeColor = '#6366f1';
 
-          {/* Warp transition overlay */}
-          {isWarping && (
+        const hasPortalStart = parts.findIndex(p => p.id === selectedPartId) > 0;
+        const isSessionCompleted = filteredPresets.length > 0 && filteredPresets.every(lv => lv.firestoreId && playedMap.has(lv.firestoreId));
+
+        const handleEntryPortalClick = () => {
+          const currentIdx = parts.findIndex(p => p.id === selectedPartId);
+          if (currentIdx > 0) {
+            setIsWarping(true);
+            setTimeout(() => {
+              setSelectedPartId(parts[currentIdx - 1].id);
+              setIsWarping(false);
+            }, 1100);
+          }
+        };
+
+        const handleExitPortalClick = () => {
+          if (!isSessionCompleted) {
+            alert(t('levels.portal_next_tooltip_locked'));
+            return;
+          }
+          const currentIdx = parts.findIndex(p => p.id === selectedPartId);
+          if (currentIdx !== -1 && currentIdx < parts.length - 1) {
+            setIsWarping(true);
+            setTimeout(() => {
+              setSelectedPartId(parts[currentIdx + 1].id);
+              setIsWarping(false);
+            }, 1100);
+          } else {
+            setVictoryModal(true);
+          }
+        };
+
+        return (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', width: '100%', height: '100%' }}>
+
+            {/* Warp transition overlay */}
+            {isWarping && (
+              <div
+                style={{
+                  position: 'absolute', inset: 0, zIndex: 1000,
+                  background: '#03050a',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  animation: 'warpFlash 1.2s ease-in-out forwards',
+                  overflow: 'hidden'
+                }}
+              >
+                <h2 style={{ fontSize: 24, fontWeight: 900, color: '#00ff88', letterSpacing: '0.3em', textShadow: '0 0 20px rgba(0,255,136,0.6)', textTransform: 'uppercase', zIndex: 10, animation: 'warpText 1.2s ease-in-out' }}>
+                  WARPING...
+                </h2>
+                <style>{`
+                  @keyframes warpFlash {
+                    0% { opacity: 0; backdrop-filter: blur(0px); }
+                    15% { opacity: 1; backdrop-filter: blur(15px); background: rgba(255,255,255,0.9); }
+                    35% { background: #03050a; }
+                    85% { opacity: 1; }
+                    100% { opacity: 0; pointer-events: none; }
+                  }
+                  @keyframes warpText {
+                    0% { transform: scale(0.6); opacity: 0; letter-spacing: 0.1em; }
+                    50% { transform: scale(1.15); opacity: 1; letter-spacing: 0.4em; }
+                    100% { transform: scale(1.6); opacity: 0; letter-spacing: 0.6em; }
+                  }
+                `}</style>
+              </div>
+            )}
+
+            {/* Map canvas container */}
             <div
+              ref={mapRef}
+              onMouseDown={handlePanDown}
+              onMouseMove={handlePanMove}
+              onMouseUp={handlePanUpOrLeave}
+              onMouseLeave={handlePanUpOrLeave}
               style={{
-                position: 'absolute', inset: 0, zIndex: 1000,
-                background: '#03050a',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                animation: 'warpFlash 1.2s ease-in-out forwards',
-                overflow: 'hidden'
+                width: '100%',
+                height: '100%',
+                overflowY: 'auto',
+                overflowX: 'auto',
+                position: 'absolute',
+                inset: 0,
+                zIndex: 1,
+                cursor: isPanning ? 'grabbing' : 'grab',
+                userSelect: 'none',
+                touchAction: 'pan-x pan-y',
+                WebkitOverflowScrolling: 'touch',
+                paddingBottom: 110,
+                paddingTop: 76
               }}
             >
-              <h2 style={{ fontSize: 24, fontWeight: 900, color: '#00ff88', letterSpacing: '0.3em', textShadow: '0 0 20px rgba(0,255,136,0.6)', textTransform: 'uppercase', zIndex: 10, animation: 'warpText 1.2s ease-in-out' }}>
-                WARPING...
-              </h2>
-              <style>{`
-                @keyframes warpFlash {
-                  0% { opacity: 0; backdrop-filter: blur(0px); }
-                  15% { opacity: 1; backdrop-filter: blur(15px); background: rgba(255,255,255,0.9); }
-                  35% { background: #03050a; }
-                  85% { opacity: 1; }
-                  100% { opacity: 0; pointer-events: none; }
-                }
-                @keyframes warpText {
-                  0% { transform: scale(0.6); opacity: 0; letter-spacing: 0.1em; }
-                  50% { transform: scale(1.15); opacity: 1; letter-spacing: 0.4em; }
-                  100% { transform: scale(1.6); opacity: 0; letter-spacing: 0.6em; }
-                }
-              `}</style>
-            </div>
-          )}
+              {/* Scrollable canvas dimensions centered */}
+              <div 
+                id="physics-canvas" 
+                style={{ 
+                  width: canvasWidth, 
+                  height: canvasHeight, 
+                  position: 'relative', 
+                  margin: '0 auto',
+                  background: 'transparent'
+                }}
+              >
 
-          {/* Map canvas container */}
-          <div
-            ref={mapRef}
-            onMouseDown={handlePanDown}
-            onMouseMove={handlePanMove}
-            onMouseUp={handlePanUpOrLeave}
-            onMouseLeave={handlePanUpOrLeave}
-            style={{
-              width: '100%',
-              height: '100%',
-              overflowY: 'auto',
-              overflowX: 'auto',
-              position: 'absolute',
-              inset: 0,
-              zIndex: 1,
-              cursor: isPanning ? 'grabbing' : 'grab',
-              userSelect: 'none',
-              touchAction: 'pan-x pan-y',
-              WebkitOverflowScrolling: 'touch',
-              paddingBottom: 110, // Avoid bottom cards block
-              paddingTop: 76 // Avoid header block
-            }}
-          >
-            {/* Scrollable canvas dimensions */}
-            <div style={{ width: '100%', minWidth: 600, height: 920, position: 'relative' }}>
-
-              {/* Connecting Spline Path Layer */}
-              {svgPathData && (() => {
-                const activePart = partsMap.get(selectedPartId);
-                const mapTheme = activePart?.mapTheme || 'cyber-grid';
-                let activeColor = '#00ff88';
-                if (mapTheme === 'retro-matrix') activeColor = '#22c55e';
-                if (mapTheme === 'neon-abyss') activeColor = '#ec4899';
-                if (mapTheme === 'cosmic-vortex') activeColor = '#a855f7';
-                if (mapTheme === 'star-nebula') activeColor = '#6366f1';
-
-                return (
-                  <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }}>
-                    {/* 1. Neon Glowing Drop Shadow Projection */}
-                    <path
-                      d={svgPathData}
-                      fill="none"
-                      stroke={activeColor}
-                      strokeWidth="10"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ opacity: 0.15, filter: 'blur(6px)' }}
-                    />
-                    {/* 2. Core Boundary tactile line */}
-                    <path
-                      d={svgPathData}
-                      fill="none"
-                      stroke="rgba(3, 7, 18, 0.6)"
-                      strokeWidth="6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    {/* 3. Glowing core spline */}
-                    <path
-                      d={svgPathData}
-                      fill="none"
-                      stroke={activeColor}
-                      strokeWidth="3.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ opacity: 0.8, filter: `drop-shadow(0 0 3px ${activeColor})` }}
-                    />
-                    {/* 4. Moving Dash Flow Light-Beam */}
-                    <path
-                      d={svgPathData}
-                      fill="none"
-                      stroke="#ffffff"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeDasharray="8, 16"
-                      style={{ opacity: 0.75, animation: 'march 18s linear infinite' }}
-                    />
-                  </svg>
-                );
-              })()}
-
-              {/* Entry Portal (Bottom) - warps to previous session */}
-              {(() => {
-                const activePart = partsMap.get(selectedPartId);
-                if (!activePart) return null;
-
-                const currentIdx = parts.findIndex(p => p.id === selectedPartId);
-                if (currentIdx <= 0) return null;
-
-                const portalStartX = activePart.portalStartX !== undefined ? activePart.portalStartX : 50;
-                const portalStartY = activePart.portalStartY !== undefined ? activePart.portalStartY : 90;
-
-                const handleEntryPortalClick = () => {
-                  setIsWarping(true);
-                  setTimeout(() => {
-                    setSelectedPartId(parts[currentIdx - 1].id);
-                    setIsWarping(false);
-                  }, 1100);
-                };
-
-                return (
-                  <div
-                    onClick={handleEntryPortalClick}
-                    className="portal-btn"
-                    style={{
-                      position: 'absolute',
-                      left: `${portalStartX}%`,
-                      top: `${portalStartY}%`,
-                      transform: 'translate(-50%, -50%)',
-                      width: 48,
-                      height: 48,
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      zIndex: 10,
-                      color: '#00ffcc',
-                      background: 'radial-gradient(circle, #0d9488 0%, #115e59 100%)',
-                      border: '2.5px solid #00f5d4',
-                      boxShadow: '0 0 20px rgba(0, 245, 212, 0.7), inset 0 0 10px rgba(0, 245, 212, 0.3)',
-                      animation: 'portalSpin 4s linear infinite',
-                    }}
-                    title={t('levels.portal_prev_tooltip')}
-                  >
-                    <span style={{ fontSize: 22, animation: 'portalPulse 1.5s ease-in-out infinite alternate' }}>
-                      🌀
-                    </span>
-                  </div>
-                );
-              })()}
-
-              {/* Exit Portal (Top) - warps to next session / victory */}
-              {(() => {
-                const activePart = partsMap.get(selectedPartId);
-                if (!activePart) return null;
-
-                const portalX = activePart.portalX !== undefined ? activePart.portalX : 50;
-                const portalY = activePart.portalY !== undefined ? activePart.portalY : 10;
-                
-                const isSessionCompleted = filteredPresets.length > 0 && filteredPresets.every(lv => lv.firestoreId && playedMap.has(lv.firestoreId));
-
-                const handleExitPortalClick = () => {
-                  if (!isSessionCompleted) {
-                    alert(t('levels.portal_next_tooltip_locked'));
-                    return;
+                {/* CSS Keyframes for Ambient Effects */}
+                <style>{`
+                  @keyframes march {
+                    to { stroke-dashoffset: -40; }
                   }
-                  
-                  const currentIdx = parts.findIndex(p => p.id === selectedPartId);
-                  if (currentIdx !== -1 && currentIdx < parts.length - 1) {
-                    setIsWarping(true);
-                    setTimeout(() => {
-                      setSelectedPartId(parts[currentIdx + 1].id);
-                      setIsWarping(false);
-                    }, 1100);
-                  } else {
-                    setVictoryModal(true);
+                  @keyframes tunnelPulse {
+                    0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.6; }
+                    100% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.95; }
                   }
-                };
+                  @keyframes starOrbit {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                  }
+                  @keyframes activeHalo {
+                    0% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.8; }
+                    50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+                    100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.8; }
+                  }
+                  @keyframes floatAmbient {
+                    0% { transform: translateY(0px) rotate(0deg); }
+                    100% { transform: translateY(-12px) rotate(10deg); }
+                  }
+                `}</style>
 
-                return (
-                  <div
-                    onClick={handleExitPortalClick}
-                    className="portal-btn"
-                    style={{
-                      position: 'absolute',
-                      left: `${portalX}%`,
-                      top: `${portalY}%`,
-                      transform: 'translate(-50%, -50%)',
-                      width: 50,
-                      height: 50,
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      zIndex: 10,
-                      color: isSessionCompleted ? '#fbbf24' : '#475569',
-                      background: isSessionCompleted 
-                        ? 'radial-gradient(circle, #f59e0b 0%, #78350f 100%)' 
-                        : 'radial-gradient(circle, #334155 0%, #0f172a 100%)',
-                      border: `2.5px solid ${isSessionCompleted ? '#fbbf24' : '#475569'}`,
-                      boxShadow: isSessionCompleted 
-                        ? '0 0 25px rgba(245, 158, 11, 0.75), inset 0 0 15px rgba(255, 215, 0, 0.4)' 
-                        : 'none',
-                      animation: isSessionCompleted ? 'portalSpin 3s linear infinite' : 'none',
-                    }}
-                    title={isSessionCompleted ? t('levels.portal_next_tooltip_unlocked') : t('levels.portal_next_tooltip_locked')}
-                  >
-                    <span style={{ fontSize: 24, animation: isSessionCompleted ? 'portalPulse 1.5s ease-in-out infinite alternate' : 'none' }}>
-                      🌀
-                    </span>
-                  </div>
-                );
-              })()}
-
-              {/* Level Nodes */}
-              {filteredPresets.map((lv, idx) => {
-                const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
-                const isCompleted = lv.firestoreId ? playedMap.has(lv.firestoreId) : false;
-                const playedData = lv.firestoreId ? playedMap.get(lv.firestoreId) : undefined;
-                
-                const isCurrent = !isLocked && !isCompleted;
-
-                const activePart = partsMap.get(selectedPartId);
-                const mapTheme = activePart?.mapTheme || 'cyber-grid';
-                let activeColor = '#00ff88';
-                if (mapTheme === 'retro-matrix') activeColor = '#22c55e';
-                if (mapTheme === 'neon-abyss') activeColor = '#ec4899';
-                if (mapTheme === 'cosmic-vortex') activeColor = '#a855f7';
-                if (mapTheme === 'star-nebula') activeColor = '#6366f1';
-
-                const entry = lv.firestoreId && activePart ? activePart.order[lv.firestoreId] : undefined;
-                let x = entry?.mapX;
-                let y = entry?.mapY;
-                
-                if (x === undefined || y === undefined) {
-                  const count = filteredPresets.length;
-                  const ratio = count > 1 ? idx / (count - 1) : 0.5;
-                  y = Math.round(85 - ratio * 70);
-                  x = Math.round(50 + Math.sin(ratio * Math.PI * 3.5) * 35);
-                }
-
-                 return (
-                  <div
-                    key={lv.id}
-                    className={`map-node-btn ${isCurrent ? 'active-floating-node' : ''}`}
-                    onClick={() => {
-                      if (isLocked) return;
-                      router.push(`/play?id=${lv.id}&source=preset`);
-                    }}
-                    onMouseEnter={() => setGamepadSelectedNodeIndex(idx)}
-                    style={{
-                      position: 'absolute',
-                      left: `${x}%`,
-                      top: `${y}%`,
-                      transform: 'translate(-50%, -50%)',
-                      zIndex: 5,
-                      cursor: isLocked ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      color: activeColor
-                    }}
-                  >
-                    {isCurrent && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          width: 48,
-                          height: 48,
-                          borderRadius: '50%',
-                          border: `2px solid ${activeColor}`,
-                          animation: 'pulseRing 1.5s cubic-bezier(0.215, 0.610, 0.355, 1) infinite',
-                          pointerEvents: 'none'
-                        }}
-                      />
-                    )}
-
-                    {gamepadSelectedNodeIndex === idx && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          width: 44,
-                          height: 44,
-                          borderRadius: '50%',
-                          border: `2.5px solid #ffd700`,
-                          boxShadow: '0 0 15px #ffd700',
-                          animation: 'pulseRing 1.2s ease-in-out infinite',
-                          pointerEvents: 'none',
-                          zIndex: 6
-                        }}
-                      />
-                    )}
-
-                    <div
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        background: isLocked ? '#0a0c10' : (isCompleted ? `${activeColor}15` : '#070a13'),
-                        border: `2px solid ${isLocked ? '#1e293b' : (isCurrent ? '#ffd700' : activeColor)}`,
-                        color: isLocked ? '#475569' : '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 12,
-                        fontWeight: 800,
-                        boxShadow: isLocked 
-                          ? 'none' 
-                          : `0 0 15px ${isCurrent ? 'rgba(255, 215, 0, 0.4)' : `${activeColor}30`}`,
-                        textShadow: isLocked ? 'none' : '0 0 4px rgba(255,255,255,0.5)',
-                        transition: 'all 0.15s ease-in-out'
-                      }}
-                    >
-                      {isLocked ? '🔒' : idx + 1}
-                    </div>
-
+                {/* Thematic Background Elements */}
+                {(mapTheme === 'star-nebula' || mapTheme === 'cosmic-vortex') && (
+                  <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
+                    {/* Glowing Galaxy Spin */}
                     <div
                       style={{
                         position: 'absolute',
-                        top: 36,
-                        background: 'rgba(3,7,18,0.92)',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: 6,
-                        padding: '3px 8px',
-                        fontSize: 8,
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        letterSpacing: '0.05em',
-                        color: isLocked ? '#475569' : '#cbd5e1',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-                        pointerEvents: 'none',
-                        textTransform: 'uppercase',
+                        left: '50%',
+                        top: '45%',
+                        width: 500,
+                        height: 500,
+                        transform: 'translate(-50%, -50%)',
+                        background: mapTheme === 'cosmic-vortex' 
+                          ? 'radial-gradient(circle, rgba(168, 85, 247, 0.08) 0%, transparent 70%)'
+                          : 'radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%)',
+                        animation: 'spin 90s linear infinite',
+                      }}
+                    />
+                    
+                    {/* Planet A */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '12%',
+                        top: '25%',
+                        width: 90,
+                        height: 90,
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle at 30% 30%, #3b82f6 0%, #1d4ed8 70%, #0c1530 100%)',
+                        boxShadow: '0 0 25px rgba(59, 130, 246, 0.25)',
+                        opacity: 0.7
+                      }}
+                    />
+                    {/* Ring for Planet A */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '7%',
+                        top: '29%',
+                        width: 170,
+                        height: 25,
+                        border: '3px solid rgba(147, 51, 234, 0.2)',
+                        borderRadius: '50%',
+                        transform: 'rotate(-20deg)',
+                        opacity: 0.5
+                      }}
+                    />
+
+                    {/* Planet B */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: '10%',
+                        top: '60%',
+                        width: 70,
+                        height: 70,
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle at 35% 35%, #ec4899 0%, #be123c 75%, #020617 100%)',
+                        boxShadow: '0 0 20px rgba(236, 72, 153, 0.2)',
+                        opacity: 0.65
+                      }}
+                    />
+
+                    {/* Ambient Asteroids */}
+                    {[1, 2, 3, 4, 5, 6].map(i => (
+                      <div
+                        key={i}
+                        style={{
+                          position: 'absolute',
+                          left: `${(27 * i) % 75 + 12}%`,
+                          top: `${(19 * i) % 65 + 15}%`,
+                          width: 8 + (i % 3) * 5,
+                          height: 7 + (i % 3) * 4,
+                          background: 'rgba(51, 65, 85, 0.5)',
+                          border: '1px solid rgba(255,255,255,0.03)',
+                          borderRadius: '40% 60% 50% 50% / 50% 40% 60% 50%',
+                          boxShadow: 'inset -2px -2px 5px rgba(0,0,0,0.8)',
+                          opacity: 0.45,
+                          animation: `floatAmbient ${12 + i * 3}s ease-in-out infinite alternate`
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {(mapTheme === 'cyber-grid' || mapTheme === 'retro-matrix' || mapTheme === 'neon-abyss') && (
+                  <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, opacity: 0.15 }}>
+                    <svg style={{ width: '100%', height: '100%' }}>
+                      {/* Interactive circuit visual lines */}
+                      <path d="M 120 150 L 220 150 L 280 210 L 280 380 L 180 480" fill="none" stroke={activeColor} strokeWidth="1.5" />
+                      <path d="M 680 220 L 580 220 L 530 270 L 530 500 L 630 600" fill="none" stroke={activeColor} strokeWidth="1.5" strokeDasharray="6,4" />
+                      <path d="M 150 780 L 300 780 L 350 830 L 350 980" fill="none" stroke={activeColor} strokeWidth="1.5" />
+                      <path d="M 650 720 L 500 720 L 450 770 L 450 920" fill="none" stroke={activeColor} strokeWidth="1.5" />
+                    </svg>
+                  </div>
+                )}
+
+                {/* Connecting Spline Path SVG Layer */}
+                <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }}>
+                  {nodesRef.current.length > 1 && Array.from({ length: nodesRef.current.length - 1 }).map((_, i) => {
+                    const segmentState = getSegmentState(i);
+                    let strokeColor = activeColor;
+                    let isBeamActive = false;
+
+                    if (segmentState === 'completed') {
+                      strokeColor = activeColor;
+                      isBeamActive = true;
+                    } else if (segmentState === 'current') {
+                      strokeColor = '#ffd700'; // Pulsing gold for active selection road
+                      isBeamActive = true;
+                    } else {
+                      strokeColor = 'rgba(71, 85, 105, 0.25)'; // Dark dash for locked
+                    }
+
+                    return (
+                      <g key={`segment-g-${i}`}>
+                        {/* 1. Neon glowing outline (Completed/Current) */}
+                        {segmentState !== 'locked' && (
+                          <path
+                            ref={(el) => {
+                              if (el) pathsRef.current.set(`glow-${i}`, el);
+                              else pathsRef.current.delete(`glow-${i}`);
+                            }}
+                            fill="none"
+                            stroke={strokeColor}
+                            strokeWidth="10"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ opacity: 0.15, filter: 'blur(5px)' }}
+                          />
+                        )}
+
+                        {/* 2. Core dark boundary */}
+                        <path
+                          ref={(el) => {
+                            if (el) pathsRef.current.set(`core-${i}`, el);
+                            else pathsRef.current.delete(`core-${i}`);
+                          }}
+                          fill="none"
+                          stroke={segmentState === 'locked' ? 'rgba(30, 41, 59, 0.4)' : 'rgba(3, 7, 18, 0.5)'}
+                          strokeWidth={segmentState === 'locked' ? '3' : '6.5'}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeDasharray={segmentState === 'locked' ? '6,6' : 'none'}
+                        />
+
+                        {/* 3. Glowing core spline overlay */}
+                        {segmentState !== 'locked' && (
+                          <path
+                            ref={(el) => {
+                              if (el) pathsRef.current.set(`core-${i}`, el); // reference registration
+                              else pathsRef.current.delete(`core-${i}`);
+                            }}
+                            fill="none"
+                            stroke={strokeColor}
+                            strokeWidth="3.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ opacity: 0.8, filter: `drop-shadow(0 0 3px ${strokeColor})` }}
+                          />
+                        )}
+
+                        {/* 4. Moving Dash Flow Light-Beam */}
+                        {isBeamActive && (
+                          <path
+                            ref={(el) => {
+                              if (el) pathsRef.current.set(`beam-${i}`, el);
+                              else pathsRef.current.delete(`beam-${i}`);
+                            }}
+                            fill="none"
+                            stroke="#ffffff"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeDasharray="8, 16"
+                            style={{ opacity: 0.75, animation: 'march 12s linear infinite' }}
+                          />
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+
+                {/* Bridges and Tunnels DOM Overlays (Centered on paths) */}
+                {nodesRef.current.length > 1 && Array.from({ length: nodesRef.current.length - 1 }).map((_, i) => {
+                  const isBridge = i % 3 === 1;
+                  const isTunnel = i % 3 === 2;
+                  const segmentState = getSegmentState(i);
+
+                  if (segmentState === 'locked') return null;
+
+                  if (isBridge) {
+                    return (
+                      <div
+                        key={`bridge-${i}`}
+                        ref={(el) => {
+                          if (el) bridgesRef.current.set(`bridge-${i}`, el);
+                          else bridgesRef.current.delete(`bridge-${i}`);
+                        }}
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          width: 38,
+                          height: 18,
+                          transformOrigin: 'center',
+                          pointerEvents: 'none',
+                          zIndex: 4,
+                          background: 'rgba(8, 12, 28, 0.95)',
+                          borderLeft: `2.5px solid ${activeColor}`,
+                          borderRight: `2.5px solid ${activeColor}`,
+                          boxShadow: `0 0 10px ${activeColor}30`,
+                          borderRadius: 3,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          padding: '2px 0',
+                          transform: 'translate(-50%, -50%)'
+                        }}
+                      >
+                        <div style={{ height: 1.5, background: 'rgba(255,255,255,0.18)', width: '100%' }} />
+                        <div style={{ height: 1.5, background: 'rgba(255,255,255,0.18)', width: '100%' }} />
+                        <div style={{ height: 1.5, background: 'rgba(255,255,255,0.18)', width: '100%' }} />
+                      </div>
+                    );
+                  }
+
+                  if (isTunnel) {
+                    return (
+                      <div
+                        key={`tunnel-${i}`}
+                        ref={(el) => {
+                          if (el) tunnelsRef.current.set(`tunnel-${i}`, el);
+                          else tunnelsRef.current.delete(`tunnel-${i}`);
+                        }}
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          width: 32,
+                          height: 32,
+                          transformOrigin: 'center',
+                          pointerEvents: 'none',
+                          zIndex: 4,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transform: 'translate(-50%, -50%)'
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            width: 28,
+                            height: 28,
+                            border: `1.8px solid ${activeColor}`,
+                            borderRadius: '50%',
+                            opacity: 0.7,
+                            boxShadow: `0 0 8px ${activeColor}35`,
+                            animation: 'tunnelPulse 1.2s ease-in-out infinite alternate'
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            width: 18,
+                            height: 18,
+                            border: `1px dashed ${activeColor}`,
+                            borderRadius: '50%',
+                            opacity: 0.45,
+                            animation: 'portalSpin 5s linear infinite'
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+
+                  return null;
+                })}
+
+                {/* Entry Portal (Portal Start) */}
+                {hasPortalStart && (() => {
+                  const portalStartX = activePart?.portalStartX !== undefined ? activePart.portalStartX : 50;
+                  const portalStartY = activePart?.portalStartY !== undefined ? activePart.portalStartY : 90;
+                  const portalStartEntry = nodesRef.current.find(n => n.id === 'portal-start');
+                  const currentPortalStartX = portalStartEntry ? portalStartEntry.x : (portalStartX / 100) * canvasWidth;
+                  const currentPortalStartY = portalStartEntry ? portalStartEntry.y : (portalStartY / 100) * canvasHeight;
+
+                  return (
+                    <div
+                      ref={(el) => {
+                        if (el) elementsRef.current.set('portal-start', el);
+                        else elementsRef.current.delete('portal-start');
+                      }}
+                      onPointerDown={(e) => handleNodePointerDown('portal-start', e)}
+                      onPointerMove={(e) => handleNodePointerMove('portal-start', e)}
+                      onPointerUp={(e) => handleNodePointerUp('portal-start', e)}
+                      onClick={handleEntryPortalClick}
+                      className="portal-btn"
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        transform: `translate3d(${currentPortalStartX}px, ${currentPortalStartY}px, 0) translate(-50%, -50%)`,
+                        width: 48,
+                        height: 48,
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'grab',
+                        zIndex: 10,
+                        color: '#00ffcc',
+                        background: 'radial-gradient(circle, #0d9488 0%, #115e59 100%)',
+                        border: '2.5px solid #00f5d4',
+                        boxShadow: '0 0 20px rgba(0, 245, 212, 0.7), inset 0 0 10px rgba(0, 245, 212, 0.3)',
+                        touchAction: 'none'
+                      }}
+                      title={t('levels.portal_prev_tooltip')}
+                    >
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          animation: 'portalSpin 4s linear infinite',
+                        }}
+                      >
+                        <span style={{ fontSize: 22, animation: 'portalPulse 1.5s ease-in-out infinite alternate' }}>
+                          🌀
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Exit Portal (Portal End) */}
+                {(() => {
+                  const portalX = activePart?.portalX !== undefined ? activePart.portalX : 50;
+                  const portalY = activePart?.portalY !== undefined ? activePart.portalY : 10;
+                  const portalEndEntry = nodesRef.current.find(n => n.id === 'portal-end');
+                  const currentPortalX = portalEndEntry ? portalEndEntry.x : (portalX / 100) * canvasWidth;
+                  const currentPortalY = portalEndEntry ? portalEndEntry.y : (portalY / 100) * canvasHeight;
+
+                  return (
+                    <div
+                      ref={(el) => {
+                        if (el) elementsRef.current.set('portal-end', el);
+                        else elementsRef.current.delete('portal-end');
+                      }}
+                      onPointerDown={(e) => handleNodePointerDown('portal-end', e)}
+                      onPointerMove={(e) => handleNodePointerMove('portal-end', e)}
+                      onPointerUp={(e) => handleNodePointerUp('portal-end', e)}
+                      onClick={handleExitPortalClick}
+                      className="portal-btn"
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        transform: `translate3d(${currentPortalX}px, ${currentPortalY}px, 0) translate(-50%, -50%)`,
+                        width: 50,
+                        height: 50,
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'grab',
+                        zIndex: 10,
+                        color: isSessionCompleted ? '#fbbf24' : '#475569',
+                        background: isSessionCompleted 
+                          ? 'radial-gradient(circle, #f59e0b 0%, #78350f 100%)' 
+                          : 'radial-gradient(circle, #334155 0%, #0f172a 100%)',
+                        border: `2.5px solid ${isSessionCompleted ? '#fbbf24' : '#475569'}`,
+                        boxShadow: isSessionCompleted 
+                          ? '0 0 25px rgba(245, 158, 11, 0.75), inset 0 0 15px rgba(255, 215, 0, 0.4)' 
+                          : 'none',
+                        touchAction: 'none'
+                      }}
+                      title={isSessionCompleted ? t('levels.portal_next_tooltip_unlocked') : t('levels.portal_next_tooltip_locked')}
+                    >
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          animation: isSessionCompleted ? 'portalSpin 3s linear infinite' : 'none',
+                        }}
+                      >
+                        <span style={{ fontSize: 24, animation: isSessionCompleted ? 'portalPulse 1.5s ease-in-out infinite alternate' : 'none' }}>
+                          🌀
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Level Nodes (Simulated real-time) */}
+                {filteredPresets.map((lv, idx) => {
+                  const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
+                  const isCompleted = lv.firestoreId ? playedMap.has(lv.firestoreId) : false;
+                  const playedData = lv.firestoreId ? playedMap.get(lv.firestoreId) : undefined;
+                  const isCurrent = !isLocked && !isCompleted;
+
+                  const entry = lv.firestoreId && activePart ? activePart.order[lv.firestoreId] : undefined;
+                  const mapX = entry?.mapX !== undefined ? entry.mapX : 50;
+                  const mapY = entry?.mapY !== undefined ? entry.mapY : 50;
+
+                  const nodeRefEntry = nodesRef.current.find(n => n.id === `node-${lv.id}`);
+                  const currentX = nodeRefEntry ? nodeRefEntry.x : (mapX / 100) * canvasWidth;
+                  const currentY = nodeRefEntry ? nodeRefEntry.y : (mapY / 100) * canvasHeight;
+
+                  return (
+                    <div
+                      key={lv.id}
+                      ref={(el) => {
+                        if (el) elementsRef.current.set(`node-${lv.id}`, el);
+                        else elementsRef.current.delete(`node-${lv.id}`);
+                      }}
+                      className="map-node-btn"
+                      onPointerDown={(e) => handleNodePointerDown(`node-${lv.id}`, e)}
+                      onPointerMove={(e) => handleNodePointerMove(`node-${lv.id}`, e)}
+                      onPointerUp={(e) => handleNodePointerUp(`node-${lv.id}`, e)}
+                      onClick={() => {
+                        setGamepadSelectedNodeIndex(idx);
+                      }}
+                      onDoubleClick={() => {
+                        if (isLocked) return;
+                        router.push(`/play?id=${lv.id}&source=preset`);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        transform: `translate3d(${currentX}px, ${currentY}px, 0) translate(-50%, -50%)`,
+                        zIndex: 5,
+                        cursor: isLocked ? 'not-allowed' : 'grab',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        gap: 2
+                        color: activeColor,
+                        touchAction: 'none'
                       }}
                     >
-                      <span>{lv.name}</span>
-                      {isCompleted && playedData && (
-                        <div style={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                          {[1, 2, 3].map((n) => (
-                            <span
-                              key={n}
+                      {/* Inner relative container to isolate floating keyframe transforms */}
+                      <div
+                        className={isCurrent ? 'active-floating-node' : ''}
+                        style={{
+                          position: 'relative',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          width: '100%',
+                          height: '100%'
+                        }}
+                      >
+                        {/* Glowing Aura Ring for Active Node */}
+                        {isCurrent && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              width: 50,
+                              height: 50,
+                              borderRadius: '50%',
+                              border: `2px solid ${activeColor}`,
+                              animation: 'activeHalo 2.5s ease-in-out infinite',
+                              pointerEvents: 'none',
+                              left: '50%',
+                              top: '16px',
+                              transform: 'translate(-50%, -50%)'
+                            }}
+                          />
+                        )}
+
+                        {/* Selection Box Halo */}
+                        {gamepadSelectedNodeIndex === idx && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: '50%',
+                              top: '16px',
+                              width: 0,
+                              height: 0,
+                              pointerEvents: 'none',
+                              zIndex: 6
+                            }}
+                          >
+                            <div
                               style={{
-                                color: n <= playedData.score ? '#ffd700' : 'rgba(255,255,255,0.15)',
-                                fontSize: 7,
-                                textShadow: n <= playedData.score ? '0 0 4px #ffd700' : 'none'
+                                position: 'absolute',
+                                width: 46,
+                                height: 46,
+                                left: -23,
+                                top: -23,
+                                borderRadius: '50%',
+                                border: `2.5px solid #ffd700`,
+                                boxShadow: '0 0 15px #ffd700',
+                                animation: 'pulseRing 1.2s ease-in-out infinite'
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Rotating completed gold stars around node */}
+                        {isCompleted && playedData && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: '50%',
+                              top: '16px',
+                              width: 0,
+                              height: 0,
+                              pointerEvents: 'none',
+                              zIndex: 4
+                            }}
+                          >
+                            <div
+                              style={{
+                                position: 'absolute',
+                                width: 54,
+                                height: 54,
+                                left: -27,
+                                top: -27,
+                                animation: 'starOrbit 15s linear infinite',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
                               }}
                             >
-                              ★
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                              {[1, 2, 3].map((n) => {
+                                const angle = (n - 1) * 120;
+                                const rad = (angle * Math.PI) / 180;
+                                const radius = 24;
+                                const sx = Math.cos(rad) * radius;
+                                const sy = Math.sin(rad) * radius;
 
+                                return (
+                                  <span
+                                    key={n}
+                                    style={{
+                                      position: 'absolute',
+                                      transform: `translate(${sx}px, ${sy}px)`,
+                                      color: n <= playedData.score ? '#ffd700' : 'rgba(255, 255, 255, 0.08)',
+                                      fontSize: 8,
+                                      textShadow: n <= playedData.score ? '0 0 4px #ffd700' : 'none'
+                                    }}
+                                  >
+                                    ★
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Core Node Button */}
+                        <div
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            background: isLocked ? '#090d16' : (isCompleted ? `${activeColor}15` : '#060b13'),
+                            border: `2px solid ${isLocked ? '#1e293b' : (isCurrent ? '#ffd700' : activeColor)}`,
+                            color: isLocked ? '#475569' : '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 12,
+                            fontWeight: 800,
+                            boxShadow: isLocked 
+                              ? 'none' 
+                              : `0 0 15px ${isCurrent ? 'rgba(255, 215, 0, 0.4)' : `${activeColor}30`}`,
+                            textShadow: isLocked ? 'none' : '0 0 4px rgba(255,255,255,0.5)',
+                            transition: 'background 0.2s, border-color 0.2s'
+                          }}
+                        >
+                          {isLocked ? '🔒' : idx + 1}
+                        </div>
+
+                        {/* Level Name Label */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 36,
+                            background: 'rgba(3,7,18,0.92)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 6,
+                            padding: '3px 8px',
+                            fontSize: 8,
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                            letterSpacing: '0.05em',
+                            color: isLocked ? '#475569' : '#cbd5e1',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                            pointerEvents: 'none',
+                            textTransform: 'uppercase',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: 2
+                          }}
+                        >
+                          <span>{lv.name}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
+      {/* Floating Level Detail Panel */}
+      {!loading && activeTab === 'campaign' && viewMode === 'map' && gamepadSelectedNodeIndex !== null && (() => {
+        const lv = filteredPresets[gamepadSelectedNodeIndex];
+        if (!lv) return null;
+        
+        const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
+        const playedData = lv.firestoreId ? playedMap.get(lv.firestoreId) : undefined;
+        const isCompleted = playedData !== undefined;
+
+        const activePart = partsMap.get(selectedPartId);
+        const mapTheme = activePart?.mapTheme || 'cyber-grid';
+        let accentColor = '#00ff88';
+        if (mapTheme === 'retro-matrix') accentColor = '#22c55e';
+        if (mapTheme === 'neon-abyss') accentColor = '#ec4899';
+        if (mapTheme === 'cosmic-vortex') accentColor = '#a855f7';
+        if (mapTheme === 'star-nebula') accentColor = '#6366f1';
+
+        const DIFF_COLOR = { 1: '#00ff88', 2: '#fbbf24', 3: '#f97316', 4: '#ef4444' } as Record<number, string>;
+        const difficultyColor = lv.difficulty ? DIFF_COLOR[lv.difficulty] : '#00ff88';
+
+        return (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 86, // sits just above the horizontal world cards
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 'calc(100% - 24px)',
+              maxWidth: 420,
+              zIndex: 15,
+              background: 'rgba(8, 12, 28, 0.85)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: 16,
+              padding: '12px 16px',
+              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(0, 255, 136, 0.03)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'
+            }}
+          >
+            {/* Level Info */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569' }}>
+                SEVİYE {gamepadSelectedNodeIndex + 1}
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {isLocked ? '🔒 Kilitli Bölüm' : lv.name}
+              </span>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                {/* Difficulty pill */}
+                {lv.difficulty && (
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 800,
+                    letterSpacing: '0.04em',
+                    color: difficultyColor,
+                    background: `${difficultyColor}12`,
+                    border: `1px solid ${difficultyColor}30`,
+                    borderRadius: 4,
+                    padding: '1px 5px'
+                  }}>
+                    {t(`difficulty.${lv.difficulty}`)}
+                  </span>
+                )}
+
+                {/* Complete details */}
+                {isCompleted && playedData && (
+                  <span style={{ fontSize: 9, color: '#64748b' }}>
+                    {playedData.moveCount} Hamle · {formatTime(playedData.timeSpent)}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Stars (Center) */}
+            {isCompleted && playedData && (
+              <div style={{ display: 'flex', gap: 2, marginRight: 4 }}>
+                {[1, 2, 3].map((n) => (
+                  <span
+                    key={n}
+                    style={{
+                      color: n <= playedData.score ? '#ffd700' : 'rgba(255, 255, 255, 0.1)',
+                      fontSize: 14,
+                      textShadow: n <= playedData.score ? '0 0 6px #ffd700' : 'none'
+                    }}
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Action button */}
+            <button
+              onClick={() => {
+                if (!isLocked) {
+                  router.push(`/play?id=${lv.id}&source=preset`);
+                }
+              }}
+              disabled={isLocked}
+              style={{
+                padding: '8px 18px',
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                background: isLocked
+                  ? 'rgba(71, 85, 105, 0.1)'
+                  : `linear-gradient(135deg, ${accentColor}15 0%, ${accentColor}30 100%)`,
+                border: `1px solid ${isLocked ? 'rgba(71, 85, 105, 0.2)' : `${accentColor}60`}`,
+                color: isLocked ? '#475569' : '#fff',
+                borderRadius: 10,
+                cursor: isLocked ? 'not-allowed' : 'pointer',
+                boxShadow: isLocked ? 'none' : `0 0 15px ${accentColor}25`,
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+            >
+              <span>{isLocked ? 'KİLİTLİ' : 'OYNAT'}</span>
+              {!isLocked && <span>▶</span>}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Scrollable List Views (Campaign List & Custom Levels) */}
       {(activeTab === 'custom' || viewMode === 'list') && (
@@ -1354,6 +2228,40 @@ function LevelsPageContent() {
             );
           })}
         </div>
+      )}
+
+      {/* Floating Center Active Level Button */}
+      {!loading && activeTab === 'campaign' && viewMode === 'map' && (
+        <button
+          onClick={() => {
+            centerActiveNode(true);
+            setGamepadSelectedNodeIndex(defaultActiveIdx);
+          }}
+          style={{
+            position: 'absolute',
+            bottom: 134, 
+            right: 16,
+            zIndex: 15,
+            width: 44,
+            height: 44,
+            borderRadius: '50%',
+            background: 'rgba(8, 12, 28, 0.8)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1.5px solid rgba(255, 215, 0, 0.3)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.4), 0 0 8px rgba(255, 215, 0, 0.1)',
+            color: '#ffd700',
+            fontSize: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+          title="Kaldığım Seviyeye Git"
+        >
+          🎯
+        </button>
       )}
 
       {/* Floating View Mode Toggle Button */}

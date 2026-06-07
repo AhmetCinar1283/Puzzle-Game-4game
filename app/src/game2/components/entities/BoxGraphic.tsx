@@ -22,17 +22,6 @@ export const BoxGraphic = ({ entity }: { entity: Entity }) => {
             justifyContent: 'center',
             position: 'relative',
         }}>
-            <style>{`
-                @keyframes electricSpark {
-                    0% { transform: scale(1); box-shadow: 0 0 12px rgba(${rgb}, 0.5), inset 0 0 6px rgba(${rgb}, 0.15); }
-                    50% { transform: scale(1.04); box-shadow: 0 0 24px rgba(251,191,36, 0.95), inset 0 0 12px rgba(251,191,36, 0.4); border-color: #fbbf24; }
-                    100% { transform: scale(1); box-shadow: 0 0 12px rgba(${rgb}, 0.5), inset 0 0 6px rgba(${rgb}, 0.15); }
-                }
-                .box-container-active {
-                    animation: electricSpark 1.2s infinite ease-in-out;
-                }
-            `}</style>
-
             {/* Dış Kalıp - Görseldeki gibi yuvarlatılmış köşeler ve parlama */}
             <div 
                 className={isPowered && !dimmed ? 'box-container-active' : undefined}

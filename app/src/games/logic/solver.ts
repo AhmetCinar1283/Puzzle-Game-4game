@@ -1,4 +1,4 @@
-import { convertToGame2State } from '@/app/play/converter';
+import { convertToGame2State } from '@/app/src/game2/logic/converter';
 import { processSingleTick } from '@/app/src/game2/logic/engine/intentLoop';
 import { checkWinCondition } from '@/app/src/game2/logic/winCondition';
 import type { Entity } from '@/app/src/game2/logic/entityTypes';

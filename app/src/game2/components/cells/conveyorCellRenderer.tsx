@@ -62,24 +62,6 @@ export const ConveyorCellRenderer = ({ cell, entityOnCell, prevEntityOnCell }: C
                 transition: 'background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease',
             }}
         >
-            <style>{`
-                @keyframes conveyorChasing-${cell.id} {
-                    0%, 100% { opacity: 0.25; }
-                    50% { opacity: 1; }
-                }
-                #cell-${cell.id} .conveyor-arrow-1 {
-                    animation: ${isActiveWorking ? `conveyorChasing-${cell.id} 0.5s infinite linear` : 'none'};
-                    animation-delay: 0s;
-                }
-                #cell-${cell.id} .conveyor-arrow-2 {
-                    animation: ${isActiveWorking ? `conveyorChasing-${cell.id} 0.5s infinite linear` : 'none'};
-                    animation-delay: 0.16s;
-                }
-                #cell-${cell.id} .conveyor-arrow-3 {
-                    animation: ${isActiveWorking ? `conveyorChasing-${cell.id} 0.5s infinite linear` : 'none'};
-                    animation-delay: 0.32s;
-                }
-            `}</style>
             <svg
                 width={35} height={35}
                 viewBox="0 0 24 24"
@@ -95,9 +77,9 @@ export const ConveyorCellRenderer = ({ cell, entityOnCell, prevEntityOnCell }: C
                 }}
             >
                 <g>
-                    <path d="M6 18l6-6 6 6" className={dimmed ? undefined : 'conveyor-arrow-1'} style={{ opacity: 0.4 }} />
-                    <path d="M6 12l6-6 6 6" className={dimmed ? undefined : 'conveyor-arrow-2'} style={{ opacity: 1.0 }} />
-                    <path d="M6 6l6-6 6 6" className={dimmed ? undefined : 'conveyor-arrow-3'} style={{ opacity: 0.4 }} />
+                    <path d="M6 18l6-6 6 6" className={dimmed ? undefined : isActiveWorking ? 'conveyor-arrow-1-active' : undefined} style={{ opacity: 0.4 }} />
+                    <path d="M6 12l6-6 6 6" className={dimmed ? undefined : isActiveWorking ? 'conveyor-arrow-2-active' : undefined} style={{ opacity: 1.0 }} />
+                    <path d="M6 6l6-6 6 6" className={dimmed ? undefined : isActiveWorking ? 'conveyor-arrow-3-active' : undefined} style={{ opacity: 0.4 }} />
                 </g>
             </svg>
         </div>

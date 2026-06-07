@@ -27,30 +27,14 @@ export const PlayerGraphic = ({ entity }: { entity: Entity }) => {
             justifyContent: 'center',
             position: 'relative',
         }}>
-            <style>{`
-                @keyframes playerGlowPulse {
-                    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px ${glow}); }
-                    50% { transform: scale(1.05); filter: drop-shadow(0 0 16px ${glow}); }
-                }
-                @keyframes spinCounterClockwise {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(-360deg); }
-                }
-                .player-svg {
-                    animation: playerGlowPulse ${isReversed ? '1.3s' : '2.5s'} infinite ease-in-out;
-                    transition: transform 150ms cubic-bezier(0.25, 1, 0.5, 1);
-                }
-                .player-outer-ring-reversed {
-                    animation: spinCounterClockwise 3.5s infinite linear;
-                    transform-origin: 12px 12px;
-                }
-            `}</style>
             <svg
                 width={42}
                 height={42}
                 viewBox="0 0 24 24"
                 fill="none"
-                className="player-svg"
+                className={playerIndex === 0 
+                    ? (isReversed ? 'player-svg-p0-reversed' : 'player-svg-p0') 
+                    : (isReversed ? 'player-svg-p1-reversed' : 'player-svg-p1')}
             >
                 {/* Dış parıltı çemberi (Reversed modda sürekli döner) */}
                 <circle 

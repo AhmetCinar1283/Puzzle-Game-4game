@@ -32,37 +32,28 @@ export const PowerCellRenderer = ({ cell, entityOnCell, prevEntityOnCell }: Powe
                 transition: 'background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease',
             }}
         >
-            <style>{`
-                @keyframes powerRing-${cell.id} {
-                    0% { transform: scale(0.7); opacity: 0.8; }
-                    50% { opacity: 0.4; }
-                    100% { transform: scale(1.15); opacity: 0; }
-                }
-                @keyframes boltGlow-${cell.id} {
-                    0%, 100% { filter: drop-shadow(0 0 4px rgba(251,191,36,0.85)); transform: scale(1); }
-                    50% { filter: drop-shadow(0 0 12px rgba(251,191,36,1)); transform: scale(1.18); }
-                }
-                #cell-${cell.id} .power-ring {
-                    position: absolute;
-                    width: 44px;
-                    height: 44px;
-                    border-radius: 50%;
-                    border: 2px solid ${isOccupied ? 'rgba(251,191,36,0.85)' : 'rgba(251,191,36,0.45)'};
-                    animation: powerRing-${cell.id} ${isOccupied ? '0.7s' : '2s'} infinite ease-out;
-                    pointer-events: none;
-                }
-                #cell-${cell.id} .power-bolt {
-                    animation: boltGlow-${cell.id} ${isOccupied ? '0.5s' : '1.5s'} infinite ease-in-out;
-                    font-size: 24px;
-                    color: ${isOccupied ? '#fef08a' : '#fbbf24'};
-                    text-shadow: 0 0 10px rgba(251,191,36,0.9), 0 0 20px rgba(251,191,36,0.4);
-                    user-select: none;
-                    z-index: 1;
-                    display: inline-block;
-                }
-            `}</style>
-            <div className="power-ring" />
-            <span className="power-bolt">
+            <div 
+                className={isOccupied ? 'power-ring-active' : undefined} 
+                style={{
+                    position: 'absolute',
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    border: `2px solid ${isOccupied ? 'rgba(251,191,36,0.85)' : 'rgba(251,191,36,0.45)'}`,
+                    pointerEvents: 'none',
+                }}
+            />
+            <span 
+                className={isOccupied ? 'power-bolt-active' : undefined}
+                style={{
+                    fontSize: 24,
+                    color: isOccupied ? '#fef08a' : '#fbbf24',
+                    textShadow: '0 0 10px rgba(251,191,36,0.9), 0 0 20px rgba(251,191,36,0.4)',
+                    userSelect: 'none',
+                    zIndex: 1,
+                    display: 'inline-block',
+                }}
+            >
                 ⚡
             </span>
         </div>

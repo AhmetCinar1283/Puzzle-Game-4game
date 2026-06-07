@@ -130,49 +130,7 @@ export const PhysicsWrapper = ({ entity, prevEntity, currentCellType, frameMs, c
                     animation: customAnimation,
                 }}
             >
-                {/* Dinamik Animasyon Keyframes ve Buz Parçacık Trail Stilleri */}
-                <style>{`
-                    @keyframes teleportInEffect {
-                        0% { transform: scale(0) rotate(120deg); opacity: 0; filter: brightness(3) hue-rotate(90deg); }
-                        50% { transform: scale(1.3); opacity: 0.8; filter: brightness(2); }
-                        100% { transform: scale(1) rotate(0deg); opacity: 1; filter: brightness(1); }
-                    }
-                    @keyframes landingSquashEffect {
-                        0% { transform: scale(1.3, 0.7); }
-                        40% { transform: scale(0.85, 1.15); }
-                        70% { transform: scale(1.05, 0.95); }
-                        100% { transform: scale(1, 1); }
-                    }
-                    @keyframes iceDustLeft {
-                        0% { transform: translate(16px, 48px) scale(1); opacity: 0.8; }
-                        100% { transform: translate(56px, 40px) scale(0.1); opacity: 0; }
-                    }
-                    @keyframes iceDustRight {
-                        0% { transform: translate(48px, 48px) scale(1); opacity: 0.8; }
-                        100% { transform: translate(8px, 40px) scale(0.1); opacity: 0; }
-                    }
-                    @keyframes iceDustUp {
-                        0% { transform: translate(32px, 48px) scale(1); opacity: 0.8; }
-                        100% { transform: translate(32px, 80px) scale(0.1); opacity: 0; }
-                    }
-                    @keyframes iceDustDown {
-                        0% { transform: translate(32px, 16px) scale(1); opacity: 0.8; }
-                        100% { transform: translate(32px, -16px) scale(0.1); opacity: 0; }
-                    }
-                    .ice-dust-particle {
-                        position: absolute;
-                        width: 6px;
-                        height: 6px;
-                        border-radius: 50%;
-                        background: rgba(165,243,252,0.85);
-                        box-shadow: 0 0 5px rgba(165,243,252,1);
-                        pointer-events: none;
-                    }
-                    .ice-trail-left { animation: iceDustLeft 220ms infinite linear; }
-                    .ice-trail-right { animation: iceDustRight 220ms infinite linear; }
-                    .ice-trail-up { animation: iceDustUp 220ms infinite linear; }
-                    .ice-trail-down { animation: iceDustDown 220ms infinite linear; }
-                `}</style>
+
 
                 {/* Buzda Kayma Parçacıkları (Trail) */}
                 {isSliding && (

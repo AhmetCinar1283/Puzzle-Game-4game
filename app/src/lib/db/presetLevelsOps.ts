@@ -52,7 +52,14 @@ export async function getPresetLevels(): Promise<(StoredLevel & { id: number })[
  */
 export async function getNextPresetLevelId(currentId: number): Promise<number | null> {
   const sorted = await getPresetLevels();
-  const idx = sorted.findIndex((l) => l.id === currentId);
-  if (idx < 0 || idx >= sorted.length - 1) return null;
-  return sorted[idx + 1].id;
+  const currentLvl = sorted.find((l) => l.id === currentId);
+  if (!currentLvl) return null;
+
+  const partLevels = currentLvl.part
+    ? sorted.filter((l) => l.part === currentLvl.part)
+    : sorted;
+
+  const idx = partLevels.findIndex((l) => l.id === currentId);
+  if (idx < 0 || idx >= partLevels.length - 1) return null;
+  return partLevels[idx + 1].id;
 }

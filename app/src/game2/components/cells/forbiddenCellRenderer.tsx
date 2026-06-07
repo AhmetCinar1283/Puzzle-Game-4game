@@ -15,30 +15,22 @@ export const ForbiddenCellRenderer = ({ cell }: { cell: Cell }) => (
         justifyContent: 'center',
         overflow: 'hidden'
     }}>
-        <style>{`
-            @keyframes dangerScroll {
-                0% { background-position: 0 0; }
-                100% { background-position: 28px 0; }
-            }
-            .forbidden-stripes {
-                position: absolute;
-                inset: 0;
-                opacity: 0.18;
-                background-image: linear-gradient(
-                    135deg,
-                    #ef4444 25%,
-                    transparent 25%,
-                    transparent 50%,
-                    #ef4444 50%,
-                    #ef4444 75%,
-                    transparent 75%,
-                    transparent
-                );
-                background-size: 20px 20px;
-                animation: dangerScroll 1.5s infinite linear;
-            }
-        `}</style>
-        <div className="forbidden-stripes" />
+        <div style={{
+            position: 'absolute',
+            inset: 0,
+            opacity: 0.18,
+            backgroundImage: `linear-gradient(
+                135deg,
+                #ef4444 25%,
+                transparent 25%,
+                transparent 50%,
+                #ef4444 50%,
+                #ef4444 75%,
+                transparent 75%,
+                transparent
+            )`,
+            backgroundSize: '20px 20px',
+        }} />
         
         <span style={{ 
             fontSize: 24, 

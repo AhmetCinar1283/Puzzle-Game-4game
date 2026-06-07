@@ -1,13 +1,13 @@
-// play/converter.ts
+// app/src/game2/logic/converter.ts
 // StoredLevel (eski format) → game2 Entity[] + Cell[][] dönüşümü.
-// Yalnızca play/ sayfasına özgü — game2 logic katmanı bunu bilmez.
+// Paylaşılan mantık (Shared logic) katmanındadır. Hem istemci (frontend) hem worker kullanır.
 
-import type { StoredLevel } from '@/app/src/lib/db';
-import type { CellType }    from '@/app/src/games/types';
-import type { Cell, CellTypes } from '@/app/src/game2/logic/cellTypes';
-import type { Entity }          from '@/app/src/game2/logic/entityTypes';
-import { CELL_DEFS }            from '@/app/src/game2/logic/cells/registry';
-import type { Direction }       from '@/app/src/game2/logic/types';
+import type { StoredLevel } from '../../lib/db';
+import type { CellType }    from '../../games/types';
+import type { Cell, CellTypes } from './cellTypes';
+import type { Entity }          from './entityTypes';
+import { CELL_DEFS }            from './cells/registry';
+import type { Direction }       from './types';
 
 // ============================================================
 // ESKİ → YENİ HÜCRE TİPİ HARİTASI
@@ -63,6 +63,17 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
     const grid: Cell[][] = rawGrid.map((row, rowIdx) =>
         row.map((oldType, colIdx) => {
             const { type, customData = {} } = mapCellType(oldType);
+
+            // Özel trambolin adımlarını customData.force'a eşle
+            if (type === 'trampoline') {
+                const trampCfg = stored.trampolineConfig?.find(
+                    cfg => cfg.position.row === rowIdx && cfg.position.col === colIdx
+                );
+                if (trampCfg) {
+                    customData.force = trampCfg.steps;
+                }
+            }
+
             return {
                 id:           `${rowIdx}-${colIdx}`,
                 type,
@@ -75,7 +86,6 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
     );
 
     // ── 2. ADIM: Teleporter çiftlerini bağla ─────────────────
-    // Her 'isIn' teleporter için aynı gruptaki 'isOut' hücresinin konumunu bul ve vice versa.
     const teleporters = grid.flat().filter(c => c.type === 'teleport');
 
     for (const inCell of teleporters.filter(c => c.customData.isIn === true)) {
@@ -91,7 +101,7 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
     let nextId = 1;
     const entities: Entity[] = [];
 
-    // Oyuncular — initialObjects sıralaması P1=0, P2=1
+    // Oyuncular
     for (let i = 0; i < stored.initialObjects.length; i++) {
         const obj = stored.initialObjects[i];
         const isLocked = !!obj.lockOnTarget &&
@@ -107,7 +117,7 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
             isElectrified: false,
             customData: {
                 playerIndex:  i,
-                mode:         obj.mode ?? 'normal',  // 'normal' | 'reversed'
+                mode:         obj.mode ?? 'normal',
                 lockOnTarget: obj.lockOnTarget ?? true,
                 isLocked,
             },

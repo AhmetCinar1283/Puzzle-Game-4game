@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PlayScreen } from '@/app/src/game2/components/PlayScreen';
-import { convertToGame2State } from '@/app/play/converter';
+import { convertToGame2State } from '@/app/src/game2/logic/converter';
 import { NBtn } from './components/EditorUI';
 import EditorLeftPanel from './components/EditorLeftPanel';
 import ToolPalette from './components/ToolPalette';

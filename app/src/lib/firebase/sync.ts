@@ -189,6 +189,24 @@ export async function fetchAndCacheLevel(
   const level = firestoreDocToStoredLevel(firestoreId, data);
 
   const dexie = getDB();
+  const existing = await dexie.presetLevels.get(dexieId);
+  if (existing) {
+    // Preserve section/part and position as they are managed via levelParts metadata
+    level.part = existing.part;
+    level.position = existing.position;
+
+    // Preserve other metadata if they are missing/undefined in the fetched levels doc
+    if (level.difficulty === undefined || level.difficulty === null) {
+      level.difficulty = existing.difficulty;
+    }
+    if (level.creatorName === undefined || level.creatorName === null) {
+      level.creatorName = existing.creatorName;
+    }
+    if (!level.name && existing.name) {
+      level.name = existing.name;
+    }
+  }
+
   await dexie.presetLevels.update(dexieId, level); // includes isNeedSync: false
 }
 

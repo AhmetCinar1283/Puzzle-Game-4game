@@ -69,48 +69,18 @@ export const TeleportCellRenderer = ({ cell, entityOnCell, prevEntityOnCell }: T
                 transition: 'background-color 600ms ease, border-color 600ms ease, box-shadow 600ms ease',
             }}
         >
-            <style>{`
-                @keyframes rotatePortal-${cell.id} {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                @keyframes rotatePortalReverse-${cell.id} {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(-360deg); }
-                }
-                @keyframes portalPulse-${cell.id} {
-                    0% { transform: scale(0.65); opacity: 0.8; }
-                    50% { opacity: 0.45; }
-                    100% { transform: scale(1.35); opacity: 0; }
-                }
-                #cell-${cell.id} .portal-pulse-ring {
-                    position: absolute;
-                    width: 48px;
-                    height: 48px;
-                    border-radius: 50%;
-                    border: 2px solid rgba(${rgb}, ${isActivelyTeleporting ? 0.95 : 0.4});
-                    animation: portalPulse-${cell.id} ${isActivelyTeleporting ? '0.8s' : '2.2s'} infinite ease-out;
-                    pointer-events: none;
-                    transition: border-color 600ms ease;
-                }
-                #cell-${cell.id} .portal-vortex {
-                    border-radius: 50%;
-                    border: 2px dashed rgba(${rgb}, 0.7);
-                    border-top-color: transparent;
-                    border-bottom-color: transparent;
-                    animation: rotatePortal-${cell.id} 4.2s infinite linear;
-                    pointer-events: none;
-                }
-                #cell-${cell.id} .portal-vortex-inner {
-                    border-radius: 50%;
-                    border: 2px dotted rgba(${rgb}, 0.5);
-                    border-left-color: transparent;
-                    animation: rotatePortalReverse-${cell.id} 2.2s infinite linear;
-                    pointer-events: none;
-                }
-            `}</style>
-
-            <div className="portal-pulse-ring" />
+            <div 
+                className={isActivelyTeleporting ? 'portal-pulse-ring-active' : undefined}
+                style={{
+                    position: 'absolute',
+                    width: 48,
+                    height: 48,
+                    borderRadius: '50%',
+                    border: `2px solid rgba(${rgb}, ${isActivelyTeleporting ? 0.95 : 0.4})`,
+                    pointerEvents: 'none',
+                    transition: 'border-color 600ms ease',
+                }}
+            />
 
             {/* Dış girdap için pürüzsüz ölçekleme katmanı */}
             <div
@@ -128,7 +98,18 @@ export const TeleportCellRenderer = ({ cell, entityOnCell, prevEntityOnCell }: T
                     pointerEvents: 'none',
                 }}
             >
-                <div className="portal-vortex" style={{ width: '100%', height: '100%' }} />
+                <div 
+                    className={isActivelyTeleporting ? 'portal-vortex-active' : undefined} 
+                    style={{ 
+                        width: '100%', 
+                        height: '100%',
+                        borderRadius: '50%',
+                        border: `2px dashed rgba(${rgb}, 0.7)`,
+                        borderTopColor: 'transparent',
+                        borderBottomColor: 'transparent',
+                        pointerEvents: 'none',
+                    }} 
+                />
             </div>
 
             {/* İç girdap için pürüzsüz ölçekleme katmanı */}
@@ -146,7 +127,17 @@ export const TeleportCellRenderer = ({ cell, entityOnCell, prevEntityOnCell }: T
                     pointerEvents: 'none',
                 }}
             >
-                <div className="portal-vortex-inner" style={{ width: '100%', height: '100%' }} />
+                <div 
+                    className={isActivelyTeleporting ? 'portal-vortex-inner-active' : undefined} 
+                    style={{ 
+                        width: '100%', 
+                        height: '100%',
+                        borderRadius: '50%',
+                        border: `2px dotted rgba(${rgb}, 0.5)`,
+                        borderLeftColor: 'transparent',
+                        pointerEvents: 'none',
+                    }} 
+                />
             </div>
 
             <div style={{

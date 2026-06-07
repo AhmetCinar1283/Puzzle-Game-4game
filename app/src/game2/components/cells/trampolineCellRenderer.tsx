@@ -57,40 +57,20 @@ export const TrampolineCellRenderer = ({ cell, entityOnCell, prevEntityOnCell }:
                 transition: 'background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease',
             }}
         >
-            <style>{`
-                @keyframes trampolineLaunch-${cell.id} {
-                    0% { transform: scale(1.3, 0.35); filter: brightness(1.6); }
-                    40% { transform: scale(0.7, 1.4); filter: brightness(2.0); }
-                    70% { transform: scale(1.15, 0.85); }
-                    100% { transform: scale(1, 1); }
-                }
-                #cell-${cell.id} .trampoline-container {
-                    width: 100%;
-                    height: 100%;
-                    display: flex;
-                    align-items: center;
-                    justifyContent: center;
-                }
-                #cell-${cell.id} .trampoline-spring-wrapper {
-                    width: 38px;
-                    height: 38px;
-                    display: flex;
-                    align-items: center;
-                    justifyContent: center;
-                }
-                #cell-${cell.id} .trampoline-spring {
-                    width: 100%;
-                    height: 100%;
-                    transform-origin: bottom center;
-                    animation: ${isActivelyBouncing 
-                        ? `trampolineLaunch-${cell.id} 500ms cubic-bezier(0.25, 1, 0.5, 1) forwards` 
-                        : 'none'};
-                }
-            `}</style>
-            <div className="trampoline-container">
+            <div style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+            }}>
                 <div 
-                    className="trampoline-spring-wrapper"
                     style={{
+                        width: 38,
+                        height: 38,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                         transform: `rotate(${ROTATION[direction]})`,
                     }}
                 >
@@ -103,8 +83,11 @@ export const TrampolineCellRenderer = ({ cell, entityOnCell, prevEntityOnCell }:
                         strokeWidth={isActivelyBouncing ? "3.2" : "2.5"}
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        className="trampoline-spring"
+                        className={isActivelyBouncing ? 'trampoline-spring-active' : undefined}
                         style={{
+                            width: '100%',
+                            height: '100%',
+                            transformOrigin: 'bottom center',
                             filter: isActivelyBouncing 
                                 ? 'drop-shadow(0 0 12px rgba(34,211,238,1))' 
                                 : 'drop-shadow(0 0 6px rgba(34,211,238,0.85))',

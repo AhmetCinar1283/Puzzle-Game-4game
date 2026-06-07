@@ -919,13 +919,13 @@ function MapDesignerModal({ part, onClose, onSave }: MapDesignerModalProps) {
           </button>
         </div>
 
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', flexWrap: 'wrap-reverse' }}>
+        <div style={{ flex: 1, display: 'flex', overflowY: 'auto', flexWrap: 'wrap' }}>
           
           <div style={{ width: '100%', maxWidth: 300, padding: 24, borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 20, boxSizing: 'border-box', overflowY: 'auto' }}>
             
             <div>
               <label style={{ display: 'block', fontSize: 10, fontWeight: 900, color: '#64748b', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>
-                {t('admin.designer_theme')}
+                {t('admin.designer_theme') || 'Harita Teması'}
               </label>
               <select
                 value={mapTheme}
@@ -934,17 +934,17 @@ function MapDesignerModal({ part, onClose, onSave }: MapDesignerModalProps) {
                   width: '100%', background: '#0a0f1d', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: 8, padding: '8px 12px', fontSize: 12, outline: 'none'
                 }}
               >
-                <option value="cyber-grid">{t('admin.designer_theme_cyber')}</option>
-                <option value="star-nebula">{t('admin.designer_theme_star')}</option>
-                <option value="cosmic-vortex">{t('admin.designer_theme_cosmic')}</option>
-                <option value="retro-matrix">{t('admin.designer_theme_retro')}</option>
-                <option value="neon-abyss">{t('admin.designer_theme_abyss')}</option>
+                <option value="cyber-grid">{t('admin.designer_theme_cyber') || 'Siber Izgara (Cyber Grid)'}</option>
+                <option value="star-nebula">{t('admin.designer_theme_star') || 'Yıldız Bulutu (Star Nebula)'}</option>
+                <option value="cosmic-vortex">{t('admin.designer_theme_cosmic') || 'Kozmik Girdap (Cosmic Vortex)'}</option>
+                <option value="retro-matrix">{t('admin.designer_theme_retro') || 'Retro Matrix'}</option>
+                <option value="neon-abyss">{t('admin.designer_theme_abyss') || 'Neon Uçurum (Neon Abyss)'}</option>
               </select>
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: 10, fontWeight: 900, color: '#64748b', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>
-                {t('admin.designer_preset')}
+                {t('admin.designer_preset') || 'Hazır Şablon Üret'}
               </label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <button
@@ -953,7 +953,7 @@ function MapDesignerModal({ part, onClose, onSave }: MapDesignerModalProps) {
                   onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
                 >
-                  📈 {t('admin.designer_preset_snake')}
+                  📈 {t('admin.designer_preset_snake') || 'Kıvrımlı Yol (Snake)'}
                 </button>
                 <button
                   onClick={() => generatePreset('spiral')}
@@ -961,7 +961,7 @@ function MapDesignerModal({ part, onClose, onSave }: MapDesignerModalProps) {
                   onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
                 >
-                  🌀 {t('admin.designer_preset_spiral')}
+                  🌀 {t('admin.designer_preset_spiral') || 'Spiral (Dışa Doğru)'}
                 </button>
                 <button
                   onClick={() => generatePreset('circle')}
@@ -969,14 +969,14 @@ function MapDesignerModal({ part, onClose, onSave }: MapDesignerModalProps) {
                   onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
                 >
-                  ◯ {t('admin.designer_preset_circle')}
+                  ◯ {t('admin.designer_preset_circle') || 'Çember Düzeni'}
                 </button>
               </div>
             </div>
 
             <div style={{ marginTop: 'auto', background: `${activeThemeColor}06`, border: `1px solid ${activeThemeColor}15`, borderRadius: 8, padding: 12 }}>
               <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
-                💡 <strong>How to design:</strong> Drag the numbered level nodes and portals. 🌀 (orange border) is Exit, 🟢 (green border) is Entry Portal.
+                💡 <strong>Nasıl tasarlanır:</strong> Seviye düğmelerini ve portalları sürükleyip yerleştirin. 🌀 (turuncu kenarlı) Çıkış, 🟢 (yeşil kenarlı) Giriş Portalidir.
               </p>
             </div>
 
@@ -985,13 +985,13 @@ function MapDesignerModal({ part, onClose, onSave }: MapDesignerModalProps) {
                 onClick={handleSave} disabled={saving}
                 style={{ flex: 1, padding: '10px 16px', background: saving ? 'rgba(0,255,136,0.3)' : '#00ff88', border: 'none', color: '#030712', fontWeight: 800, borderRadius: 8, fontSize: 12, cursor: saving ? 'not-allowed' : 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase', boxShadow: saving ? 'none' : '0 0 16px rgba(0,255,136,0.3)' }}
               >
-                {saving ? '...' : t('admin.designer_save')}
+                {saving ? '...' : (t('admin.designer_save') || 'Düzeni ve Temayı Kaydet')}
               </button>
               <button
                 onClick={onClose} disabled={saving}
                 style={{ padding: '10px 14px', background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}
               >
-                {t('admin.designer_cancel')}
+                {t('admin.designer_cancel') || 'İptal'}
               </button>
             </div>
 
@@ -1106,7 +1106,7 @@ function MapDesignerModal({ part, onClose, onSave }: MapDesignerModalProps) {
               </div>
 
               {/* Level Nodes */}
-              {sortedLevels.map((lv) => {
+              {sortedLevels.map((lv, idx) => {
                 const coords = levelCoords[lv.id] || { x: 50, y: 50 };
                 return (
                   <div
@@ -1137,7 +1137,7 @@ function MapDesignerModal({ part, onClose, onSave }: MapDesignerModalProps) {
                       touchAction: 'none'
                     }}
                   >
-                    {(lv.position ?? 0) + 1}
+                    {idx + 1}
                   </div>
                 );
               })}
