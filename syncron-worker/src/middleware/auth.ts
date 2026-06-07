@@ -26,3 +26,29 @@ export const firebaseAuth = createMiddleware<AppContext>(async (c, next) => {
     return c.json({ success: false, error: 'Invalid or expired token' }, 401);
   }
 });
+
+/**
+ * Optional Firebase Auth middleware.
+ * If Authorization header with Bearer token is provided, it verifies it.
+ * If valid, sets c.var.uid. If invalid, returns 401.
+ * If missing, allows request to proceed as anonymous (c.var.uid is undefined).
+ */
+export const optionalFirebaseAuth = createMiddleware<AppContext>(async (c, next) => {
+  const authHeader = c.req.header('Authorization') ?? '';
+  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+
+  if (!idToken) {
+    await next();
+    return;
+  }
+
+  try {
+    const verified = await verifyIdToken(idToken, c.env.FIREBASE_PROJECT_ID);
+    c.set('uid', verified.uid);
+    await next();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[optionalFirebaseAuth] Token verification failed:', msg);
+    return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+  }
+});

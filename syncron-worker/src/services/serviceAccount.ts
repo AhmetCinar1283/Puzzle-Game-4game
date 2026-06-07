@@ -25,8 +25,19 @@ function pemToUint8Array(pem: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+export function isValidServiceAccount(serviceAccountJson: string | undefined): boolean {
+  if (!serviceAccountJson) return false;
+  const trimmed = serviceAccountJson.trim();
+  return trimmed.startsWith('{') && trimmed.includes('private_key');
+}
+
 export async function getAdminAccessToken(serviceAccountJson: string): Promise<string> {
-  const sa: ServiceAccount = JSON.parse(serviceAccountJson);
+  let sa: ServiceAccount;
+  try {
+    sa = JSON.parse(serviceAccountJson);
+  } catch (err) {
+    throw new Error('Invalid service account JSON structure.');
+  }
   const now = Math.floor(Date.now() / 1000);
 
   const header = base64urlEncode(

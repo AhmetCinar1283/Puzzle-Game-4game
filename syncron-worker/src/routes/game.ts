@@ -7,6 +7,7 @@ import { fsGet, fsCommit, parseLevelDoc, docPath, nowTimestamp, fromDoc } from '
 import { verifyMoves } from '../services/gameVerify';
 import { getSolutionStats, computeStars, updateSolutions } from '../services/solutions';
 import { writeAuditLog } from '../services/auditLog';
+import { updateLeaderboardData } from '../services/leaderboard';
 import type { CompleteLevelResponse } from '../types';
 
 export const gameRouter = new Hono<AppContext>();
@@ -64,11 +65,27 @@ gameRouter.post('/complete-level', firebaseAuth, async (c) => {
 
   // 6. Parallel reads
   const playedPath = `users/${uid}/playedLevels/${levelId}`;
-  const [existingPlayed, solutionStats] = await Promise.all([
+  const [existingPlayed, solutionStats, userDoc] = await Promise.all([
     fsGet(projectId, playedPath, adminToken),
     getSolutionStats(projectId, levelId, adminToken),
+    fsGet(projectId, `users/${uid}`, adminToken),
   ]);
-  const { bestMoveCount, worstTopMoveCount } = solutionStats;
+  const { bestMoveCount, worstTopMoveCount, bestHolderUid } = solutionStats;
+
+  let displayName = 'Player';
+  let tag: string | null = null;
+  if (userDoc) {
+    const userData = fromDoc(userDoc);
+    if (typeof userData.displayName === 'string') {
+      displayName = userData.displayName;
+    }
+    if (typeof userData.tag === 'string') {
+      tag = userData.tag;
+    }
+  }
+
+  const levelRaw = fromDoc(levelDoc);
+  const createdBy = typeof levelRaw.createdBy === 'string' ? levelRaw.createdBy : null;
 
   // 7. Compute stars and score delta
   const isFirstCompletion = existingPlayed === null;
@@ -156,6 +173,20 @@ gameRouter.post('/complete-level', firebaseAuth, async (c) => {
       isFirst:      isFirstCompletion,
       isNewBest:    isNewBestSolution,
     }).catch((err) => console.error('[AuditLog] level.complete write failed:', err)),
+  );
+
+  // 11. Update leaderboard data in D1 (non-blocking)
+  c.executionCtx.waitUntil(
+    updateLeaderboardData(c.env.AUDIT_DB, uid, {
+      scoreDelta,
+      isFirstCompletion,
+      displayName,
+      tag,
+      isNewBestSolution,
+      oldBestHolderUid: bestHolderUid,
+      createdBy,
+      starsGained: bestStars,
+    }).catch((err) => console.error('[Leaderboard] leaderboard update failed:', err)),
   );
 
   const response: CompleteLevelResponse = {

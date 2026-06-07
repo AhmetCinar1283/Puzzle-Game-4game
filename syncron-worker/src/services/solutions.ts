@@ -20,6 +20,8 @@ export interface SolutionStats {
   worstTopMoveCount: number | null;
   /** How many solutions are currently stored (0 – TOP_N). */
   topCount: number;
+  /** Owner of the best solution; null if no solutions yet. */
+  bestHolderUid: string | null;
 }
 
 /**
@@ -33,17 +35,18 @@ export async function getSolutionStats(
 ): Promise<SolutionStats> {
   const path = `levels/${firestoreId}/infos/solutions`;
   const doc = await fsGet(projectId, path, accessToken);
-  if (!doc) return { bestMoveCount: null, worstTopMoveCount: null, topCount: 0 };
+  if (!doc) return { bestMoveCount: null, worstTopMoveCount: null, topCount: 0, bestHolderUid: null };
 
   const existing: SolutionEntry[] =
     (fromDoc(doc).solutions as SolutionEntry[] | undefined) ?? [];
-  if (existing.length === 0) return { bestMoveCount: null, worstTopMoveCount: null, topCount: 0 };
+  if (existing.length === 0) return { bestMoveCount: null, worstTopMoveCount: null, topCount: 0, bestHolderUid: null };
 
   const sorted = [...existing].sort((a, b) => a.moveCount - b.moveCount);
   return {
     bestMoveCount: sorted[0].moveCount,
     worstTopMoveCount: existing.length >= TOP_N ? sorted[sorted.length - 1].moveCount : null,
     topCount: existing.length,
+    bestHolderUid: sorted[0].uid,
   };
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuthContext } from '../contexts/AuthContext';
 import AuthModal from './AuthModal';
 import { useT } from '../contexts/LanguageContext';
@@ -18,6 +19,7 @@ export default function UserBadge() {
   const { user, isAnonymous, loading } = useAuthContext();
   const [open, setOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const router = useRouter();
 
   // Subscribe to user tickets for live unread updates
   useEffect(() => {
@@ -46,7 +48,13 @@ export default function UserBadge() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (signed) {
+            router.push('/profile');
+          } else {
+            setOpen(true);
+          }
+        }}
         title={signed ? (displayName ?? t('auth.my_account')) : t('auth.sign_in')}
         style={{
           position: 'fixed',

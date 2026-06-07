@@ -33,58 +33,100 @@ type Particle = {
   borderRadius: number;
 };
 
-function useNavLower(t: ReturnType<typeof useT>) {
-  return [
-    { href: '/levels', label: t('home.levels'), color: '#ffd700', sub: t('home.levels_sub') },
-    { href: '/editor', label: t('home.editor'), color: '#00c4ff', sub: t('home.editor_sub') },
-  ];
-}
-
-function NavButton({
-  label, sub, color, onClick, isSelected, onMouseEnter
+function MenuCard({
+  id, label, sub, color, onClick, isSelected, onMouseEnter, isHero
 }: {
-  label: string; sub: string; color: string; onClick: () => void; isSelected?: boolean; onMouseEnter?: () => void
+  id: string; label: string; sub: string; color: string; onClick: () => void; isSelected?: boolean; onMouseEnter?: () => void; isHero?: boolean;
 }) {
+  const [hovered, setHovered] = useState(false);
+  const active = isSelected || hovered;
+
+  const getIcon = () => {
+    switch (id) {
+      case 'play': return '🎮';
+      case 'levels': return '🏆';
+      case 'editor': return '🛠️';
+      case 'friends': return '👥';
+      case 'controls': return '🕹️';
+      case 'admin': return '⚡';
+      default: return '✦';
+    }
+  };
+
   return (
     <button
       onClick={onClick}
-      style={{
-        width: '100%',
-        padding: '14px 0',
-        fontSize: 14,
-        fontWeight: 700,
-        letterSpacing: '0.1em',
-        textTransform: 'uppercase',
-        background: isSelected ? `${color}18` : `${color}0d`,
-        border: isSelected ? `1px solid ${color}` : `1px solid ${color}50`,
-        color,
-        borderRadius: 10,
-        cursor: 'pointer',
-        boxShadow: isSelected ? `0 0 26px ${color}2e` : `0 0 18px ${color}18`,
-        transition: 'all 0.2s',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 4,
-      }}
-      onMouseEnter={(e) => {
+      onMouseEnter={() => {
+        setHovered(true);
         onMouseEnter?.();
-        const el = e.currentTarget;
-        el.style.background = `${color}18`;
-        el.style.boxShadow = `0 0 26px ${color}2e`;
-        el.style.border = `1px solid ${color}`;
       }}
-      onMouseLeave={(e) => {
-        if (!isSelected) {
-          const el = e.currentTarget;
-          el.style.background = `${color}0d`;
-          el.style.boxShadow = `0 0 18px ${color}18`;
-          el.style.border = `1px solid ${color}50`;
-        }
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        gridColumn: isHero ? '1 / -1' : undefined,
+        width: '100%',
+        minHeight: isHero ? 90 : 80,
+        padding: '14px 18px',
+        background: active
+          ? `linear-gradient(135deg, ${color}1e 0%, rgba(13, 20, 37, 0.95) 100%)`
+          : 'rgba(13, 20, 37, 0.45)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: `1.5px solid ${active ? color : `${color}25`}`,
+        color: active ? '#fff' : '#94a3b8',
+        borderRadius: 14,
+        cursor: 'pointer',
+        boxShadow: active
+          ? `0 0 24px ${color}25, inset 0 0 8px ${color}15`
+          : '0 8px 32px rgba(0, 0, 0, 0.4)',
+        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
+        textAlign: 'left',
+        outline: 'none',
       }}
     >
-      <span>{label}</span>
-      <span style={{ fontSize: 9, fontWeight: 400, letterSpacing: '0.08em', opacity: 0.5, textTransform: 'none' }}>{sub}</span>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span style={{
+          fontSize: isHero ? 15 : 13,
+          fontWeight: 800,
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          color: active ? '#fff' : '#e2e8f0',
+          transition: 'color 0.2s',
+        }}>
+          {label}
+        </span>
+        <span style={{
+          fontSize: isHero ? 10 : 9,
+          fontWeight: 500,
+          color: active ? `${color}` : '#64748b',
+          lineHeight: 1.3,
+          letterSpacing: '0.02em',
+          transition: 'color 0.2s',
+        }}>
+          {sub}
+        </span>
+      </div>
+
+      <div style={{
+        width: isHero ? 40 : 34,
+        height: isHero ? 40 : 34,
+        borderRadius: 10,
+        background: active ? `${color}20` : 'rgba(255, 255, 255, 0.02)',
+        border: `1px solid ${active ? `${color}40` : 'rgba(255, 255, 255, 0.05)'}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: isHero ? 18 : 15,
+        color: active ? color : '#475569',
+        boxShadow: active ? `0 0 12px ${color}25` : 'none',
+        transition: 'all 0.25s ease',
+        flexShrink: 0,
+      }}>
+        {getIcon()}
+      </div>
     </button>
   );
 }
@@ -98,7 +140,6 @@ export default function Home() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
   const user = useSelector(selectUser);
-  const NAV_LOWER = useNavLower(t);
 
   // Generate particles with window dimensions (client only)
   useEffect(() => {
@@ -164,6 +205,7 @@ export default function Home() {
       { id: 'play', label: t('home.play'), sub: t('home.play_sub'), color: '#00ff88', onClick: handlePlayClick },
       { id: 'levels', label: t('home.levels'), sub: t('home.levels_sub'), color: '#ffd700', onClick: () => router.push('/levels') },
       { id: 'editor', label: t('home.editor'), sub: t('home.editor_sub'), color: '#00c4ff', onClick: () => router.push('/editor') },
+      { id: 'friends', label: `👥 ${t('friends.title')}`, sub: t('home.friends_sub'), color: '#ec4899', onClick: () => router.push('/friends') },
       { id: 'controls', label: t('home.controls'), sub: t('home.controls_sub'), color: '#fbbf24', onClick: () => router.push('/controls') },
     ];
     if (user?.role === 'admin') {
@@ -172,18 +214,67 @@ export default function Home() {
     return opts;
   }, [t, user?.role, router, handlePlayClick]);
 
-  useGamepad({
-    onMove: (dir) => {
-      if (dir === 'up') {
-        setActiveMenuIndex((prev) => (prev - 1 + options.length) % options.length);
-      } else if (dir === 'down') {
-        setActiveMenuIndex((prev) => (prev + 1) % options.length);
+  const handleMoveMenu = useCallback((dir: 'up' | 'down' | 'left' | 'right') => {
+    setActiveMenuIndex((prev) => {
+      const hasAdmin = options.length > 5;
+      switch (dir) {
+        case 'up':
+          if (prev === 0) return hasAdmin ? 5 : 4;
+          if (prev === 1 || prev === 2) return 0;
+          if (prev === 3) return 1;
+          if (prev === 4) return 2;
+          if (prev === 5) return 3;
+          return prev;
+        case 'down':
+          if (prev === 0) return 1;
+          if (prev === 1) return 3;
+          if (prev === 2) return 4;
+          if (prev === 3 || prev === 4) return hasAdmin ? 5 : 0;
+          if (prev === 5) return 0;
+          return prev;
+        case 'left':
+          if (prev === 2) return 1;
+          if (prev === 4) return 3;
+          return prev;
+        case 'right':
+          if (prev === 1) return 2;
+          if (prev === 3) return 4;
+          return prev;
       }
-    },
+      return prev;
+    });
+  }, [options.length]);
+
+  useGamepad({
+    onMove: (dir) => handleMoveMenu(dir),
     onConfirm: () => {
       options[activeMenuIndex]?.onClick();
     },
   });
+
+  // Keyboard navigation for menu cards
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        handleMoveMenu('up');
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        handleMoveMenu('down');
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleMoveMenu('left');
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleMoveMenu('right');
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        options[activeMenuIndex]?.onClick();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleMoveMenu, activeMenuIndex, options]);
 
   return (
     <>
@@ -260,17 +351,27 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Nav buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', width: '100%', maxWidth: 260 }}>
+        {/* Nav cards grid */}
+        <div style={{
+          width: '100%',
+          maxWidth: 480,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 12,
+          padding: '0 8px',
+          boxSizing: 'border-box',
+        }}>
           {options.map((opt, idx) => (
-            <NavButton
+            <MenuCard
               key={opt.id}
+              id={opt.id}
               label={opt.label}
               sub={opt.sub}
               color={opt.color}
               onClick={opt.onClick}
               isSelected={activeMenuIndex === idx}
               onMouseEnter={() => setActiveMenuIndex(idx)}
+              isHero={opt.id === 'play' || opt.id === 'admin'}
             />
           ))}
         </div>

@@ -5,7 +5,11 @@ import { gameRouter } from './routes/game';
 import { ticketsRouter } from './routes/tickets';
 import { internalLogRouter } from './routes/internalLog';
 import { adminApiRouter } from './routes/adminApi';
+import { leaderboardRouter } from './routes/leaderboard';
+import { badgesRouter } from './routes/badges';
+import { friendsRouter } from './routes/friends';
 import { runLogRetention } from './scheduled/logRetention';
+import { runBadgeDistribution } from './scheduled/badgeDistribution';
 
 const app = new Hono<AppContext>();
 
@@ -15,7 +19,7 @@ const app = new Hono<AppContext>();
 app.use('*', (c, next) => {
   return cors({
     origin: c.env.ALLOWED_ORIGIN,
-    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'X-Timestamp', 'X-Signature'],
     maxAge: 86400,
   })(c, next);
@@ -26,12 +30,15 @@ app.route('/', gameRouter);
 app.route('/', ticketsRouter);
 app.route('/', internalLogRouter);  // POST /internal/log
 app.route('/', adminApiRouter);     // GET  /admin/users/:uid/logs, etc.
+app.route('/', leaderboardRouter);
+app.route('/', badgesRouter);
+app.route('/', friendsRouter);
 
 // ─── Error handlers ───────────────────────────────────────────────────────────
 app.onError((err, c) => {
   console.error('Unhandled worker error:', err);
   c.header('Access-Control-Allow-Origin', c.env.ALLOWED_ORIGIN);
-  c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  c.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   return c.json({ success: false, error: 'Internal error' }, 500);
 });
@@ -45,8 +52,14 @@ export default {
 
   // Cron Trigger: runs weekly log retention (archive old logs to R2, delete from D1)
   // Schedule: "0 3 * * 0" = every Sunday at 03:00 UTC (configured in wrangler.jsonc)
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(runLogRetention(env));
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    if (event.cron === '0 3 * * SUN') {
+      ctx.waitUntil(runLogRetention(env));
+    } else if (event.cron === '5 0 * * MON') {
+      ctx.waitUntil(runBadgeDistribution(env, 'weekly'));
+    } else if (event.cron === '5 0 1 * *') {
+      ctx.waitUntil(runBadgeDistribution(env, 'monthly'));
+    }
   },
 };
 

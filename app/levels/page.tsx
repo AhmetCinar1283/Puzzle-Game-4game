@@ -2048,7 +2048,7 @@ function LevelsPageContent() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-              style={{ width: '100%', maxWidth: 800, background: 'rgba(8, 12, 28, 0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 16, padding: isMobile ? '10px' : '24px', boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)' }}
+              style={{ width: '100%', maxWidth: 1024, background: 'rgba(8, 12, 28, 0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 16, padding: isMobile ? '10px' : '24px', boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)' }}
             >
               {activeTab === 'campaign' ? (
                 /* Campaign List View */

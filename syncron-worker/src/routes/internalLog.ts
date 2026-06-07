@@ -17,6 +17,9 @@ import { hmacAuth } from '../middleware/hmacAuth';
 import { checkInternalLogRateLimit } from '../middleware/rateLimiter';
 import { writeAuditLog } from '../services/auditLog';
 import type { AuditCategory, AuditAction } from '../services/auditLog';
+import { getAdminAccessToken, isValidServiceAccount } from '../services/serviceAccount';
+import { fsGet, fromDoc } from '../services/firestore';
+import { upsertUserProfile } from '../services/profiles';
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
@@ -68,6 +71,37 @@ internalLogRouter.post('/internal/log', hmacAuth, async (c) => {
   } catch (err) {
     console.error('[InternalLog] D1 write failed:', err);
     return c.json({ success: false, error: 'Failed to write log' }, 500);
+  }
+
+  // 4. Background Sync: If this is a profile creation/update/tag-change log, sync cache from Firestore
+  if (
+    category === 'account' &&
+    (action === 'account.create' || action === 'account.upgrade' || action === 'account.tag_change') &&
+    isValidServiceAccount(c.env.GOOGLE_SERVICE_ACCOUNT)
+  ) {
+    c.executionCtx.waitUntil(
+      (async () => {
+        try {
+          const adminToken = await getAdminAccessToken(c.env.GOOGLE_SERVICE_ACCOUNT);
+          const projectId = c.env.FIREBASE_PROJECT_ID;
+          const userDoc = await fsGet(projectId, `users/${uid}`, adminToken);
+          if (userDoc) {
+            const userData = fromDoc(userDoc);
+            const displayName = typeof userData.displayName === 'string' ? userData.displayName : 'Player';
+            const tag = typeof userData.tag === 'string' ? userData.tag : null;
+            let showcaseBadges: any[] = [];
+            if (Array.isArray(userData.showcaseBadges)) {
+              showcaseBadges = userData.showcaseBadges;
+            }
+            const jsonBadges = JSON.stringify(showcaseBadges);
+
+            await upsertUserProfile(c.env.AUDIT_DB, uid, displayName, tag, showcaseBadges);
+          }
+        } catch (syncErr) {
+          console.error('[InternalLog] Background profile sync failed:', syncErr);
+        }
+      })()
+    );
   }
 
   return c.json({ success: true });

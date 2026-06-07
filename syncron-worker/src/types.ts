@@ -31,6 +31,13 @@ export interface CompleteLevelResponse {
   scoreDelta: number;
 }
 
+export interface PeriodIds {
+  daily: string;
+  weekly: string;
+  monthly: string;
+  allTime: string;
+}
+
 export const MOVES_LIMIT = 500;
 
 // ─── Support Ticket Types ─────────────────────────────────────────────────────

@@ -26,7 +26,14 @@ export function LevelTable({
   headers?: string[];
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+        gap: '16px',
+        width: '100%',
+      }}
+    >
       {children}
     </div>
   );

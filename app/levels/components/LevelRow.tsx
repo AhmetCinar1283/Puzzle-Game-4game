@@ -184,186 +184,201 @@ export function LevelRow({
   return (
     <>
       <div
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => { setHovered(false); cancelLongPress(); }}
         onContextMenu={handleContextMenu}
         onPointerDown={handlePointerDown}
         onPointerUp={cancelLongPress}
         onPointerLeave={cancelLongPress}
+        onPointerMove={cancelLongPress}
         onClick={handleClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: isMobile ? '13px 12px' : '14px 16px',
-          background: locked
-            ? 'rgba(255,255,255,0.01)'
-            : gamepadSelected
-              ? `rgba(${level.difficulty === 1 ? '0, 255, 136' : level.difficulty === 2 ? '251, 191, 36' : level.difficulty === 3 ? '249, 115, 22' : level.difficulty === 4 ? '239, 68, 68' : '0, 255, 136'}, 0.12)`
-              : hovered 
-                ? `rgba(${level.difficulty === 1 ? '0, 255, 136' : level.difficulty === 2 ? '251, 191, 36' : level.difficulty === 3 ? '249, 115, 22' : level.difficulty === 4 ? '239, 68, 68' : '0, 255, 136'}, 0.07)` 
-                : 'rgba(8, 12, 28, 0.45)',
-          border: `1px solid ${locked
-            ? 'rgba(30,58,95,0.18)'
-            : gamepadSelected
-              ? '#ffd700'
-              : hovered 
-                ? (level.difficulty ? DIFF_COLOR[level.difficulty] : '#00ff88')
-                : 'rgba(255, 255, 255, 0.06)'}`,
-          borderRadius: 12, 
-          boxShadow: !locked && (gamepadSelected || hovered) 
-            ? `0 6px 20px rgba(${level.difficulty === 1 ? '0, 255, 136' : level.difficulty === 2 ? '251, 191, 36' : level.difficulty === 3 ? '249, 115, 22' : level.difficulty === 4 ? '239, 68, 68' : '0, 255, 136'}, 0.15), inset 0 0 10px rgba(255,255,255,0.02)` 
-            : '0 4px 12px rgba(0,0,0,0.2)',
-          transform: !locked && (gamepadSelected || hovered) ? 'scale(1.01) translateY(-1px)' : 'scale(1)',
-          transition: 'all 0.22s cubic-bezier(0.25, 0.8, 0.25, 1)',
-          opacity: locked ? 0.45 : 1,
-          cursor: locked ? 'default' : 'pointer',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          height: 144,
+          padding: '12px 14px',
+          background: hovered || gamepadSelected
+            ? 'rgba(17, 24, 39, 0.9)'
+            : 'rgba(13, 20, 37, 0.45)',
+          backdropFilter: 'blur(12px)',
+          border: `1px solid ${hovered || gamepadSelected
+            ? (diffColor || '#00c4ff')
+            : 'rgba(255, 255, 255, 0.08)'}`,
+          borderRadius: 12,
+          cursor: locked ? 'not-allowed' : 'pointer',
+          boxShadow: hovered || gamepadSelected
+            ? `0 0 15px ${(diffColor || '#00c4ff')}40, inset 0 0 10px ${(diffColor || '#00c4ff')}20`
+            : '0 8px 24px rgba(0, 0, 0, 0.35)',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           userSelect: 'none',
-          WebkitUserSelect: 'none',
+          outline: 'none',
         }}
       >
-        {/* Index */}
-        <span style={{
-          fontSize: 11, color: '#2d4a6b', fontVariantNumeric: 'tabular-nums',
-          minWidth: 24, textAlign: 'center', flexShrink: 0,
-          fontWeight: 700, letterSpacing: '0.04em',
-        }}>
-          {String(index + 1).padStart(2, '0')}
-        </span>
-
-        {/* Main content */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {/* Name + badges */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        {/* Top Row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 8 }}>
+          {/* Left: Index tag and Title */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
             <span style={{
-              fontSize: 14, fontWeight: 600,
-              color: locked ? '#475569' : hovered ? '#e2e8f0' : '#94a3b8',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              flex: 1, transition: 'color 0.15s',
+              fontSize: 10,
+              fontWeight: 800,
+              color: diffColor || '#00c4ff',
+              background: diffColor ? `${diffColor}15` : 'rgba(0, 196, 255, 0.15)',
+              border: `1px solid ${diffColor ? `${diffColor}40` : 'rgba(0, 196, 255, 0.3)'}`,
+              borderRadius: 4,
+              padding: '2px 5px',
+              fontFamily: 'monospace',
+              flexShrink: 0,
             }}>
-              {locked && <span style={{ marginRight: 5 }}>🔒</span>}
-              {level.name}
+              {String(index + 1).padStart(2, '0')}
             </span>
-
-            {/* Difficulty pill */}
-            {diffColor && diffBg && (
-              <span style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-                color: diffColor, background: diffBg,
-                border: `1px solid ${diffColor}45`, borderRadius: 4,
-                padding: '2px 7px', flexShrink: 0,
-              }}>
-                {t(`difficulty.${level.difficulty}`)}
-              </span>
-            )}
-
-            {/* Grid size */}
-            {!isMobile && (
-              <span style={{
-                fontSize: 11, color: '#2d4a6b', flexShrink: 0, fontVariantNumeric: 'tabular-nums',
-              }}>
-                {level.width}×{level.height}
-              </span>
-            )}
+            <span style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: locked ? '#475569' : '#f1f5f9',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {locked ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#475569' }}>
+                  🔒 {t('levels.locked') || 'Kilitli'}
+                </span>
+              ) : level.name}
+            </span>
           </div>
-
-          {/* Sub-info: stars, stats, tags */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', minHeight: 14 }}>
-            {playedLevel?.stars != null && <StarDisplay stars={playedLevel.stars} />}
-
-            {playedLevel && (playedLevel.moveCount != null || playedLevel.timeSpent > 0) && (
-              <span style={{ fontSize: 10, color: '#334155', letterSpacing: '0.04em' }}>
-                {playedLevel.moveCount != null ? `${playedLevel.moveCount} hamle` : ''}
-                {playedLevel.moveCount != null && playedLevel.timeSpent > 0 ? ' · ' : ''}
-                {playedLevel.timeSpent > 0 ? formatTime(playedLevel.timeSpent) : ''}
-              </span>
-            )}
-
-            {isPreset && level.creatorName && (
-              <span style={{ fontSize: 10, color: '#475569' }}>by {level.creatorName}</span>
-            )}
-
-            {level.trailCollision && (
-              <span style={{
-                fontSize: 9, color: '#00c4ff',
-                border: '1px solid rgba(0,196,255,0.3)', borderRadius: 3,
-                padding: '1px 5px', letterSpacing: '0.08em',
-              }}>TRAIL</span>
-            )}
-
-            {isPreset && level.isNeedSync && (
-              <span style={{ fontSize: 10, color: '#fbbf24', letterSpacing: '0.04em' }}>↻</span>
-            )}
-
-            {canAct && !isMobile && hovered && (
-              <span style={{ fontSize: 10, color: '#1e3a5f', fontStyle: 'italic' }}>
-                sağ tık →  işlemler
-              </span>
-            )}
-          </div>
+          
+          {/* Right: Difficulty Pill */}
+          {level.difficulty && (
+            <span style={{
+              fontSize: 9,
+              fontWeight: 800,
+              letterSpacing: '0.04em',
+              color: diffColor,
+              background: `${diffColor}12`,
+              border: `1px solid ${diffColor}30`,
+              borderRadius: 4,
+              padding: '1px 5px',
+              flexShrink: 0,
+            }}>
+              {t(`difficulty.${level.difficulty}`)}
+            </span>
+          )}
         </div>
 
-        {/* Right: action buttons + play */}
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Hover-reveal admin buttons (desktop) */}
-          {canAct && !isMobile && (
-            <div style={{
-              display: 'flex', gap: 4,
-              opacity: hovered ? 1 : 0, transition: 'opacity 0.15s',
-              pointerEvents: hovered ? 'auto' : 'none',
-            }}>
-              <SmallBtn onClick={onEdit} color="#00c4ff" label="✎" title={t('list.edit')} />
-              <SmallBtn onClick={onDelete} color="#ef4444" label="✕" title={t('list.delete')} />
+        {/* Middle Row */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+              {level.width}×{level.height} Grid
+            </span>
+            {level.creatorName && (
+              <>
+                <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: 10 }}>•</span>
+                <span style={{ fontSize: 11, color: '#00c4ff', fontWeight: 600, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={level.creatorName}>
+                  by {level.creatorName}
+                </span>
+              </>
+            )}
+          </div>
+          
+          {level.trailCollision && (
+            <div style={{ display: 'flex', alignItems: 'center', marginTop: 1 }}>
+              <span style={{
+                fontSize: 9,
+                fontWeight: 800,
+                color: '#ef4444',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: 3,
+                padding: '1px 4px',
+                letterSpacing: '0.05em',
+              }}>
+                ⚡ {t('editor.trail_collision') || 'TRAIL'}
+              </span>
             </div>
           )}
+        </div>
 
-          {/* Move buttons (user levels, desktop) */}
-          {!isPreset && !isMobile && (
-            <div style={{
-              display: 'flex', flexDirection: 'column', gap: 2,
-              opacity: hovered ? 1 : 0, transition: 'opacity 0.15s',
-              pointerEvents: hovered ? 'auto' : 'none',
-            }}>
-              <ArrowBtn onClick={onMoveUp} disabled={index === 0} label="↑" />
-              <ArrowBtn onClick={onMoveDown} disabled={index >= total - 1} label="↓" />
-            </div>
-          )}
+        {/* Bottom Row */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', width: '100%', marginTop: 'auto' }}>
+          {/* Left: StarDisplay & Played Stats */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {playedLevel ? (
+              <>
+                <StarDisplay stars={playedLevel.stars || 1} />
+                <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, marginTop: 1 }}>
+                  {playedLevel.moveCount} {t('hud.moves')?.replace(':', '') || 'Hamle'} · {formatTime(playedLevel.timeSpent)}
+                </span>
+              </>
+            ) : (
+              <span style={{ fontSize: 10, color: '#475569', fontStyle: 'italic' }}>
+                {t('levels.not_played') || 'Oynanmadı'}
+              </span>
+            )}
+          </div>
 
-          {/* Play button */}
-          <button
-            onClick={(e) => { e.stopPropagation(); if (!locked) onPlay(); }}
-            disabled={locked}
-            title={locked ? 'Locked' : t('list.play')}
-            style={{
-              width: isMobile ? 42 : 46,
-              height: isMobile ? 38 : 46,
-              fontSize: isMobile ? 15 : 17,
-              background: locked
-                ? 'rgba(30,58,95,0.1)'
-                : hovered ? 'rgba(0,255,136,0.14)' : 'rgba(0,255,136,0.07)',
-              border: `1px solid ${locked
-                ? 'rgba(30,58,95,0.3)'
-                : hovered ? 'rgba(0,255,136,0.6)' : 'rgba(0,255,136,0.28)'}`,
-              color: locked ? '#2d4a6b' : hovered ? '#00ff88' : '#4a9e70',
-              borderRadius: 9, cursor: locked ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'all 0.15s',
-              boxShadow: !locked && hovered ? '0 0 18px rgba(0,255,136,0.2), inset 0 0 10px rgba(0,255,136,0.05)' : 'none',
-            }}
+          {/* Right: Quick Action Buttons & Play Trigger */}
+          <div 
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={(e) => e.stopPropagation()} // Prevent card play click when clicking small control buttons
           >
-            {locked ? '🔒' : '▶'}
-          </button>
+            {canAct && (hovered || gamepadSelected || !isMobile) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {!isPreset && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <ArrowBtn onClick={onMoveUp} disabled={index === 0} label="▲" />
+                    <ArrowBtn onClick={onMoveDown} disabled={index >= total - 1} label="▼" />
+                  </div>
+                )}
+                <SmallBtn onClick={onEdit} color="#00c4ff" label="✎" title={t('list.edit')} />
+                <SmallBtn onClick={onDelete} color="#ef4444" label="✕" title={t('list.delete')} />
+              </div>
+            )}
+
+            {/* Main Action Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!locked) onPlay();
+              }}
+              disabled={locked}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                background: locked
+                  ? 'rgba(71, 85, 105, 0.1)'
+                  : `linear-gradient(135deg, ${(diffColor || '#00c4ff')}15 0%, ${(diffColor || '#00c4ff')}30 100%)`,
+                border: `1px solid ${locked ? 'rgba(71, 85, 105, 0.2)' : `${(diffColor || '#00c4ff')}60`}`,
+                color: locked ? '#475569' : '#fff',
+                cursor: locked ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: locked ? 'none' : `0 0 10px ${(diffColor || '#00c4ff')}20`,
+                fontSize: 12,
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {locked ? '🔒' : '▶'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Context menu */}
-      {ctxMenu && canAct && (
+      {ctxMenu && (
         <ContextMenu
-          x={ctxMenu.x} y={ctxMenu.y}
-          isPreset={isPreset} index={index} total={total}
-          onEdit={onEdit} onDelete={onDelete}
-          onMoveUp={onMoveUp} onMoveDown={onMoveDown}
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          isPreset={isPreset}
+          index={index}
+          total={total}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
           onClose={() => setCtxMenu(null)}
           t={t}
         />
