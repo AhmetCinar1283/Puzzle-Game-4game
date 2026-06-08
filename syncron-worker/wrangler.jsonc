@@ -16,17 +16,21 @@
 	],
 	"vars": {
 		"FIREBASE_PROJECT_ID": "syncron-1923",
-		"FIREBASE_API_KEY": "AIzaSyAjiRbyBEiJhZoa04G9ptzImGnBXl2OF4M",
 		"ALLOWED_ORIGIN": "http://localhost:3000"
+		// FIREBASE_API_KEY is provisioned as a secret — NOT a plain var (git-leak risk).
+		// Set once with: wrangler secret put FIREBASE_API_KEY
 	},
 	// ─── Cron Triggers ───────────────────────────────────────────────────────
-	// Runs runLogRetention() every Sunday at 03:00 UTC
-	// Archives logs older than 90 days to R2, then deletes them from D1.
+	// "0 3 * * SUN" → runLogRetention()      — every Sunday   03:00 UTC
+	// "5 0 * * MON" → runBadgeDistribution() — every Monday   00:05 UTC (weekly badges)
+	// "5 0 1 * *"   → runBadgeDistribution() — 1st of month   00:05 UTC (monthly badges)
+	// "0 4 * * *"   → runAnonymousCleanup()  — every day      04:00 UTC (D1 anonymous cleanup)
 	"triggers": {
 		"crons": [
 			"0 3 * * SUN",
 			"5 0 * * MON",
-			"5 0 1 * *"
+			"5 0 1 * *",
+			"0 4 * * *"
 		]
 	},
 	// ─── D1 Database ─────────────────────────────────────────────────────────

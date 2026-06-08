@@ -10,6 +10,7 @@ import { badgesRouter } from './routes/badges';
 import { friendsRouter } from './routes/friends';
 import { runLogRetention } from './scheduled/logRetention';
 import { runBadgeDistribution } from './scheduled/badgeDistribution';
+import { runAnonymousCleanup } from './scheduled/anonymousCleanup';
 
 const app = new Hono<AppContext>();
 
@@ -59,6 +60,10 @@ export default {
       ctx.waitUntil(runBadgeDistribution(env, 'weekly'));
     } else if (event.cron === '5 0 1 * *') {
       ctx.waitUntil(runBadgeDistribution(env, 'monthly'));
+    } else if (event.cron === '0 4 * * *') {
+      // Daily at 04:00 UTC — delete stale anonymous user data from D1.
+      // Firebase Functions does the Auth+Firestore side at 04:05 UTC.
+      ctx.waitUntil(runAnonymousCleanup(env));
     }
   },
 };

@@ -10,14 +10,16 @@ import {
 } from 'react';
 import {
   onAuthStateChanged,
-  signInAnonymously,
   signOut as firebaseSignOut,
   linkWithPopup,
   linkWithRedirect,
   linkWithCredential,
   getRedirectResult,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  createUserWithEmailAndPassword,
   signInWithCredential,
+  signInAnonymously,
   GoogleAuthProvider,
   EmailAuthProvider,
   type User,
@@ -57,7 +59,17 @@ function resolveAuthProvider(user: User): AuthProviderType {
 export interface AuthContextValue {
   user: User | null;
   loading: boolean;
+  /**
+   * True only when the user has an active ANONYMOUS Firebase Auth session
+   * (i.e. `user.isAnonymous === true`). False when the user is fully signed
+   * out (unauthenticated) — use `isUnauthenticated` for that case.
+   */
   isAnonymous: boolean;
+  /**
+   * True when there is NO active session at all (user === null).
+   * Distinct from `isAnonymous`, which requires an anonymous Auth account.
+   */
+  isUnauthenticated: boolean;
   role: UserRole;
   isModerator: boolean;
   /**
@@ -73,7 +85,7 @@ export interface AuthContextValue {
    * - `mode: 'signin'`   → signInWithEmailAndPassword (switches to existing account)
    */
   linkWithEmail: (email: string, password: string, mode: 'register' | 'signin') => Promise<void>;
-  /** Signs out and immediately re-signs anonymously. */
+  /** Signs out — user becomes null (unauthenticated). No anonymous re-sign-in. */
   signOut: () => Promise<void>;
 }
 
@@ -125,13 +137,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }),
         );
       } else {
-        try {
-          await signInAnonymously(auth);
-          // onAuthStateChanged fires again with the new anonymous user
-        } catch (err) {
-          console.error('[Auth] Anonymous sign-in failed:', err);
-          setLoading(false);
-        }
+        // User is signed out — stay unauthenticated (null).
+        // JIT anonymous sign-in happens in play/page.tsx and game/page.tsx
+        // right before the first level is loaded.
+        setUser(null);
+        dispatch(resetUser());
+        setLoading(false);
       }
     });
 
@@ -149,7 +160,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (accepted) {
           localStorage.removeItem('accepted_terms');
         }
-        await createOrUpdateUserDoc(user, accepted);
+        // Only sync Firestore doc for real (non-anonymous) users.
+        // Anonymous users get their doc lazily created by the Worker on first level completion.
+        if (!user.isAnonymous) {
+          await createOrUpdateUserDoc(user, accepted);
+        }
         const snap = await getDoc(doc(db, 'users', user.uid));
         if (snap.exists()) {
           const data = snap.data();
@@ -174,9 +189,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     syncUser();
   }, [user, dispatch]);
 
-  // 3. Google linking
+  // 3. Google sign-in / linking
+  // - user === null  → unauthenticated guest  → signInWithPopup / signInWithCredential
+  // - user.isAnonymous → anonymous session     → linkWithPopup (preserves UID & data)
   const linkWithGoogle = useCallback(async () => {
-    if (!user) throw new Error('No active session.');
     let credential: ReturnType<typeof GoogleAuthProvider.credential> | null = null;
 
     try {
@@ -195,9 +211,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!idToken) throw new Error('Google Sign-in failed: No ID Token returned.');
 
         credential = GoogleAuthProvider.credential(idToken);
+
+        // Native: link if anonymous, otherwise sign in directly
+        if (user?.isAnonymous) {
+          await linkWithCredential(user, credential);
+        } else {
+          await signInWithCredential(auth, credential);
+        }
       } else {
         const provider = new GoogleAuthProvider();
-        await linkWithPopup(user, provider);
+
+        if (user?.isAnonymous) {
+          // Anonymous session exists → link to preserve UID and game data
+          await linkWithPopup(user, provider);
+        } else {
+          // No session (guest) → direct sign-in
+          await signInWithPopup(auth, provider);
+        }
+
         // Force immediate state update (onAuthStateChanged may delay for same-UID link)
         const current = auth.currentUser!;
         setUser(current);
@@ -213,9 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // If we got here on native platform, we have a native credential. Link it!
-      await linkWithCredential(user, credential);
-
+      // Native path: update state after credential operation
       const current = auth.currentUser!;
       setUser(current);
       dispatch(
@@ -247,42 +276,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, dispatch]);
 
-  // 4. Email/password
+  // 4. Email/password sign-in / linking
+  // - mode 'register':
+  //     user.isAnonymous → linkWithCredential (preserves anonymous UID & game data)
+  //     user === null    → createUserWithEmailAndPassword (fresh account)
+  // - mode 'signin':
+  //     always signInWithEmailAndPassword regardless of current session
   const linkWithEmail = useCallback(
     async (email: string, password: string, mode: 'register' | 'signin') => {
-      if (!user) throw new Error('No active session.');
-
       if (mode === 'register') {
-        // v9 modular: credential nesnesi oluştur → linkWithCredential ile bağla
-        // Bu sayede anonymous UID korunur, mevcut oyun verisi silinmez.
-        const credential = EmailAuthProvider.credential(email, password);
-        await linkWithCredential(user, credential);
-        // Force immediate state update (onAuthStateChanged may delay for same-UID link)
-        const current = auth.currentUser!;
-        setUser(current);
-        dispatch(
-          setAuthUser({
-            uid: current.uid,
-            email: current.email,
-            displayName: current.displayName,
-            isAnonymous: false,
-            authProvider: 'email',
-          }),
-        );
+        if (user?.isAnonymous) {
+          // Anonymous session exists → link to preserve UID and game data
+          const credential = EmailAuthProvider.credential(email, password);
+          await linkWithCredential(user, credential);
+          // Force immediate state update (onAuthStateChanged may delay for same-UID link)
+          const current = auth.currentUser!;
+          setUser(current);
+          dispatch(
+            setAuthUser({
+              uid: current.uid,
+              email: current.email,
+              displayName: current.displayName,
+              isAnonymous: false,
+              authProvider: 'email',
+            }),
+          );
+        } else {
+          // No session (guest) → create a brand-new account directly
+          await createUserWithEmailAndPassword(auth, email, password);
+          // onAuthStateChanged fires and handles state update
+        }
       } else {
-        // Sign in to existing account (switches UID; anonymous data on this device lost)
+        // Sign in to existing account
         await signInWithEmailAndPassword(auth, email, password);
-        // onAuthStateChanged fires for this case (UID changes)
+        // onAuthStateChanged fires for this case
       }
     },
     [user, dispatch],
   );
 
-  // 5. Sign out → re-sign anonymously via onAuthStateChanged handler
+  // 5. Sign out → user becomes null (unauthenticated), no anonymous re-sign-in
   const signOut = useCallback(async () => {
     dispatch(resetUser());
     await firebaseSignOut(auth);
-    // onAuthStateChanged fires with null → triggers signInAnonymously
+    // onAuthStateChanged fires with null → user stays null (guest/unauthenticated)
   }, [dispatch]);
 
   return (
@@ -290,7 +327,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
-        isAnonymous: user?.isAnonymous ?? true,
+        // isAnonymous: only true for an active anonymous Firebase Auth session.
+        // Defaults to false (not true) when user is null — unauthenticated ≠ anonymous.
+        isAnonymous: user?.isAnonymous ?? false,
+        // isUnauthenticated: true when there is no session at all (user === null).
+        isUnauthenticated: user === null,
         role,
         isModerator: role === 'admin' || role === 'moderator',
         linkWithGoogle,

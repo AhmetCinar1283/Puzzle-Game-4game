@@ -204,6 +204,12 @@ const tr: Record<string, string> = {
   'auth.err_tag_taken': 'Bu tag zaten alınmış.',
   'auth.err_tag_cooldown': 'Tagini değiştirmek için {n} gün daha bekle.',
   'auth.err_tag_max': "5 değişiklik hakkının tamamını kullandın.",
+  'profile.displayName_section': 'KULLANICI ADIN',
+  'profile.displayName_placeholder': 'Yeni kullanıcı adı (3-25 karakter)',
+  'profile.displayName_save': 'Kullanıcı Adını Ayarla',
+  'profile.displayName_updated': 'Kullanıcı adı başarıyla güncellendi!',
+  'profile.err_displayName_length': 'Kullanıcı adı 3-25 karakter olmalıdır.',
+  'profile.err_displayName_chars': 'Yalnızca harf, sayı, boşluk, alt çizgi (_) ve tire (-) kullanılabilir.',
 
   // HUD
   'hud.moves': 'Hamle:',

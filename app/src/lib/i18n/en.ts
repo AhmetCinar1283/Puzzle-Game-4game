@@ -204,6 +204,12 @@ const en: Record<string, string> = {
   'auth.err_tag_taken': 'This tag is already taken.',
   'auth.err_tag_cooldown': 'Wait {n} more day(s) before changing your tag.',
   'auth.err_tag_max': "You've used all 5 tag changes.",
+  'profile.displayName_section': 'DISPLAY NAME',
+  'profile.displayName_placeholder': 'New display name (3-25 characters)',
+  'profile.displayName_save': 'Set Display Name',
+  'profile.displayName_updated': 'Display name updated successfully!',
+  'profile.err_displayName_length': 'Display name must be 3-25 characters.',
+  'profile.err_displayName_chars': 'Only letters, numbers, spaces, underscores (_), and dashes (-) are allowed.',
 
   // HUD
   'hud.moves': 'Moves:',

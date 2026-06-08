@@ -1,13 +1,34 @@
 import type { CellType } from '../types';
+import { getPlayerColor } from '../../game2/components/playerColors';
+
+const GROUP_COLORS: Record<string, string> = {
+  A: '#ec4899',
+  B: '#f97316',
+  C: '#14b8a6',
+  D: '#a855f7',
+  E: '#eab308',
+  F: '#ef4444',
+  G: '#3b82f6',
+};
+
+function getGroupColor(group: string): string {
+  if (GROUP_COLORS[group]) return GROUP_COLORS[group];
+  let hash = 0;
+  for (let i = 0; i < group.length; i++) {
+    hash = group.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 85%, 60%)`;
+}
 
 interface GameCellProps {
-  cellType: CellType;
+  cellType: string;
   cellSize: number;
   /** For conveyor cells: whether the conveyor is currently powered/active (affects visual). */
   isPowered?: boolean;
 }
 
-const CELL_STYLE: Record<CellType, React.CSSProperties> = {
+const CELL_STYLE: Record<string, React.CSSProperties> = {
   empty: {
     background: '#0d1928',
     border: '1px solid rgba(30, 58, 138, 0.25)',
@@ -249,37 +270,25 @@ export default function GameCell({ cellType, cellSize, isPowered }: GameCellProp
         </span>
       )}
 
-      {/* Target 1 */}
-      {cellType === 'target_1' && (
-        <span
-          className="target-pulse-green"
-          style={{
-            fontSize: cellSize * 0.38,
-            lineHeight: 1,
-            color: '#00ff88',
-            userSelect: 'none',
-            display: 'inline-block',
-          }}
-        >
-          ◎
-        </span>
-      )}
-
-      {/* Target 2 */}
-      {cellType === 'target_2' && (
-        <span
-          className="target-pulse-blue"
-          style={{
-            fontSize: cellSize * 0.38,
-            lineHeight: 1,
-            color: '#00c4ff',
-            userSelect: 'none',
-            display: 'inline-block',
-          }}
-        >
-          ◎
-        </span>
-      )}
+      {/* Dynamic Target Cells */}
+      {cellType.startsWith('target_') && (() => {
+        const idx = parseInt(cellType.substring('target_'.length), 10) - 1;
+        const color = getPlayerColor(isNaN(idx) ? 0 : idx).hex;
+        return (
+          <span
+            className="target-pulse-blue"
+            style={{
+              fontSize: cellSize * 0.38,
+              lineHeight: 1,
+              color: color,
+              userSelect: 'none',
+              display: 'inline-block',
+            }}
+          >
+            ◎
+          </span>
+        );
+      })()}
 
       {/* Ice */}
       {cellType === 'ice' && (
@@ -348,41 +357,45 @@ export default function GameCell({ cellType, cellSize, isPowered }: GameCellProp
       )}
 
       {/* Teleporters */}
-      {isTeleporter && (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 1,
-          }}
-        >
-          <span
+      {isTeleporter && (() => {
+        const group = cellType.substring(cellType.lastIndexOf('_') + 1);
+        const color = getGroupColor(group);
+        return (
+          <div
             style={{
-              fontSize: cellSize * 0.22,
-              lineHeight: 1,
-              color: TELEPORTER_COLOR[cellType] ?? '#fff',
-              textShadow: `0 0 8px ${TELEPORTER_COLOR[cellType] ?? '#fff'}`,
-              userSelect: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 1,
             }}
           >
-            {isTeleporterIn ? '⟿' : '⟾'}
-          </span>
-          <span
-            style={{
-              fontSize: cellSize * 0.2,
-              lineHeight: 1,
-              color: TELEPORTER_COLOR[cellType] ?? '#fff',
-              textShadow: `0 0 6px ${TELEPORTER_COLOR[cellType] ?? '#fff'}`,
-              userSelect: 'none',
-              fontWeight: 'bold',
-            }}
-          >
-            {TELEPORTER_LABEL[cellType]}
-          </span>
-        </div>
-      )}
+            <span
+              style={{
+                fontSize: cellSize * 0.22,
+                lineHeight: 1,
+                color: color,
+                textShadow: `0 0 8px ${color}`,
+                userSelect: 'none',
+              }}
+            >
+              {isTeleporterIn ? '⟿' : '⟾'}
+            </span>
+            <span
+              style={{
+                fontSize: cellSize * 0.2,
+                lineHeight: 1,
+                color: color,
+                textShadow: `0 0 6px ${color}`,
+                userSelect: 'none',
+                fontWeight: 'bold',
+              }}
+            >
+              {group}
+            </span>
+          </div>
+        );
+      })()}
     </div>
   );
 }

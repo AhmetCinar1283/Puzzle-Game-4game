@@ -47,7 +47,29 @@ export const CELL_TYPES: CellType[] = [
   ...CELL_TYPES_TRAMPOLINE,
 ];
 
-export const CELL_LABEL: Record<CellType | 'erase', string> = {
+import { getPlayerColor } from '@/app/src/game2/components/playerColors';
+
+const GROUP_COLORS: Record<string, string> = {
+  A: '#ec4899',
+  B: '#f97316',
+  C: '#14b8a6',
+  D: '#a855f7',
+  E: '#eab308',
+  F: '#ef4444',
+  G: '#3b82f6',
+};
+
+export function getGroupColor(group: string): string {
+  if (GROUP_COLORS[group]) return GROUP_COLORS[group];
+  let hash = 0;
+  for (let i = 0; i < group.length; i++) {
+    hash = group.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 85%, 60%)`;
+}
+
+const RAW_CELL_LABEL: Record<string, string> = {
   empty: 'Empty', obstacle: 'Obstacle', forbidden: 'Forbidden',
   target_1: 'Target 1', target_2: 'Target 2', direction_toggle: 'Toggle', erase: 'Erase',
   ice: 'Ice',
@@ -61,7 +83,23 @@ export const CELL_LABEL: Record<CellType | 'erase', string> = {
   trampoline_left: 'Trmp ◄', trampoline_right: 'Trmp ►',
 };
 
-export const CELL_ICON: Record<CellType | 'erase', string> = {
+export const CELL_LABEL = new Proxy(RAW_CELL_LABEL, {
+  get(target, prop: string) {
+    if (prop in target) return target[prop];
+    if (prop.startsWith('target_')) {
+      return `Target ${prop.substring(7)}`;
+    }
+    if (prop.startsWith('teleporter_in_')) {
+      return `Tel-In ${prop.substring('teleporter_in_'.length)}`;
+    }
+    if (prop.startsWith('teleporter_out_')) {
+      return `Tel-Out ${prop.substring('teleporter_out_'.length)}`;
+    }
+    return prop;
+  }
+}) as unknown as Record<string, string>;
+
+const RAW_CELL_ICON: Record<string, string> = {
   empty: '▫', obstacle: '■', forbidden: '✕',
   target_1: '◎', target_2: '◎', direction_toggle: '⇄', erase: '⌫',
   ice: '❄',
@@ -73,7 +111,21 @@ export const CELL_ICON: Record<CellType | 'erase', string> = {
   trampoline_up: '▲', trampoline_down: '▼', trampoline_left: '◄', trampoline_right: '►',
 };
 
-export const CELL_COLOR: Record<CellType | 'erase', string> = {
+export const CELL_ICON = new Proxy(RAW_CELL_ICON, {
+  get(target, prop: string) {
+    if (prop in target) return target[prop];
+    if (prop.startsWith('target_')) return '◎';
+    if (prop.startsWith('teleporter_in_')) {
+      return `⟿${prop.substring('teleporter_in_'.length)}`;
+    }
+    if (prop.startsWith('teleporter_out_')) {
+      return `⟾${prop.substring('teleporter_out_'.length)}`;
+    }
+    return prop;
+  }
+}) as unknown as Record<string, string>;
+
+const RAW_CELL_COLOR: Record<string, string> = {
   empty: '#475569', obstacle: '#94a3b8', forbidden: '#ef4444',
   target_1: '#00ff88', target_2: '#00c4ff', direction_toggle: '#ffd700', erase: '#64748b',
   ice: '#a5f3fc',
@@ -86,6 +138,21 @@ export const CELL_COLOR: Record<CellType | 'erase', string> = {
   trampoline_up: '#22d3ee', trampoline_down: '#22d3ee',
   trampoline_left: '#22d3ee', trampoline_right: '#22d3ee',
 };
+
+export const CELL_COLOR = new Proxy(RAW_CELL_COLOR, {
+  get(target, prop: string) {
+    if (prop in target) return target[prop];
+    if (prop.startsWith('target_')) {
+      const idx = parseInt(prop.substring(7), 10) - 1;
+      return getPlayerColor(isNaN(idx) ? 0 : idx).hex;
+    }
+    if (prop.startsWith('teleporter_in_') || prop.startsWith('teleporter_out_')) {
+      const group = prop.substring(prop.lastIndexOf('_') + 1);
+      return getGroupColor(group);
+    }
+    return '#475569';
+  }
+}) as unknown as Record<string, string>;
 
 export const EDGE_OPTIONS: EdgeBehavior[] = ['wall', 'portal', 'lava'];
 export const EDGE_LABEL: Record<EdgeBehavior, string> = { wall: 'Wall', portal: 'Portal', lava: 'Lava' };

@@ -4,6 +4,7 @@ import { useRef } from 'react';
 import GameCell from '@/app/src/games/components/GameCell';
 import { EDGE_COLOR } from '../editorConfig';
 import { useEditorContext } from '../EditorContext';
+import { getPlayerColor } from '@/app/src/game2/components/playerColors';
 
 function ObjDot({ color, size, label }: { color: string; size: number; label: string }) {
   const pad = Math.floor(size * 0.14);
@@ -16,7 +17,7 @@ function ObjDot({ color, size, label }: { color: string; size: number; label: st
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       pointerEvents: 'none', zIndex: 10,
     }}>
-      <span style={{ fontSize: s * 0.38, fontWeight: 900, color: color === '#00ff88' ? '#003320' : '#002233', lineHeight: 1 }}>
+      <span style={{ fontSize: s * 0.38, fontWeight: 900, color: '#000000', lineHeight: 1 }}>
         {label}
       </span>
     </div>
@@ -235,8 +236,7 @@ export default function GridCore() {
       {grid.map((row, r) => (
         <div key={r} style={{ display: 'flex' }}>
           {row.map((cell, c) => {
-            const isObj1 = objects[0].row === r && objects[0].col === c;
-            const isObj2 = objects[1].row === r && objects[1].col === c;
+            const cellObjects = objects.filter((o) => o.row === r && o.col === c);
             const isLocked = !!lockedCells[`${r},${c}`];
             return (
               <div
@@ -248,8 +248,14 @@ export default function GridCore() {
                 onMouseUp={() => { isPainting.current = false; }}
               >
                 <GameCell cellType={cell} cellSize={cellSize} />
-                {isObj1 && <ObjDot color="#00ff88" size={cellSize} label="1" />}
-                {isObj2 && <ObjDot color="#00c4ff" size={cellSize} label="2" />}
+                {cellObjects.map((obj) => (
+                  <ObjDot 
+                    key={obj.id} 
+                    color={getPlayerColor(obj.id - 1).hex} 
+                    size={cellSize} 
+                    label={String(obj.id)} 
+                  />
+                ))}
                 {boxes.map((b) => b.row === r && b.col === c ? (
                   <BoxDot key={b.id} size={cellSize} requiresPower={b.requiresPower} />
                 ) : null)}

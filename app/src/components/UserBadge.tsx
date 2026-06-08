@@ -43,7 +43,7 @@ export default function UserBadge() {
 
   const displayName = user?.displayName ?? user?.email?.split('@')[0] ?? null;
   const initial = displayName?.[0]?.toUpperCase() ?? '?';
-  const signed = !isAnonymous;
+  const signed = user !== null && !isAnonymous;
 
   return (
     <>

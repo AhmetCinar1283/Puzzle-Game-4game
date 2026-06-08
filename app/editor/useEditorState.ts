@@ -53,7 +53,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const prevToolRef = useRef<ToolType>('obstacle');
   const setActiveTool = useCallback((t: ToolType) => {
     _setActiveTool((prev) => {
-      if (prev !== 'place_box' && prev !== 'place_obj1' && prev !== 'place_obj2') {
+      if (prev !== 'place_box' && !prev.startsWith('place_obj')) {
         prevToolRef.current = prev;
       }
       return t;
@@ -151,11 +151,16 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setTrailCollision(!!stored.trailCollision);
     setDifficulty((stored.difficulty != undefined ? stored.difficulty : 2) as 1 | 2 | 3 | 4);
     setSavedRequestId(stored.requestId ?? null);
-    const objs = [...DEFAULT_OBJS.map((o) => ({ ...o }))];
-    stored.initialObjects.forEach((obj) => {
-      const idx = objs.findIndex((o) => o.id === obj.id);
-      if (idx >= 0) objs[idx] = { id: obj.id, row: obj.position.row, col: obj.position.col, mode: obj.mode, lockOnTarget: obj.lockOnTarget };
-    });
+    const objs: ObjConfig[] = (stored.initialObjects ?? []).map((obj) => ({
+      id: obj.id,
+      row: obj.position.row,
+      col: obj.position.col,
+      mode: obj.mode,
+      lockOnTarget: obj.lockOnTarget,
+    }));
+    if (objs.length === 0) {
+      objs.push({ id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true });
+    }
     setObjects(objs);
     setBoxes((stored.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
     setConveyorPowerRequired(stored.conveyorPowerRequired ?? []);
@@ -203,8 +208,13 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const paintCell = useCallback((r: number, c: number, isDrag: boolean) => {
     setActiveCandidateIndex(null);
     if (!isDrag) pushGridHistory();
-    if (activeTool === 'place_obj1') { setObjects((os) => os.map((o) => o.id === 1 ? { ...o, row: r, col: c } : o)); return; }
-    if (activeTool === 'place_obj2') { setObjects((os) => os.map((o) => o.id === 2 ? { ...o, row: r, col: c } : o)); return; }
+    if (activeTool.startsWith('place_obj')) {
+      const id = parseInt(activeTool.substring(9), 10);
+      if (!isNaN(id)) {
+        setObjects((os) => os.map((o) => o.id === id ? { ...o, row: r, col: c } : o));
+        return;
+      }
+    }
     if (activeTool === 'place_box' && activePlacingBoxId !== null) {
       setBoxes((bs) => bs.map((b) => b.id === activePlacingBoxId ? { ...b, row: r, col: c } : b));
       setActivePlacingBoxId(null);
@@ -256,22 +266,43 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       return next;
     });
   }, [activeTool, activePlacingBoxId, setActiveTool]);
-
   const generateLevelData = useCallback((): { level: LevelData | null; error: string | null } => {
-    const targets: { objectId: number; position: { row: number; col: number } }[] = [];
-    for (let r = 0; r < height; r++)
-      for (let c = 0; c < width; c++) {
-        if (grid[r][c] === 'target_1') targets.push({ objectId: 1, position: { row: r, col: c } });
-        if (grid[r][c] === 'target_2') targets.push({ objectId: 2, position: { row: r, col: c } });
-      }
     const validObjs = objects.filter((o) => o.row !== null && o.col !== null);
-    if (validObjs.length < 2) return { level: null, error: 'Place both objects on the grid first.' };
-    for (const letter of ['A', 'B', 'C'] as const) {
-      const hasIn = grid.some((row) => row.includes(`teleporter_in_${letter}` as CellType));
-      const hasOut = grid.some((row) => row.includes(`teleporter_out_${letter}` as CellType));
-      if (hasIn && !hasOut) return { level: null, error: `Teleporter ${letter} has an entrance but no exit.` };
-      if (!hasIn && hasOut) return { level: null, error: `Teleporter ${letter} has an exit but no entrance.` };
+    if (validObjs.length < 1) return { level: null, error: 'Place at least one player on the grid first.' };
+    if (validObjs.length !== objects.length) return { level: null, error: 'All defined players must be placed on the grid.' };
+
+    const targets: { objectId: number; position: { row: number; col: number } }[] = [];
+    for (let r = 0; r < height; r++) {
+      for (let c = 0; c < width; c++) {
+        if (grid[r][c].startsWith('target_')) {
+          const id = parseInt(grid[r][c].substring(7), 10);
+          if (!isNaN(id)) {
+            targets.push({ objectId: id, position: { row: r, col: c } });
+          }
+        }
+      }
     }
+
+    if (targets.length !== validObjs.length) {
+      return { level: null, error: `Number of targets (${targets.length}) must match number of players (${validObjs.length}).` };
+    }
+
+    // Validate teleporters: check each group has at least 2 portals
+    const telGroupCounts: Record<string, number> = {};
+    for (const row of grid) {
+      for (const cell of row) {
+        if (cell.startsWith('teleporter_in_') || cell.startsWith('teleporter_out_')) {
+          const group = cell.substring(cell.lastIndexOf('_') + 1);
+          telGroupCounts[group] = (telGroupCounts[group] ?? 0) + 1;
+        }
+      }
+    }
+    for (const [group, count] of Object.entries(telGroupCounts)) {
+      if (count < 2) {
+        return { level: null, error: `Teleporter group ${group} must have at least 2 portals.` };
+      }
+    }
+
     const validBoxes = boxes.filter((b) => b.row !== null && b.col !== null);
     return {
       level: {
@@ -439,11 +470,16 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       setConveyorConfig(parsed.conveyorConfig ?? []);
       setTrampolineConfig(parsed.trampolineConfig ?? []);
       setActivePlacingBoxId(null);
-      const objs = [...DEFAULT_OBJS.map((o) => ({ ...o }))];
-      (parsed.initialObjects ?? []).forEach((obj) => {
-        const idx = objs.findIndex((o) => o.id === obj.id);
-        if (idx >= 0) objs[idx] = { id: obj.id, row: obj.position.row, col: obj.position.col, mode: obj.mode, lockOnTarget: obj.lockOnTarget };
-      });
+      const objs: ObjConfig[] = (parsed.initialObjects ?? []).map((obj) => ({
+        id: obj.id,
+        row: obj.position.row,
+        col: obj.position.col,
+        mode: obj.mode,
+        lockOnTarget: obj.lockOnTarget,
+      }));
+      if (objs.length === 0) {
+        objs.push({ id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true });
+      }
       setObjects(objs);
       return null;
     } catch {
@@ -461,11 +497,16 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setEdges(fl.edges as typeof edges);
     setGrid(typeof fl.grid == 'string' ? JSON.parse(fl.grid) : fl.grid as CellType[][]);
     setTrailCollision(!!fl.trailCollision);
-    const objs = [...DEFAULT_OBJS.map((o) => ({ ...o }))];
-    fl.initialObjects.forEach((obj) => {
-      const idx = objs.findIndex((o) => o.id === obj.id);
-      if (idx >= 0) objs[idx] = { id: obj.id, row: obj.position.row, col: obj.position.col, mode: obj.mode, lockOnTarget: obj.lockOnTarget };
-    });
+    const objs: ObjConfig[] = (fl.initialObjects ?? []).map((obj) => ({
+      id: obj.id,
+      row: obj.position.row,
+      col: obj.position.col,
+      mode: obj.mode,
+      lockOnTarget: obj.lockOnTarget,
+    }));
+    if (objs.length === 0) {
+      objs.push({ id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true });
+    }
     setObjects(objs);
     setBoxes((fl.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
     setConveyorPowerRequired(fl.conveyorPowerRequired ?? []);
@@ -553,11 +594,16 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setSavedRequestId(null);
     setFirestoreEditId(null);
     
-    const objs = [...DEFAULT_OBJS.map((o) => ({ ...o }))];
-    level.initialObjects.forEach((obj) => {
-      const idx = objs.findIndex((o) => o.id === obj.id);
-      if (idx >= 0) objs[idx] = { id: obj.id, row: obj.position.row, col: obj.position.col, mode: obj.mode, lockOnTarget: obj.lockOnTarget };
-    });
+    const objs: ObjConfig[] = (level.initialObjects ?? []).map((obj) => ({
+      id: obj.id,
+      row: obj.position.row,
+      col: obj.position.col,
+      mode: obj.mode,
+      lockOnTarget: obj.lockOnTarget,
+    }));
+    if (objs.length === 0) {
+      objs.push({ id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true });
+    }
     setObjects(objs);
 
     setBoxes((level.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));

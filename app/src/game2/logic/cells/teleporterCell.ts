@@ -20,8 +20,7 @@ export const teleportBehavior: CellBehavior = {
     onEnter: (cell, entity, grid, entities, prevPos) => {
         if (entity.physics.z > 0) return []; // Havada — ışınlanma yok
 
-        const isIn = (cell.customData.isIn as boolean) ?? true;
-        const targetPos = (isIn ? cell.customData.exitPos : cell.customData.entrancePos) as Position | undefined;
+        const targetPos = cell.customData.targetPos as Position | undefined;
         if (!targetPos) return [];
 
         // Eğer bir önceki pozisyon hedeflenen ışınlanma çıkış noktası ile aynıysa, 

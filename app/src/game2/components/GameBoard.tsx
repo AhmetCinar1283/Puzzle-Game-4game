@@ -19,6 +19,7 @@ import { ENTITY_RENDERERS } from './entities/ENTITY_RENDERERS';
 import { PhysicsWrapper } from './physicsWrapper';
 import { LevelEdges } from '../logic/engine/getNextTopologyPosition';
 import { GAME_ANIMATION_KEYFRAMES } from './effects/animationStyles';
+import { getPlayerColor } from './playerColors';
 
 const CELL_SIZE = 64;
 
@@ -284,10 +285,7 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
                         const trailPlayerIndex = cell.customData.trailPlayerIndex as number | undefined;
                         if (trailPlayerIndex === undefined) return null;
 
-                        const color = trailPlayerIndex === 0 ? '#00ff88' : '#00c4ff'; // P1: Green, P2: Blue
-                        const glow = trailPlayerIndex === 0 
-                            ? 'rgba(0, 255, 136, 0.65)' 
-                            : 'rgba(0, 196, 255, 0.65)';
+                        const { hex: color, glow } = getPlayerColor(trailPlayerIndex);
 
                         const r = cell.position.row;
                         const c = cell.position.col;

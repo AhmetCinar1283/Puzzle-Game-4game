@@ -3,12 +3,13 @@
 import React, { useState, useEffect, useMemo, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { updateProfile } from 'firebase/auth';
 
 import { useAuthContext } from '../src/contexts/AuthContext';
 import { useT, useLanguage } from '../src/contexts/LanguageContext';
-import { db, functions } from '../src/lib/firebase/config';
+import { db, functions, auth } from '../src/lib/firebase/config';
 import { useBadges } from '../src/hooks/useBadges';
 import { Badge } from '../src/lib/api/badgesClient';
 import { useFriends } from '../src/hooks/useFriends';
@@ -72,6 +73,21 @@ export default function ProfileClient() {
   const [tagBusy, setTagBusy] = useState(false);
   const [tagError, setTagError] = useState('');
   const [tagSuccess, setTagSuccess] = useState(false);
+
+  // Display Name edit states
+  const [displayNameInput, setDisplayNameInput] = useState('');
+  const [displayNameBusy, setDisplayNameBusy] = useState(false);
+  const [displayNameError, setDisplayNameError] = useState('');
+  const [displayNameSuccess, setDisplayNameSuccess] = useState(false);
+
+  // Sync display name input with user profile info
+  useEffect(() => {
+    if (profileDoc?.displayName) {
+      setDisplayNameInput(profileDoc.displayName);
+    } else if (currentUser?.displayName) {
+      setDisplayNameInput(currentUser.displayName);
+    }
+  }, [profileDoc, currentUser]);
 
   const [copied, setCopied] = useState(false);
   const handleCopyTag = () => {
@@ -177,6 +193,13 @@ export default function ProfileClient() {
     });
     setParticles(list);
   }, []);
+
+  // Redirect unauthenticated guests away from their own profile page
+  useEffect(() => {
+    if (isOwner && !currentUser) {
+      router.push('/');
+    }
+  }, [currentUser, isOwner, router]);
 
   // Fetch Firestore owner profile details
   useEffect(() => {
@@ -316,6 +339,54 @@ export default function ProfileClient() {
       else setTagError(t('auth.err_generic'));
     } finally {
       setTagBusy(false);
+    }
+  };
+
+  const handleDisplayNameSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    const newName = displayNameInput.trim();
+    if (!newName || !isOwner) return;
+
+    if (newName.length < 3 || newName.length > 25) {
+      setDisplayNameError(t('profile.err_displayName_length'));
+      return;
+    }
+
+    // Alphanumeric + spaces + underscore + dash + Turkish characters
+    const validRegex = /^[a-zA-Z0-9ğüşöçİĞÜŞÖÇ\s_-]+$/;
+    if (!validRegex.test(newName)) {
+      setDisplayNameError(t('profile.err_displayName_chars'));
+      return;
+    }
+
+    setDisplayNameBusy(true);
+    setDisplayNameError('');
+    setDisplayNameSuccess(false);
+
+    try {
+      // 1. Update Firestore user doc
+      await updateDoc(doc(db, 'users', viewUid), { displayName: newName });
+
+      // 2. Update Firebase Auth profile if user object is current user
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, { displayName: newName });
+      }
+
+      // 3. Update local state
+      setProfileDoc((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              displayName: newName,
+            }
+          : prev
+      );
+      setDisplayNameSuccess(true);
+    } catch (err: any) {
+      console.error('[Profile] Failed to update display name:', err);
+      setDisplayNameError(t('auth.err_generic'));
+    } finally {
+      setDisplayNameBusy(false);
     }
   };
 
@@ -721,6 +792,81 @@ export default function ProfileClient() {
           showcaseBadges={showcaseBadges}
           onEditClick={() => setPickerOpen(true)}
         />
+
+        {/* Display Name Management Panel (Owner only) */}
+        {isOwner && !isCurrentAnonymous && (
+          <div
+            style={{
+              background: '#0a0f1a50',
+              border: '1px solid #111827',
+              borderRadius: '16px',
+              padding: '20px 24px',
+              boxSizing: 'border-box',
+            }}
+          >
+            <h3
+              style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                letterSpacing: '0.15em',
+                color: '#4b5563',
+                textTransform: 'uppercase',
+                margin: '0 0 12px 0',
+              }}
+            >
+              {t('profile.displayName_section')}
+            </h3>
+
+            <form onSubmit={handleDisplayNameSubmit} style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                placeholder={t('profile.displayName_placeholder')}
+                value={displayNameInput}
+                onChange={(e) => setDisplayNameInput(e.target.value)}
+                maxLength={25}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  background: '#060c16',
+                  border: '1px solid #1f2937',
+                  borderRadius: '8px',
+                  color: '#e5e7eb',
+                  fontSize: '13px',
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <button
+                type="submit"
+                disabled={displayNameBusy || !displayNameInput.trim() || displayNameInput.trim() === displayName}
+                style={{
+                  padding: '8px 16px',
+                  background: '#00ff8815',
+                  border: '1px solid #00ff8840',
+                  borderRadius: '8px',
+                  color: '#00ff88',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: displayNameBusy || !displayNameInput.trim() || displayNameInput.trim() === displayName ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!displayNameBusy && displayNameInput.trim() && displayNameInput.trim() !== displayName) {
+                    e.currentTarget.style.background = '#00ff8825';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#00ff8815';
+                }}
+              >
+                {displayNameBusy ? '...' : t('profile.displayName_save')}
+              </button>
+            </form>
+
+            {displayNameError && <p style={{ color: '#ff2d55', fontSize: '12px', margin: '8px 0 0' }}>{displayNameError}</p>}
+            {displayNameSuccess && <p style={{ color: '#00ff88', fontSize: '12px', margin: '8px 0 0' }}>{t('profile.displayName_updated')}</p>}
+          </div>
+        )}
 
         {/* Tag Management Panel (Owner only) */}
         {isOwner && !isCurrentAnonymous && (

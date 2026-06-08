@@ -91,6 +91,7 @@ export default function AuthModal({ onClose }: Props) {
       await fn();
       onClose();
     } catch (err) {
+      console.error('[AuthModal] Error during auth operation:', err);
       const key = toMessageKey(err);
       if (key) setError(t(key));
     } finally {
@@ -154,7 +155,7 @@ export default function AuthModal({ onClose }: Props) {
   };
 
   // ── Signed-in view ──────────────────────────────────────────────────────────
-  if (!isAnonymous) {
+  if (user !== null && !isAnonymous) {
     const name = user?.displayName ?? user?.email ?? t('auth.sign_in');
     const provider = user?.providerData?.[0]?.providerId ?? '';
     const providerLabel = provider === 'google.com' ? 'Google' : provider === 'password' ? t('auth.email') : '';

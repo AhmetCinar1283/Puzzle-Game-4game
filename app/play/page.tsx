@@ -13,7 +13,8 @@ import type { UIButtonType, Direction } from '@/app/src/game2/logic/types';
 import type { Entity } from '@/app/src/game2/logic/entityTypes';
 import type { Cell } from '@/app/src/game2/logic/cellTypes';
 import type { LevelEdges } from '@/app/src/game2/logic/engine/getNextTopologyPosition';
-
+import { signInAnonymously } from 'firebase/auth';
+import { auth } from '@/app/src/lib/firebase/config';
 
 // ─── Worker tipi (docs/scoring.md) ──────────────────────────────────────────
 
@@ -101,6 +102,17 @@ function PlayContent() {
 
         async function load() {
             try {
+                // JIT anonymous sign-in: if user hasn’t signed in yet, do it now
+                // before loading the level. This is the moment they chose to play.
+                if (!auth.currentUser) {
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (anonErr) {
+                        // Non-fatal: level still loads from local Dexie cache
+                        console.warn('[Play] JIT anonymous sign-in failed:', anonErr);
+                    }
+                }
+
                 let stored: (StoredLevel & { id: number }) | undefined;
                 let nextId: number | null = null;
 
@@ -118,15 +130,13 @@ function PlayContent() {
                             raw = await db.presetLevels.get(levelId!);
                         } catch (err) {
                             console.warn('[Play] Lazy fetch failed:', err);
-                            console.log("5")
                         }
                         if (cancelled) return;
                         if (!raw) { setError(true); setLoading(false); return; }
                     }
-                    
+
                     stored = storedToLevelData(raw as StoredLevel & { id: number });
                     nextId = await getNextPresetLevelId(levelId!);
-                    console.log("8")
                     storageSet('lastPlayedLevelId', String(levelId));
                     storageSet('lastPlayedSource', 'preset');
                 } else {
@@ -138,7 +148,6 @@ function PlayContent() {
                     
                     stored = storedToLevelData(raw as StoredLevel & { id: number });
                     nextId = await getNextLevelId(levelId!);
-                    console.log("12")
                     storageSet('lastPlayedLevelId', String(levelId));
                     storageSet('lastPlayedSource', 'user');
                 }
@@ -177,14 +186,36 @@ function PlayContent() {
         const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000);
 
         try {
-            // Get Firebase ID Token for authorization
-            const { auth } = await import('@/app/src/lib/firebase/config');
-            const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+            // Get Firebase ID Token for authorization.
+            // If auth.currentUser is null (JIT sign-in failed silently during load()),
+            // attempt one last anonymous sign-in before giving up — prevents silent score loss.
+            const { auth: firebaseAuth } = await import('@/app/src/lib/firebase/config');
 
-            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
+            if (!firebaseAuth.currentUser) {
+                try {
+                    const { signInAnonymously: anonSignIn } = await import('firebase/auth');
+                    await anonSignIn(firebaseAuth);
+                } catch (retryErr) {
+                    console.warn('[Play] Token retry sign-in failed — cannot submit score:', retryErr);
+                    setWorkerResult({ success: false });
+                    return;
+                }
             }
+
+            const token = firebaseAuth.currentUser
+                ? await firebaseAuth.currentUser.getIdToken()
+                : null;
+
+            if (!token) {
+                console.warn('[Play] No auth token available after retry — cannot submit score.');
+                setWorkerResult({ success: false });
+                return;
+            }
+
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            };
 
             const res = await fetch(`${WORKER_URL}/complete-level`, {
                 method: 'POST',

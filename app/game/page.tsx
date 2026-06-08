@@ -7,6 +7,9 @@ import type { StoredLevel } from '@/app/src/lib/db';
 import { useUserStorage } from '@/app/src/lib/userStorage';
 import GameShell from '@/app/src/games/components/GameShell';
 import { useT } from '@/app/src/contexts/LanguageContext';
+import { signInAnonymously } from 'firebase/auth';
+import { auth } from '@/app/src/lib/firebase/config';
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,6 +61,17 @@ function GameContent() {
 
     let cancelled = false;
     async function load() {
+      // JIT anonymous sign-in: if user hasn’t signed in yet, do it now
+      // before loading the level. This is the moment they chose to play.
+      if (!auth.currentUser) {
+        try {
+          await signInAnonymously(auth);
+        } catch (anonErr) {
+          // Non-fatal: level still loads from local Dexie cache
+          console.warn('[Game] JIT anonymous sign-in failed:', anonErr);
+        }
+      }
+
       if (isPreset) {
         const { getDB, getNextPresetLevelId } = await import('@/app/src/lib/db');
         const db = getDB();

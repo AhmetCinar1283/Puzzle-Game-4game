@@ -18,7 +18,23 @@ type CellMapping = {
     customData?: Record<string, unknown>;
 };
 
-function mapCellType(old: CellType): CellMapping {
+function mapCellType(old: string): CellMapping {
+    if (old.startsWith('target_')) {
+        const numStr = old.substring('target_'.length);
+        const playerIndex = parseInt(numStr, 10) - 1;
+        if (!isNaN(playerIndex)) {
+            return { type: 'target', customData: { playerIndex } };
+        }
+    }
+    if (old.startsWith('teleporter_in_')) {
+        const group = old.substring('teleporter_in_'.length);
+        return { type: 'teleport', customData: { group } };
+    }
+    if (old.startsWith('teleporter_out_')) {
+        const group = old.substring('teleporter_out_'.length);
+        return { type: 'teleport', customData: { group } };
+    }
+
     switch (old) {
         case 'empty':            return { type: 'normal' };
         case 'obstacle':         return { type: 'obstacle' };
@@ -26,8 +42,6 @@ function mapCellType(old: CellType): CellMapping {
         case 'ice':              return { type: 'ice' };
         case 'power_node':       return { type: 'power' };
         case 'direction_toggle': return { type: 'toggle' };
-        case 'target_1':         return { type: 'target',    customData: { playerIndex: 0 } };
-        case 'target_2':         return { type: 'target',    customData: { playerIndex: 1 } };
         case 'conveyor_up':      return { type: 'conveyor',  customData: { direction: 'up'    as Direction } };
         case 'conveyor_down':    return { type: 'conveyor',  customData: { direction: 'down'  as Direction } };
         case 'conveyor_left':    return { type: 'conveyor',  customData: { direction: 'left'  as Direction } };
@@ -36,12 +50,6 @@ function mapCellType(old: CellType): CellMapping {
         case 'trampoline_down':  return { type: 'trampoline', customData: { direction: 'down' as Direction } };
         case 'trampoline_left':  return { type: 'trampoline', customData: { direction: 'left' as Direction } };
         case 'trampoline_right': return { type: 'trampoline', customData: { direction: 'right' as Direction } };
-        case 'teleporter_in_A':  return { type: 'teleport', customData: { group: 'A', isIn: true  } };
-        case 'teleporter_out_A': return { type: 'teleport', customData: { group: 'A', isIn: false } };
-        case 'teleporter_in_B':  return { type: 'teleport', customData: { group: 'B', isIn: true  } };
-        case 'teleporter_out_B': return { type: 'teleport', customData: { group: 'B', isIn: false } };
-        case 'teleporter_in_C':  return { type: 'teleport', customData: { group: 'C', isIn: true  } };
-        case 'teleporter_out_C': return { type: 'teleport', customData: { group: 'C', isIn: false } };
         default:                 return { type: 'normal' };
     }
 }
@@ -56,7 +64,7 @@ export interface Game2State {
 }
 
 export function convertToGame2State(stored: StoredLevel & { id: number }): Game2State {
-    const rawGrid: CellType[][] =
+    const rawGrid: any[][] =
         typeof stored.grid === 'string' ? JSON.parse(stored.grid) : stored.grid;
 
     // ── 1. ADIM: Hücre grid'ini oluştur ─────────────────────
@@ -87,13 +95,34 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
 
     // ── 2. ADIM: Teleporter çiftlerini bağla ─────────────────
     const teleporters = grid.flat().filter(c => c.type === 'teleport');
+    const teleportersByGroup: Record<string, Cell[]> = {};
+    for (const tel of teleporters) {
+        const group = tel.customData.group as string;
+        if (!group) continue;
+        if (!teleportersByGroup[group]) teleportersByGroup[group] = [];
+        teleportersByGroup[group].push(tel);
+    }
 
-    for (const inCell of teleporters.filter(c => c.customData.isIn === true)) {
-        const group = inCell.customData.group as string;
-        const outCell = teleporters.find(c => c.customData.group === group && c.customData.isIn === false);
-        if (outCell) {
-            inCell.customData.exitPos      = { ...outCell.position };
-            outCell.customData.entrancePos = { ...inCell.position };
+    for (const [group, list] of Object.entries(teleportersByGroup)) {
+        if (list.length === 2) {
+            const [t1, t2] = list;
+            t1.customData.targetPos = { ...t2.position };
+            t2.customData.targetPos = { ...t1.position };
+            // Geriye dönük uyumluluk (backward compatibility) için:
+            t1.customData.exitPos = { ...t2.position };
+            t1.customData.entrancePos = { ...t1.position };
+            t2.customData.exitPos = { ...t1.position };
+            t2.customData.entrancePos = { ...t2.position };
+        } else if (list.length > 2) {
+            // Cyclical path for 3+ portals in a group
+            for (let i = 0; i < list.length; i++) {
+                const current = list[i];
+                const next = list[(i + 1) % list.length];
+                current.customData.targetPos = { ...next.position };
+                // Fallback geriye dönük uyumluluk:
+                current.customData.exitPos = { ...next.position };
+                current.customData.entrancePos = { ...current.position };
+            }
         }
     }
 

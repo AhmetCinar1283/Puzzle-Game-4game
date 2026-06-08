@@ -116,7 +116,11 @@ export async function upsertUserProfile(
     ON CONFLICT(uid)
     DO UPDATE SET
       display_name = excluded.display_name,
-      tag = excluded.tag,
+      -- COALESCE: only advance tag from NULL → real value, never real value → NULL.
+      -- This prevents a race where an upgrading user completes a level before
+      -- Cloud Functions assigns their tag, causing the tag to be wiped in D1
+      -- and the cleanup cron incorrectly targeting them.
+      tag = COALESCE(excluded.tag, user_profiles.tag),
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   `;
 

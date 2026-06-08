@@ -110,6 +110,25 @@ gameRouter.post('/complete-level', firebaseAuth, async (c) => {
   const now = nowTimestamp();
   const writes: unknown[] = [];
 
+  // If the user has no Firestore doc yet (anonymous user on first completion),
+  // lazily create it — only if it does not already exist (idempotent).
+  if (!userDoc) {
+    writes.push({
+      update: {
+        name: docPath(projectId, `users/${uid}`),
+        fields: {
+          uid:            { stringValue: uid },
+          authProvider:   { stringValue: 'anonymous' },
+          createdAt:      { timestampValue: now },
+          totalScore:     { integerValue: '0' },
+          completedCount: { integerValue: '0' },
+          role:           { stringValue: 'user' },
+        },
+      },
+      currentDocument: { exists: false },
+    });
+  }
+
   if (scoreDelta > 0 || isFirstCompletion) {
     const fieldTransforms: unknown[] = [];
     if (scoreDelta > 0) {

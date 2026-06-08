@@ -3,12 +3,7 @@
 // Fizik, pozisyon, animasyon → PhysicsWrapper'ın işi.
 
 import { Entity } from '../../logic/entityTypes';
-
-// Oyuncu renk şeması (docs/theme.md)
-const PLAYER_COLORS: Record<number, { primary: string; glow: string }> = {
-    0: { primary: '#00ff88', glow: 'rgba(0,255,136,0.65)' }, // Emerald — P1
-    1: { primary: '#00c4ff', glow: 'rgba(0,196,255,0.65)' }, // Sky     — P2
-};
+import { getPlayerColor } from '../playerColors';
 
 export const PlayerGraphic = ({ entity }: { entity: Entity }) => {
     const playerIndex = (entity.customData.playerIndex as number) ?? 0;
@@ -16,7 +11,7 @@ export const PlayerGraphic = ({ entity }: { entity: Entity }) => {
     const isReversed = mode === 'reversed';
     
     // Ters yönde de olsak oyuncu kendi asıl rengini korusun (yeşil/mavi vs.)
-    const { primary, glow } = PLAYER_COLORS[playerIndex] ?? PLAYER_COLORS[0];
+    const { primary, glow } = getPlayerColor(playerIndex);
 
     return (
         <div style={{
@@ -32,9 +27,11 @@ export const PlayerGraphic = ({ entity }: { entity: Entity }) => {
                 height={42}
                 viewBox="0 0 24 24"
                 fill="none"
-                className={playerIndex === 0 
-                    ? (isReversed ? 'player-svg-p0-reversed' : 'player-svg-p0') 
-                    : (isReversed ? 'player-svg-p1-reversed' : 'player-svg-p1')}
+                style={{
+                    filter: `drop-shadow(0 0 ${isReversed ? '12px' : '8px'} ${glow})`,
+                    transition: 'transform 150ms cubic-bezier(0.25, 1, 0.5, 1)',
+                    animation: isReversed ? 'playerPulse 1.3s infinite ease-in-out' : 'playerPulse 2.5s infinite ease-in-out',
+                }}
             >
                 {/* Dış parıltı çemberi (Reversed modda sürekli döner) */}
                 <circle 

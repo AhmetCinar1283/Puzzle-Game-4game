@@ -249,33 +249,13 @@ export const GAME_ANIMATION_KEYFRAMES = `
     }
 
     /* ── OYUNCU GRAFİĞİ (PLAYER GRAPHIC) ── */
-    @keyframes playerGlowPulse-p0 {
-        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(0,255,136,0.65)); }
-        50% { transform: scale(1.05); filter: drop-shadow(0 0 16px rgba(0,255,136,0.65)); }
-    }
-    @keyframes playerGlowPulse-p1 {
-        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(0,196,255,0.65)); }
-        50% { transform: scale(1.05); filter: drop-shadow(0 0 16px rgba(0,196,255,0.65)); }
+    @keyframes playerPulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
     }
     @keyframes spinCounterClockwise {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(-360deg); }
-    }
-    .player-svg-p0 {
-        animation: playerGlowPulse-p0 2.5s infinite ease-in-out;
-        transition: transform 150ms cubic-bezier(0.25, 1, 0.5, 1);
-    }
-    .player-svg-p0-reversed {
-        animation: playerGlowPulse-p0 1.3s infinite ease-in-out;
-        transition: transform 150ms cubic-bezier(0.25, 1, 0.5, 1);
-    }
-    .player-svg-p1 {
-        animation: playerGlowPulse-p1 2.5s infinite ease-in-out;
-        transition: transform 150ms cubic-bezier(0.25, 1, 0.5, 1);
-    }
-    .player-svg-p1-reversed {
-        animation: playerGlowPulse-p1 1.3s infinite ease-in-out;
-        transition: transform 150ms cubic-bezier(0.25, 1, 0.5, 1);
     }
     .player-outer-ring-reversed {
         animation: spinCounterClockwise 3.5s infinite linear;

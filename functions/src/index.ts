@@ -45,7 +45,7 @@ function randomTag(): string {
  *
  * Retries up to 20 times on collision (extremely rare at 32^5 slots).
  */
-async function assignUniqueTag(uid: string): Promise<string> {
+async function assignUniqueTag(uid: string, extraUpdates?: Record<string, any>): Promise<string> {
     const MAX_ATTEMPTS = 20;
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -60,7 +60,7 @@ async function assignUniqueTag(uid: string): Promise<string> {
                     uid,
                     assignedAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
-                tx.update(db.collection('users').doc(uid), { tag });
+                tx.update(db.collection('users').doc(uid), { tag, ...extraUpdates });
             });
             return tag;
         } catch (err: unknown) {
@@ -90,12 +90,21 @@ export const onUserCreated = functions.firestore.onDocumentCreated(
         if (data.authProvider === 'anonymous') return; // no tag for anonymous users
         if (data.tag) return; // guard against re-trigger
 
-        // 1. Assign tag (primary logic — must succeed)
+        // 1. Assign tag & default displayName if missing
         try {
-            await assignUniqueTag(uid);
-            functions.logger.info(`[onUserCreated] Tag assigned to ${uid}`);
+            const extraUpdates: Record<string, any> = {};
+            if (!data.displayName || data.displayName.trim() === '') {
+                const createdDate = data.createdAt ? (data.createdAt as admin.firestore.Timestamp).toDate() : new Date();
+                const mm = String(createdDate.getUTCMonth() + 1).padStart(2, '0');
+                const dd = String(createdDate.getUTCDate()).padStart(2, '0');
+                const yyyy = createdDate.getUTCFullYear();
+                extraUpdates.displayName = `user${mm}-${dd}-${yyyy}`;
+            }
+
+            await assignUniqueTag(uid, extraUpdates);
+            functions.logger.info(`[onUserCreated] Tag and default displayName assigned to ${uid}`);
         } catch (err) {
-            functions.logger.error(`[onUserCreated] Failed to assign tag to ${uid}:`, err);
+            functions.logger.error(`[onUserCreated] Failed to assign tag/displayName to ${uid}:`, err);
             // Do not return here — still attempt to log the account creation event
         }
 
@@ -132,12 +141,21 @@ export const onUserUpgraded = functions.firestore.onDocumentUpdated(
         if (after.authProvider === 'anonymous') return;  // not actually upgraded
         if (after.tag) return;                           // tag already present
 
-        // 1. Assign tag (primary logic — must succeed)
+        // 1. Assign tag & default displayName if missing
         try {
-            await assignUniqueTag(uid);
-            functions.logger.info(`[onUserUpgraded] Tag assigned to upgraded user ${uid}`);
+            const extraUpdates: Record<string, any> = {};
+            if (!after.displayName || after.displayName.trim() === '') {
+                const createdDate = after.createdAt ? (after.createdAt as admin.firestore.Timestamp).toDate() : new Date();
+                const mm = String(createdDate.getUTCMonth() + 1).padStart(2, '0');
+                const dd = String(createdDate.getUTCDate()).padStart(2, '0');
+                const yyyy = createdDate.getUTCFullYear();
+                extraUpdates.displayName = `user${mm}-${dd}-${yyyy}`;
+            }
+
+            await assignUniqueTag(uid, extraUpdates);
+            functions.logger.info(`[onUserUpgraded] Tag and default displayName assigned to upgraded user ${uid}`);
         } catch (err) {
-            functions.logger.error(`[onUserUpgraded] Failed to assign tag to ${uid}:`, err);
+            functions.logger.error(`[onUserUpgraded] Failed to assign tag/displayName to ${uid}:`, err);
         }
 
         // 2. Audit log — fire-and-forget, non-fatal
@@ -437,3 +455,105 @@ export const onTicketMessageCreated = functions.firestore.onDocumentCreated(
         }
     },
 );
+
+// ─── Scheduled: clean up stale anonymous users ────────────────────────────────
+//
+// Runs daily at 04:05 UTC — 5 minutes after the Cloudflare Worker's D1 cleanup
+// cron (04:00 UTC). Both jobs are fully independent; the 5-minute gap is just
+// a convention to keep logs easy to correlate.
+//
+// What this does:
+//   1. Lists Firebase Auth users with no provider data (= anonymous users).
+//   2. Filters those whose lastSignInTime (or creationTime) is older than
+//      ANONYMOUS_RETENTION_DAYS (30 days).
+//   3. For each stale user:
+//      a. Deletes the Firestore users/{uid} document and its subcollections
+//         (playedLevels) using Admin SDK's recursiveDelete.
+//      b. Deletes the Firebase Auth account.
+//
+// Safety:
+//   - Processes in batches of 1 000 (Firebase Auth listUsers max).
+//   - Each user is deleted individually so one failure does not abort the run.
+//   - recursiveDelete is called before deleteUser so Auth is always removed last.
+
+const ANONYMOUS_RETENTION_DAYS = 30;
+
+export const cleanupOldAnonymousUsers = functions.scheduler.onSchedule(
+    {
+        schedule: '5 4 * * *', // daily at 04:05 UTC
+        timeZone: 'UTC',
+        region: 'europe-west3',
+    },
+    async () => {
+        const cutoffMs = Date.now() - ANONYMOUS_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+        let pageToken: string | undefined;
+        let totalDeleted = 0;
+        let totalErrors  = 0;
+
+        functions.logger.info('[AnonymousCleanup] Starting.', { cutoff: new Date(cutoffMs).toISOString() });
+
+        do {
+            let listResult: admin.auth.ListUsersResult;
+            try {
+                listResult = await admin.auth().listUsers(1000, pageToken);
+            } catch (err) {
+                functions.logger.error('[AnonymousCleanup] listUsers failed — aborting run:', err);
+                break;
+            }
+
+            // Anonymous users have no provider data entries
+            const candidateAnonymous = listResult.users.filter((user) => {
+                if (user.providerData && user.providerData.length > 0) return false; // real user
+
+                const lastActivity = user.metadata.lastSignInTime
+                    ? new Date(user.metadata.lastSignInTime).getTime()
+                    : new Date(user.metadata.creationTime).getTime();
+
+                return lastActivity < cutoffMs;
+            });
+
+            for (const user of candidateAnonymous) {
+                try {
+                    // Cross-check Firestore updatedAt before deleting.
+                    // Auth metadata.lastSignInTime only updates on explicit sign-in,
+                    // not on token refresh. A long-running mobile session may look
+                    // stale in Auth while having recent Firestore activity (level
+                    // completions, profile updates). Firestore is the ground truth.
+                    const firestoreDoc = await db.collection('users').doc(user.uid).get();
+                    if (firestoreDoc.exists) {
+                        const data = firestoreDoc.data();
+                        const updatedAt: FirebaseFirestore.Timestamp | undefined = data?.updatedAt;
+                        if (updatedAt && updatedAt.toMillis() > cutoffMs) {
+                            functions.logger.info(
+                                `[AnonymousCleanup] Skipping uid=${user.uid} — ` +
+                                `Firestore updatedAt is recent (${updatedAt.toDate().toISOString()})`,
+                            );
+                            continue;
+                        }
+                    }
+
+                    // 1. Delete Firestore document recursively (users/{uid} + playedLevels/*)
+                    await db.recursiveDelete(db.collection('users').doc(user.uid));
+
+                    // 2. Delete Firebase Auth account
+                    await admin.auth().deleteUser(user.uid);
+
+                    totalDeleted++;
+                    functions.logger.info(`[AnonymousCleanup] Deleted uid=${user.uid}`);
+                } catch (err) {
+                    totalErrors++;
+                    functions.logger.error(
+                        `[AnonymousCleanup] Failed to delete uid=${user.uid}:`, err,
+                    );
+                    // Continue — one failure should not abort the whole run
+                }
+            }
+
+            pageToken = listResult.pageToken;
+        } while (pageToken);
+
+        functions.logger.info('[AnonymousCleanup] Done.', { totalDeleted, totalErrors });
+    },
+);
+

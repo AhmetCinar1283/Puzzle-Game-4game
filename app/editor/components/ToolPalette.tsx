@@ -9,6 +9,7 @@ import {
   CELL_COLOR, CELL_LABEL, type ToolType,
 } from '../editorConfig';
 import { useEditorContext } from '../EditorContext';
+import { getPlayerColor } from '@/app/src/game2/components/playerColors';
 
 const CELL_SIZE = 36;
 const CELL_SIZE_MOB = 28;
@@ -77,15 +78,37 @@ function Divider({ small }: { small?: boolean }) {
 }
 
 export default function ToolPalette({ isMobile }: { isMobile: boolean }) {
-  const { activeTool, setActiveTool, objects, boxes, setBoxes, setActivePlacingBoxId, activePlacingBoxId, undo, canUndo } = useEditorContext();
+  const { activeTool, setActiveTool, objects, setObjects, grid, boxes, setBoxes, setActivePlacingBoxId, activePlacingBoxId, undo, canUndo } = useEditorContext();
   const small = isMobile;
 
+  const [addedGroups, setAddedGroups] = useState<string[]>([]);
+  
+  const foundGroups = new Set<string>(['A', 'B', 'C']);
+  for (const row of grid) {
+    for (const cell of row) {
+      if (cell.startsWith('teleporter_in_') || cell.startsWith('teleporter_out_')) {
+        const group = cell.substring(cell.lastIndexOf('_') + 1);
+        foundGroups.add(group);
+      }
+    }
+  }
+  addedGroups.forEach(g => foundGroups.add(g));
+  const telGroups = Array.from(foundGroups).sort();
+
+  const dynamicBasicTypes = [
+    'empty', 'obstacle', 'forbidden',
+    ...objects.map((o) => `target_${o.id}`),
+    'direction_toggle',
+  ];
+
+  const dynamicTeleporterTypes = telGroups.flatMap((g) => [`teleporter_in_${g}`, `teleporter_out_${g}`]);
+
   const toolGroups = [
-    { label: 'Basic', types: CELL_TYPES_BASIC },
+    { label: 'Basic', types: dynamicBasicTypes },
     { label: 'Ice', types: CELL_TYPES_ICE },
     { label: 'Power', types: CELL_TYPES_POWER },
     { label: 'Conveyors', types: CELL_TYPES_CONVEYOR },
-    { label: 'Teleporters', types: CELL_TYPES_TELEPORTER },
+    { label: 'Teleporters', types: dynamicTeleporterTypes },
     { label: 'Trampolines', types: CELL_TYPES_TRAMPOLINE },
   ];
 
@@ -118,6 +141,26 @@ export default function ToolPalette({ isMobile }: { isMobile: boolean }) {
               small={small}
             />
           ))}
+          {label === 'Teleporters' && (
+            <button
+              title="Add Teleporter Group"
+              onClick={() => {
+                const nextLetter = String.fromCharCode(65 + telGroups.length);
+                setAddedGroups((prev) => [...prev, nextLetter]);
+              }}
+              style={{
+                flexShrink: 0,
+                padding: '2px 6px', fontSize: 10, fontWeight: 700,
+                border: '1px solid rgba(139, 92, 246, 0.4)',
+                background: 'rgba(139, 92, 246, 0.05)',
+                color: '#a78bfa', borderRadius: 6, cursor: 'pointer',
+                alignSelf: 'center', height: small ? CELL_SIZE_MOB - 4 : CELL_SIZE - 4,
+                marginLeft: 2,
+              }}
+            >
+              + Group
+            </button>
+          )}
         </div>
       ))}
 
@@ -174,10 +217,10 @@ export default function ToolPalette({ isMobile }: { isMobile: boolean }) {
       <Divider small={small} />
 
       {/* Players */}
-      {[1, 2].map((id) => {
+      {objects.map((obj) => {
+        const id = obj.id;
         const tool = `place_obj${id}` as ToolType;
-        const color = id === 1 ? '#00ff88' : '#00c4ff';
-        const obj = objects.find((o) => o.id === id)!;
+        const { hex: color } = getPlayerColor(id - 1);
         const sz = small ? CELL_SIZE_MOB : CELL_SIZE;
         return (
           <ToolBtn
@@ -192,13 +235,58 @@ export default function ToolPalette({ isMobile }: { isMobile: boolean }) {
               boxShadow: `0 0 6px ${color}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ fontSize: (sz - 10) * 0.4, fontWeight: 900, color: id === 1 ? '#003320' : '#002233' }}>
+              <span style={{ fontSize: (sz - 10) * 0.4, fontWeight: 900, color: '#000000' }}>
                 {id}
               </span>
             </div>
           </ToolBtn>
         );
       })}
+
+      {/* Add/Remove Player Controls */}
+      <div style={{ display: 'flex', gap: 2 }}>
+        <button
+          title="Add Player"
+          onClick={() => {
+            const newId = objects.length + 1;
+            setObjects((os) => [...os, { id: newId, row: null, col: null, mode: 'normal', lockOnTarget: true }]);
+          }}
+          style={{
+            flexShrink: 0,
+            padding: '2px 6px', fontSize: 10, fontWeight: 700,
+            border: '1px solid rgba(0, 255, 136, 0.4)',
+            background: 'rgba(0, 255, 136, 0.05)',
+            color: '#00ff88', borderRadius: 6, cursor: 'pointer',
+            height: small ? CELL_SIZE_MOB : CELL_SIZE,
+            display: 'flex', alignItems: 'center', gap: 2,
+          }}
+        >
+          <span>+P</span>
+        </button>
+        {objects.length > 1 && (
+          <button
+            title="Remove Player"
+            onClick={() => {
+              setObjects((os) => os.slice(0, -1));
+              const lastId = objects.length;
+              if (activeTool === `place_obj${lastId}`) {
+                setActiveTool('obstacle');
+              }
+            }}
+            style={{
+              flexShrink: 0,
+              padding: '2px 6px', fontSize: 10, fontWeight: 700,
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              background: 'rgba(239, 68, 68, 0.05)',
+              color: '#ef4444', borderRadius: 6, cursor: 'pointer',
+              height: small ? CELL_SIZE_MOB : CELL_SIZE,
+              display: 'flex', alignItems: 'center', gap: 2,
+            }}
+          >
+            <span>-P</span>
+          </button>
+        )}
+      </div>
 
       <Divider small={small} />
 
