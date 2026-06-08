@@ -8,12 +8,19 @@ import { verifyMoves } from '../services/gameVerify';
 import { getSolutionStats, computeStars, updateSolutions } from '../services/solutions';
 import { writeAuditLog } from '../services/auditLog';
 import { updateLeaderboardData } from '../services/leaderboard';
+import { checkActiveBan } from '../services/banService';
 import type { CompleteLevelResponse } from '../types';
 
 export const gameRouter = new Hono<AppContext>();
 
 gameRouter.post('/complete-level', firebaseAuth, async (c) => {
   const uid = c.get('uid');
+
+  // Check for platform ban
+  const isBanned = await checkActiveBan(c.env.AUDIT_DB, uid, 'platform');
+  if (isBanned) {
+    return c.json({ success: false, error: 'Account suspended' }, 403);
+  }
 
   // 1. Parse JSON safely
   let body;

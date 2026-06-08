@@ -44,6 +44,17 @@ const SCHEMA_STATEMENTS = [
     levels_done  INTEGER NOT NULL DEFAULT 0 CHECK (levels_done >= 0),
     updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     PRIMARY KEY (uid, period_type, period_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS user_bans (
+    id          TEXT NOT NULL PRIMARY KEY,
+    uid         TEXT NOT NULL CHECK (length(uid) BETWEEN 1 AND 128),
+    ban_type    TEXT NOT NULL CHECK (ban_type IN ('platform', 'tag', 'social', 'coop')),
+    reason      TEXT NOT NULL CHECK (length(reason) BETWEEN 1 AND 500),
+    issued_by   TEXT NOT NULL CHECK (length(issued_by) BETWEEN 1 AND 128),
+    issued_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    expires_at  TEXT,
+    lifted_at   TEXT,
+    lifted_by   TEXT
   )`
 ];
 
@@ -60,6 +71,7 @@ describe('Friends & Friend Leaderboard API', () => {
     await db.prepare('DELETE FROM friendships').run();
     await db.prepare('DELETE FROM user_period_scores').run();
     await db.prepare('DELETE FROM user_profiles').run();
+    await db.prepare('DELETE FROM user_bans').run();
 
     // Seed User Profiles
     await db.prepare(`INSERT INTO user_profiles (uid, display_name, tag) VALUES ('user-1', 'User One', 'U1')`).run();
@@ -653,6 +665,94 @@ describe('Friends & Friend Leaderboard API', () => {
       expect(resBadJson.status).toBe(400);
       const json = await resBadJson.json<any>();
       expect(json.error).toBe('Invalid JSON');
+    });
+  });
+
+  describe('Ban and Block System', () => {
+    it('blocks friend request when user has an active social ban', async () => {
+      // Seed social ban for user-1
+      await db
+        .prepare(
+          `INSERT INTO user_bans (id, uid, ban_type, reason, issued_by)
+           VALUES ('ban-1', 'user-1', 'social', 'Spamming requests', 'admin-1')`
+        )
+        .run();
+
+      const ctx = createExecutionContext();
+      const req = new IncomingRequest('http://localhost/friends/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer valid-token-user-1',
+        },
+        body: JSON.stringify({ targetUid: 'user-2' }),
+      });
+      const res = await worker.fetch(req, env, ctx);
+      expect(res.status).toBe(403);
+      const json = await res.json<any>();
+      expect(json.success).toBe(false);
+      expect(json.error).toBe('Social features are restricted');
+    });
+
+    it('blocks a user successfully', async () => {
+      const ctx = createExecutionContext();
+      const req = new IncomingRequest('http://localhost/friends/block/user-2', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer valid-token-user-1' },
+      });
+      const res = await worker.fetch(req, env, ctx);
+      expect(res.status).toBe(200);
+      const json = await res.json<any>();
+      expect(json.success).toBe(true);
+
+      // Verify DB
+      const block = await db
+        .prepare("SELECT status, requested_by FROM friendships WHERE user_a = 'user-1' AND user_b = 'user-2'")
+        .first<{ status: string; requested_by: string }>();
+      expect(block?.status).toBe('blocked');
+      expect(block?.requested_by).toBe('user-1');
+    });
+
+    it('unblocks a user successfully', async () => {
+      // Seed block relationship
+      await db
+        .prepare(`INSERT INTO friendships (user_a, user_b, status, requested_by) VALUES ('user-1', 'user-2', 'blocked', 'user-1')`)
+        .run();
+
+      const ctx = createExecutionContext();
+      const req = new IncomingRequest('http://localhost/friends/block/user-2', {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer valid-token-user-1' },
+      });
+      const res = await worker.fetch(req, env, ctx);
+      expect(res.status).toBe(200);
+      const json = await res.json<any>();
+      expect(json.success).toBe(true);
+
+      // Verify DB
+      const block = await db
+        .prepare("SELECT status FROM friendships WHERE user_a = 'user-1' AND user_b = 'user-2'")
+        .first();
+      expect(block).toBeNull();
+    });
+
+    it('lists blocked users successfully', async () => {
+      // user-1 blocked user-2
+      await db
+        .prepare(`INSERT INTO friendships (user_a, user_b, status, requested_by) VALUES ('user-1', 'user-2', 'blocked', 'user-1')`)
+        .run();
+
+      const ctx = createExecutionContext();
+      const req = new IncomingRequest('http://localhost/friends/blocked', {
+        headers: { Authorization: 'Bearer valid-token-user-1' },
+      });
+      const res = await worker.fetch(req, env, ctx);
+      expect(res.status).toBe(200);
+      const json = await res.json<any>();
+      expect(json.success).toBe(true);
+      expect(json.blocked.length).toBe(1);
+      expect(json.blocked[0].uid).toBe('user-2');
+      expect(json.blocked[0].displayName).toBe('User Two');
     });
   });
 });

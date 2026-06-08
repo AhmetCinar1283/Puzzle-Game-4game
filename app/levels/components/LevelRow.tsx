@@ -178,8 +178,8 @@ export function LevelRow({
 
   // ── Styles ──
 
-  const diffColor = level.difficulty ? DIFF_COLOR[level.difficulty] : null;
-  const diffBg = level.difficulty ? DIFF_BG[level.difficulty] : null;
+  const diffColor = level.difficulty ? DIFF_COLOR[level.difficulty] : undefined;
+  const diffBg = level.difficulty ? DIFF_BG[level.difficulty] : undefined;
 
   return (
     <>

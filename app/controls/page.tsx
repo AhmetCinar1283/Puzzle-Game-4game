@@ -63,8 +63,37 @@ export default function ControlsPage() {
         next[index] = val;
         return next;
       });
+      // Scroll page vertically using Right Stick Y (axis 3)
+      if (index === 3 && Math.abs(val) > 0.15) {
+        window.scrollBy({ top: val * 22, behavior: 'auto' });
+      }
     },
+    onMenu: () => router.push('/'),
+    onMove: (dir) => {
+      if (dir === 'up') {
+        window.scrollBy({ top: -180, behavior: 'smooth' });
+      } else if (dir === 'down') {
+        window.scrollBy({ top: 180, behavior: 'smooth' });
+      }
+    }
   });
+
+  // Keyboard navigation: Esc or Enter → back to home, ArrowUp/ArrowDown/PageUp/PageDown → scroll
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        router.push('/');
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        window.scrollBy({ top: -180, behavior: 'smooth' });
+      } else if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        window.scrollBy({ top: 180, behavior: 'smooth' });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [router]);
 
   // Generate background neon particles
   useEffect(() => {
@@ -138,6 +167,7 @@ export default function ControlsPage() {
           boxSizing: 'border-box',
           color: '#ffffff',
           fontFamily: 'var(--font-geist-sans), system-ui, sans-serif',
+          overflowY: 'auto',
         }}
       >
         {/* Top Header */}
@@ -169,6 +199,24 @@ export default function ControlsPage() {
             }}
           >
             {t('controls.back')}
+            {isConnected && (
+              <span style={{
+                background: '#ef4444',
+                color: '#fff',
+                fontSize: 9,
+                fontWeight: 800,
+                borderRadius: '50%',
+                width: 14,
+                height: 14,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginLeft: 6,
+                boxShadow: '0 0 5px #ef4444'
+              }}>
+                B
+              </span>
+            )}
           </button>
         </div>
 

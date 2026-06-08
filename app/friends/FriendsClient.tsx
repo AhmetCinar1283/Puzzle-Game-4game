@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, useMemo, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthContext } from '../src/contexts/AuthContext';
-import { useT } from '../src/contexts/LanguageContext';
+import { useT, useLanguage } from '../src/contexts/LanguageContext';
 import { useGamepad } from '../src/hooks/useGamepad';
 import { useFriends } from '../src/hooks/useFriends';
 import BadgeIcon from '../src/components/BadgeIcon';
 import AuthModal from '../src/components/AuthModal';
+import { useAppSelector } from '../src/store/hooks';
+import { Copy, Check } from 'lucide-react';
 
 const NEON_TYPES = [
   { color: '#00ff88', glow: '0 0 6px #00ff88, 0 0 18px rgba(0,255,136,0.3)' },
@@ -34,18 +36,52 @@ interface Particle {
 
 export default function FriendsClient() {
   const t = useT();
+  const { lang } = useLanguage();
   const router = useRouter();
   const { user, isAnonymous } = useAuthContext();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [particles, setParticles] = useState<Particle[]>([]);
+  
+  const myTag = useAppSelector((state) => state.user.tag);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyMyTag = () => {
+    if (!myTag) return;
+    const tagText = `#${myTag}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tagText)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch((err) => console.error('Copy failed', err));
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = tagText;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Fallback copy failed', err);
+      }
+      document.body.removeChild(textarea);
+    }
+  };
 
   // Friends Hook
   const {
     friends,
     requests,
-    searchResults,
+    blocked,
     loadingFriends,
+    loadingBlocked,
+    searchResults,
     loadingRequests,
     searching,
     actionBusy,
@@ -58,6 +94,8 @@ export default function FriendsClient() {
     acceptRequest,
     rejectRequest,
     removeFriend,
+    blockUser,
+    unblockUser,
   } = useFriends();
 
   // Floating background particles
@@ -85,19 +123,54 @@ export default function FriendsClient() {
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement === searchInputRef.current) {
+        return;
+      }
       if (e.key === 'Escape') {
         router.push('/');
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        window.scrollBy({ top: -180, behavior: 'smooth' });
+      } else if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        window.scrollBy({ top: 180, behavior: 'smooth' });
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [router]);
 
-  // Gamepad controls
-  useGamepad({
+  // Ref to the search input for gamepad focus
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Gamepad controls: B/Start → back, A → focus the search input, Stick/D-pad → scroll page
+  const { isConnected } = useGamepad({
     onMenu: () => {
       router.push('/');
     },
+    onConfirm: () => {
+      // If input is already focused, submit the search
+      if (document.activeElement === searchInputRef.current) {
+        if (searchInput.trim()) search(searchInput.trim());
+      } else {
+        // Otherwise focus the search input
+        searchInputRef.current?.focus();
+      }
+    },
+    onMove: (dir) => {
+      if (document.activeElement === searchInputRef.current) return;
+      if (dir === 'up') {
+        window.scrollBy({ top: -180, behavior: 'smooth' });
+      } else if (dir === 'down') {
+        window.scrollBy({ top: 180, behavior: 'smooth' });
+      }
+    },
+    onAxisMove: (axisIndex, value) => {
+      if (document.activeElement === searchInputRef.current) return;
+      if (axisIndex === 3 && Math.abs(value) > 0.15) {
+        window.scrollBy({ top: value * 22, behavior: 'auto' });
+      }
+    }
   });
 
   const handleSearchSubmit = (e: FormEvent) => {
@@ -106,11 +179,12 @@ export default function FriendsClient() {
     search(searchInput.trim());
   };
 
-  // Safe tag input handler (only letters A-Z, numbers 2-9, max 10 chars)
+  // Safe tag input handler (removes '#', filters non-[A-Z2-9] chars, converts to uppercase, max 10 chars)
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.toUpperCase();
-    const tagRegex = /^[A-Z2-9]*$/;
-    if (tagRegex.test(value) && value.length <= 10) {
+    let value = e.target.value.replace(/#/g, '').toUpperCase();
+    // Keep only A-Z and 2-9
+    value = value.split('').filter((char) => /^[A-Z2-9]$/.test(char)).join('');
+    if (value.length <= 10) {
       setSearchInput(value);
     }
   };
@@ -141,6 +215,7 @@ export default function FriendsClient() {
         alignItems: 'center',
         boxSizing: 'border-box',
         overflowX: 'hidden',
+        overflowY: 'auto',
         position: 'relative',
       }}
     >
@@ -211,6 +286,24 @@ export default function FriendsClient() {
             }}
           >
             {t('friends.back_menu')}
+            {isConnected && (
+              <span style={{
+                background: '#ef4444',
+                color: '#fff',
+                fontSize: 9,
+                fontWeight: 800,
+                borderRadius: '50%',
+                width: 14,
+                height: 14,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginLeft: 6,
+                boxShadow: '0 0 5px #ef4444'
+              }}>
+                B
+              </span>
+            )}
           </button>
         </div>
 
@@ -339,13 +432,74 @@ export default function FriendsClient() {
                   color: '#4b5563',
                   textTransform: 'uppercase',
                   margin: '0 0 14px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
                 }}
               >
-                {t('friends.search_title')}
+                <span>{t('friends.search_title')}</span>
+                {isConnected && (
+                  <span style={{ color: '#00c4ff', fontSize: 10, textTransform: 'none', letterSpacing: 'normal' }}>
+                    {lang === 'tr' ? 'Odaklanmak için (A) tuşuna basın' : 'Press (A) to focus'}
+                  </span>
+                )}
               </h3>
+
+              {myTag && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '16px',
+                    padding: '8px 12px',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid #111827',
+                    borderRadius: '8px',
+                  }}
+                >
+                  <span style={{ fontSize: '12.5px', color: '#9ca3af', fontWeight: 600 }}>
+                    {lang === 'tr' ? 'Senin Etiketin:' : 'Your Tag:'}
+                  </span>
+                  <button
+                    onClick={handleCopyMyTag}
+                    style={{
+                      background: 'rgba(0, 196, 255, 0.06)',
+                      border: '1px solid rgba(0, 196, 255, 0.25)',
+                      color: '#00c4ff',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      letterSpacing: '0.05em',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(0, 196, 255, 0.15)';
+                      e.currentTarget.style.borderColor = 'rgba(0, 196, 255, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(0, 196, 255, 0.06)';
+                      e.currentTarget.style.borderColor = 'rgba(0, 196, 255, 0.25)';
+                    }}
+                  >
+                    #{myTag}
+                    {copied ? (
+                      <Check size={12} style={{ color: '#00ff88' }} />
+                    ) : (
+                      <Copy size={12} />
+                    )}
+                  </button>
+                </div>
+              )}
 
               <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '8px' }}>
                 <input
+                  ref={searchInputRef}
                   type="text"
                   placeholder={t('friends.search_placeholder')}
                   value={searchInput}
@@ -403,6 +557,24 @@ export default function FriendsClient() {
                   }}
                 >
                   {searching ? '...' : t('friends.search_btn')}
+                  {isConnected && document.activeElement === searchInputRef.current && (
+                    <span style={{
+                      background: '#00c4ff',
+                      color: '#030712',
+                      fontSize: 9,
+                      fontWeight: 800,
+                      borderRadius: '50%',
+                      width: 14,
+                      height: 14,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginLeft: 6,
+                      boxShadow: '0 0 5px rgba(0, 196, 255, 0.5)'
+                    }}>
+                      A
+                    </span>
+                  )}
                 </button>
               </form>
 
@@ -787,35 +959,66 @@ export default function FriendsClient() {
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => {
-                            if (window.confirm(t('levels.delete_title') === 'Emin misiniz?' ? 'Bu arkadaşı silmek istediğinize emin misiniz?' : 'Are you sure you want to remove this friend?')) {
-                              removeFriend(friend.uid);
-                            }
-                          }}
-                          disabled={isBusy}
-                          style={{
-                            padding: '6px 12px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            background: 'rgba(255, 45, 85, 0.06)',
-                            border: '1px solid rgba(255, 45, 85, 0.3)',
-                            color: '#ff2d55',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#ff2d55';
-                            e.currentTarget.style.color = '#030712';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(255, 45, 85, 0.06)';
-                            e.currentTarget.style.color = '#ff2d55';
-                          }}
-                        >
-                          {isBusy ? '...' : t('friends.remove_friend')}
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(t('levels.delete_title') === 'Emin misiniz?' ? 'Bu arkadaşı silmek istediğinize emin misiniz?' : 'Are you sure you want to remove this friend?')) {
+                                removeFriend(friend.uid);
+                              }
+                            }}
+                            disabled={isBusy}
+                            style={{
+                              padding: '6px 12px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              background: 'rgba(255, 45, 85, 0.06)',
+                              border: '1px solid rgba(255, 45, 85, 0.3)',
+                              color: '#ff2d55',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = '#ff2d55';
+                              e.currentTarget.style.color = '#030712';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(255, 45, 85, 0.06)';
+                              e.currentTarget.style.color = '#ff2d55';
+                            }}
+                          >
+                            {isBusy ? '...' : t('friends.remove_friend')}
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(t('friends.block_confirm'))) {
+                                blockUser(friend.uid);
+                              }
+                            }}
+                            disabled={isBusy}
+                            style={{
+                              padding: '6px 12px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              background: 'rgba(239, 68, 68, 0.06)',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              color: '#ef4444',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = '#ef4444';
+                              e.currentTarget.style.color = '#030712';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.06)';
+                              e.currentTarget.style.color = '#ef4444';
+                            }}
+                          >
+                            {isBusy ? '...' : t('friends.block_friend')}
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -825,6 +1028,137 @@ export default function FriendsClient() {
                   {t('friends.no_friends_desc')}
                 </p>
               )}
+            </div>
+
+            {/* Blocked List Panel */}
+            <div
+              style={{
+                background: '#0a0f1a50',
+                border: '1px solid #111827',
+                borderRadius: '16px',
+                padding: '20px 24px',
+              }}
+            >
+              <details style={{ width: '100%' }}>
+                <summary
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    letterSpacing: '0.15em',
+                    color: '#4b5563',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    listStyle: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>👁️</span>
+                    <span>{t('friends.blocked_title')} ({blocked.length})</span>
+                  </div>
+                  <span style={{ fontSize: '10px' }}>▼</span>
+                </summary>
+                
+                <div style={{ marginTop: '16px' }}>
+                  {loadingBlocked ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0' }}>
+                      <div
+                        style={{
+                          width: '16px',
+                          height: '16px',
+                          border: '2px solid rgba(255,255,255,0.1)',
+                          borderTopColor: '#ec4899',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite',
+                        }}
+                      />
+                    </div>
+                  ) : blocked.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {blocked.map((blockedUser) => {
+                        const isBusy = actionBusy[blockedUser.uid];
+                        return (
+                          <div
+                            key={blockedUser.uid}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '10px 12px',
+                              background: 'rgba(255,255,255,0.01)',
+                              border: '1px solid #111827',
+                              borderRadius: '8px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span
+                                style={{
+                                  fontSize: '13px',
+                                  fontWeight: 700,
+                                  color: '#e2e8f0',
+                                }}
+                              >
+                                {blockedUser.displayName}
+                                {blockedUser.tag && (
+                                  <span style={{ fontSize: '9.5px', color: '#6b7280', marginLeft: '4px' }}>
+                                    [{blockedUser.tag}]
+                                  </span>
+                                )}
+                              </span>
+                              <div style={{ display: 'flex', gap: '3px', marginTop: '2px' }}>
+                                {blockedUser.showcaseBadges && blockedUser.showcaseBadges.length > 0 ? (
+                                  blockedUser.showcaseBadges.map((badge, bIdx) => (
+                                    <BadgeIcon
+                                      key={badge.id || bIdx}
+                                      badgeType={badge.badgeType}
+                                      periodId={badge.periodId}
+                                      rank={badge.rank}
+                                      size="sm"
+                                    />
+                                  ))
+                                ) : null}
+                              </div>
+                            </div>
+                            
+                            <button
+                              onClick={() => unblockUser(blockedUser.uid)}
+                              disabled={isBusy}
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                background: 'rgba(0, 196, 255, 0.06)',
+                                border: '1px solid rgba(0, 196, 255, 0.3)',
+                                color: '#00c4ff',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#00c4ff';
+                                e.currentTarget.style.color = '#030712';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(0, 196, 255, 0.06)';
+                                e.currentTarget.style.color = '#00c4ff';
+                              }}
+                            >
+                              {isBusy ? '...' : t('friends.unblock_friend')}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p style={{ color: '#4b5563', fontSize: '12.5px', fontStyle: 'italic', margin: 0 }}>
+                      {t('friends.no_blocked_desc')}
+                    </p>
+                  )}
+                </div>
+              </details>
             </div>
           </>
         )}

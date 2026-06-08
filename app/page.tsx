@@ -34,9 +34,9 @@ type Particle = {
 };
 
 function MenuCard({
-  id, label, sub, color, onClick, isSelected, onMouseEnter, isHero
+  id, label, sub, color, onClick, isSelected, onMouseEnter, isHero, isGamepadConnected
 }: {
-  id: string; label: string; sub: string; color: string; onClick: () => void; isSelected?: boolean; onMouseEnter?: () => void; isHero?: boolean;
+  id: string; label: string; sub: string; color: string; onClick: () => void; isSelected?: boolean; onMouseEnter?: () => void; isHero?: boolean; isGamepadConnected?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const active = isSelected || hovered;
@@ -88,16 +88,35 @@ function MenuCard({
       }}
     >
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span style={{
-          fontSize: isHero ? 15 : 13,
-          fontWeight: 800,
-          letterSpacing: '0.05em',
-          textTransform: 'uppercase',
-          color: active ? '#fff' : '#e2e8f0',
-          transition: 'color 0.2s',
-        }}>
-          {label}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{
+            fontSize: isHero ? 15 : 13,
+            fontWeight: 800,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: active ? '#fff' : '#e2e8f0',
+            transition: 'color 0.2s',
+          }}>
+            {label}
+          </span>
+          {isSelected && isGamepadConnected && (
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#00ff88',
+              color: '#030712',
+              fontSize: 9,
+              fontWeight: 900,
+              borderRadius: '50%',
+              width: 14,
+              height: 14,
+              boxShadow: '0 0 6px #00ff88',
+            }}>
+              A
+            </span>
+          )}
+        </div>
         <span style={{
           fontSize: isHero ? 10 : 9,
           fontWeight: 500,
@@ -245,7 +264,7 @@ export default function Home() {
     });
   }, [options.length]);
 
-  useGamepad({
+  const { isConnected } = useGamepad({
     onMove: (dir) => handleMoveMenu(dir),
     onConfirm: () => {
       options[activeMenuIndex]?.onClick();
@@ -372,6 +391,7 @@ export default function Home() {
               isSelected={activeMenuIndex === idx}
               onMouseEnter={() => setActiveMenuIndex(idx)}
               isHero={opt.id === 'play' || opt.id === 'admin'}
+              isGamepadConnected={isConnected}
             />
           ))}
         </div>
@@ -508,6 +528,32 @@ export default function Home() {
             </a>
           </footer>
         </section>
+        {isConnected && (
+          <div style={{
+            position: 'fixed',
+            bottom: 12,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(3, 7, 18, 0.85)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(0, 255, 136, 0.2)',
+            borderRadius: 20,
+            padding: '6px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 11,
+            color: '#00ff88',
+            boxShadow: '0 4px 20px rgba(0, 255, 136, 0.15)',
+            zIndex: 100,
+            pointerEvents: 'none',
+          }}>
+            <span>🎮</span>
+            <span>
+              {isTr ? 'D-pad / Sol Analog: Yönlendir | (A): Seç' : 'D-pad / Left Stick: Navigate | (A): Select'}
+            </span>
+          </div>
+        )}
       </main>
     </>
   );

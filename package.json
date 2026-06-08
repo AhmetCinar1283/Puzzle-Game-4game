@@ -23,6 +23,7 @@
     "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
     "@reduxjs/toolkit": "^2.11.2",
     "firebase": "^12.11.0",
+    "lucide-react": "^1.17.0",
     "react-redux": "^9.2.0"
   },
   "devDependencies": {

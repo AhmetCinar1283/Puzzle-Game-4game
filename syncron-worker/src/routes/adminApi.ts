@@ -16,12 +16,14 @@ import { z } from 'zod';
 import type { AppContext } from '../types';
 import { adminAuth } from '../middleware/adminAuth';
 import { getAdminAccessToken } from '../services/serviceAccount';
-import { fsGet, fromDoc } from '../services/firestore';
+import { fsGet, fromDoc, fsPatch, fsDelete } from '../services/firestore';
 import {
   queryAuditLogs,
   getAuditLogStats,
   getLastActivity,
+  writeAuditLog,
 } from '../services/auditLog';
+import { checkActiveBan, getActiveBans, getBanHistory } from '../services/banService';
 import type { AuditCategory, AuditAction } from '../services/auditLog';
 
 export const adminApiRouter = new Hono<AppContext>();
@@ -176,3 +178,207 @@ adminApiRouter.get('/admin/users/:uid/played-levels', async (c) => {
     return c.json({ success: false, error: 'Internal error' }, 500);
   }
 });
+
+// ─── POST /admin/users/:uid/bans ──────────────────────────────────────────────
+
+const createBanSchema = z.object({
+  banType: z.enum(['platform', 'tag', 'social', 'coop']),
+  reason: z.string().min(1).max(500),
+  expiresAt: z.string().datetime({ offset: true }).optional()
+    .refine((val) => !val || new Date(val) > new Date(), {
+      message: 'Expiration date must be in the future',
+    }),
+});
+
+adminApiRouter.post('/admin/users/:uid/bans', async (c) => {
+  if (c.get('role') !== 'admin') {
+    return c.json({ success: false, error: 'Insufficient permissions' }, 403);
+  }
+
+  const uid = c.req.param('uid');
+  const adminUid = c.get('uid');
+
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Invalid JSON' }, 400);
+  }
+
+  const validation = createBanSchema.safeParse(body);
+  if (!validation.success) {
+    const error = validation.error.errors[0]?.message || 'Invalid request';
+    return c.json({ success: false, error }, 400);
+  }
+
+  const { banType, reason, expiresAt } = validation.data;
+  const db = c.env.AUDIT_DB;
+
+  try {
+    // 1. Handle tag ban specific actions (Firestore)
+    if (banType === 'tag') {
+      let adminToken;
+      try {
+        adminToken = await getAdminAccessToken(c.env.GOOGLE_SERVICE_ACCOUNT);
+      } catch (e) {
+        console.error('Service account error:', e);
+        return c.json({ success: false, error: 'Internal error' }, 500);
+      }
+
+      const projectId = c.env.FIREBASE_PROJECT_ID;
+
+      // Fetch user profile first to find tag
+      const userDoc = await fsGet(projectId, `users/${uid}`, adminToken);
+      if (userDoc) {
+        const userData = fromDoc(userDoc);
+        const tag = typeof userData.tag === 'string' ? userData.tag : null;
+
+        // If user has a tag, delete it from tag registry
+        if (tag) {
+          try {
+            await fsDelete(projectId, `tags/${tag.toUpperCase()}`, adminToken);
+          } catch (delErr) {
+            console.warn(`[AdminAPI] Failed to delete tag ${tag} from registry:`, delErr);
+            // Non-fatal, continue to make sure we set users/{uid} tag to null
+          }
+        }
+      }
+
+      // Update Firestore users/{uid}: set tag to null and tagChangeCount to 999
+      await fsPatch(projectId, `users/${uid}`, { tag: null, tagChangeCount: 999 }, ['tag', 'tagChangeCount'], adminToken);
+    }
+
+    // 2. Perform D1 updates
+    const expiresAtStr = expiresAt || null;
+    const banId = crypto.randomUUID().replace(/-/g, '').slice(0, 32);
+
+    if (banType === 'tag') {
+      const stmt1 = db
+        .prepare('UPDATE user_profiles SET tag = NULL WHERE uid = ?1')
+        .bind(uid);
+      const stmt2 = db
+        .prepare(
+          `INSERT INTO user_bans (id, uid, ban_type, reason, issued_by, expires_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
+        )
+        .bind(banId, uid, banType, reason, adminUid, expiresAtStr);
+
+      await db.batch([stmt1, stmt2]);
+    } else {
+      await db
+        .prepare(
+          `INSERT INTO user_bans (id, uid, ban_type, reason, issued_by, expires_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
+        )
+        .bind(banId, uid, banType, reason, adminUid, expiresAtStr)
+        .run();
+    }
+
+    // 3. Write Audit Log
+    c.executionCtx.waitUntil(
+      writeAuditLog(db, uid, 'admin.ban', 'admin', {
+        banId,
+        banType,
+        reason,
+        expiresAt: expiresAtStr,
+        issuedBy: adminUid,
+      }).catch((err) => console.error('[AuditLog] admin.ban write failed:', err))
+    );
+
+    return c.json({ success: true, banId });
+  } catch (err) {
+    console.error(`[AdminAPI] Failed to issue ban for ${uid}:`, err);
+    return c.json({ success: false, error: 'Internal error' }, 500);
+  }
+});
+
+// ─── POST /admin/users/:uid/bans/:banId/lift ───────────────────────────────────
+
+adminApiRouter.post('/admin/users/:uid/bans/:banId/lift', async (c) => {
+  if (c.get('role') !== 'admin') {
+    return c.json({ success: false, error: 'Insufficient permissions' }, 403);
+  }
+
+  const uid = c.req.param('uid');
+  const banId = c.req.param('banId');
+  const adminUid = c.get('uid');
+  const db = c.env.AUDIT_DB;
+
+  try {
+    // 1. Fetch ban record to check if it exists, is active, and see its type
+    const ban = await db
+      .prepare('SELECT ban_type FROM user_bans WHERE id = ?1 AND uid = ?2 AND lifted_at IS NULL')
+      .bind(banId, uid)
+      .first<{ ban_type: string }>();
+
+    if (!ban) {
+      return c.json({ success: false, error: 'Active ban record not found' }, 404);
+    }
+
+    // 2. If it's a tag ban, reset tagChangeCount in Firestore to 0
+    if (ban.ban_type === 'tag') {
+      let adminToken;
+      try {
+        adminToken = await getAdminAccessToken(c.env.GOOGLE_SERVICE_ACCOUNT);
+      } catch (e) {
+        console.error('Service account error:', e);
+        return c.json({ success: false, error: 'Internal error' }, 500);
+      }
+      const projectId = c.env.FIREBASE_PROJECT_ID;
+      await fsPatch(projectId, `users/${uid}`, { tagChangeCount: 0 }, ['tagChangeCount'], adminToken);
+    }
+
+    // 3. Update DB
+    const now = new Date().toISOString();
+    const result = await db
+      .prepare(
+        `UPDATE user_bans
+         SET lifted_at = ?3, lifted_by = ?4
+         WHERE id = ?1 AND uid = ?2 AND lifted_at IS NULL`
+      )
+      .bind(banId, uid, now, adminUid)
+      .run();
+
+    if (result.meta.changes === 0) {
+      return c.json({ success: false, error: 'Active ban record not found' }, 404);
+    }
+
+    // 4. Write Audit Log
+    c.executionCtx.waitUntil(
+      writeAuditLog(db, uid, 'admin.ban_lift', 'admin', {
+        banId,
+        banType: ban.ban_type,
+        liftedBy: adminUid,
+      }).catch((err) => console.error('[AuditLog] admin.ban_lift write failed:', err))
+    );
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error(`[AdminAPI] Failed to lift ban ${banId} for ${uid}:`, err);
+    return c.json({ success: false, error: 'Internal error' }, 500);
+  }
+});
+
+// ─── GET /admin/users/:uid/bans ───────────────────────────────────────────────
+
+adminApiRouter.get('/admin/users/:uid/bans', async (c) => {
+  const uid = c.req.param('uid');
+  const db = c.env.AUDIT_DB;
+
+  try {
+    const [bans, activeBans] = await Promise.all([
+      getBanHistory(db, uid),
+      getActiveBans(db, uid),
+    ]);
+
+    return c.json({
+      success: true,
+      bans,
+      activeBans,
+    });
+  } catch (err) {
+    console.error(`[AdminAPI] Failed to fetch bans for ${uid}:`, err);
+    return c.json({ success: false, error: 'Internal error' }, 500);
+  }
+});
+

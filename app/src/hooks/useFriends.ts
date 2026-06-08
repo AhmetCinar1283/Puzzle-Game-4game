@@ -8,6 +8,9 @@ import {
   acceptFriendRequest,
   rejectFriendRequest,
   removeFriend,
+  blockUser,
+  unblockUser,
+  getBlockedUsers,
   Friend,
   FriendRequest,
   UserSearchResult,
@@ -21,10 +24,12 @@ export function useFriends() {
   const { user, isAnonymous } = useAuthContext();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
+  const [blocked, setBlocked] = useState<Friend[]>([]);
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
 
   const [loadingFriends, setLoadingFriends] = useState(false);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [loadingBlocked, setLoadingBlocked] = useState(false);
   const [searching, setSearching] = useState(false);
   const [actionBusy, setActionBusy] = useState<Record<string, boolean>>({});
 
@@ -99,12 +104,37 @@ export function useFriends() {
     [user, isAnonymous, cacheKey]
   );
 
+  const fetchBlockedList = useCallback(
+    async (force = false) => {
+      if (!user || isAnonymous) return;
+
+      setLoadingBlocked(true);
+      setError(null);
+      try {
+        const res = await getBlockedUsers();
+        if (res.success) {
+          setBlocked(res.blocked || []);
+        }
+      } catch (err: any) {
+        console.error('[useFriends] Failed to fetch blocked list:', err);
+        setError(err.message || 'Error loading blocked list.');
+      } finally {
+        setLoadingBlocked(false);
+      }
+    },
+    [user, isAnonymous]
+  );
+
   const loadAll = useCallback(
     async (force = false) => {
       if (!user || isAnonymous) return;
-      await Promise.all([fetchFriendsList(force), fetchIncomingRequests(force)]);
+      await Promise.all([
+        fetchFriendsList(force),
+        fetchIncomingRequests(force),
+        fetchBlockedList(force),
+      ]);
     },
-    [user, isAnonymous, fetchFriendsList, fetchIncomingRequests]
+    [user, isAnonymous, fetchFriendsList, fetchIncomingRequests, fetchBlockedList]
   );
 
   useEffect(() => {
@@ -239,12 +269,62 @@ export function useFriends() {
     [user, isAnonymous, loadAll]
   );
 
+  const block = useCallback(
+    async (targetUid: string) => {
+      if (!user || isAnonymous) return;
+      setBusy(targetUid, true);
+      setError(null);
+      setSuccessMsg(null);
+      try {
+        const res = await blockUser(targetUid);
+        if (res.success) {
+          setSuccessMsg('friends.success_blocked');
+          await loadAll(true);
+          setSearchResults((prev) =>
+            prev.map((u) => (u.uid === targetUid ? { ...u, friendshipStatus: 'none' } : u))
+          );
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to block user.');
+      } finally {
+        setBusy(targetUid, false);
+      }
+    },
+    [user, isAnonymous, loadAll]
+  );
+
+  const unblock = useCallback(
+    async (targetUid: string) => {
+      if (!user || isAnonymous) return;
+      setBusy(targetUid, true);
+      setError(null);
+      setSuccessMsg(null);
+      try {
+        const res = await unblockUser(targetUid);
+        if (res.success) {
+          setSuccessMsg('friends.success_unblocked');
+          await loadAll(true);
+          setSearchResults((prev) =>
+            prev.map((u) => (u.uid === targetUid ? { ...u, friendshipStatus: 'none' } : u))
+          );
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to unblock user.');
+      } finally {
+        setBusy(targetUid, false);
+      }
+    },
+    [user, isAnonymous, loadAll]
+  );
+
   return {
     friends,
     requests,
+    blocked,
     searchResults,
     loadingFriends,
     loadingRequests,
+    loadingBlocked,
     searching,
     actionBusy,
     error,
@@ -253,11 +333,14 @@ export function useFriends() {
     setSuccessMsg,
     fetchFriends: () => fetchFriendsList(true),
     fetchRequests: () => fetchIncomingRequests(true),
+    fetchBlockedList: () => fetchBlockedList(true),
     search,
     sendRequest,
     acceptRequest,
     rejectRequest,
     removeFriend: remove,
+    blockUser: block,
+    unblockUser: unblock,
   };
 }
 

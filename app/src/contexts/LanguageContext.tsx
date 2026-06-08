@@ -23,9 +23,6 @@ function getInitialLang(): Lang {
   try {
     const stored = localStorage.getItem('lang');
     if (stored && LANGS.some((l) => l.code === stored)) return stored as Lang;
-    // No stored preference — detect from browser language
-    const browserLang = (navigator.language ?? '').toLowerCase();
-    if (browserLang.startsWith('tr')) return 'tr';
   } catch {}
   return 'en';
 }

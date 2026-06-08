@@ -765,6 +765,33 @@ function LevelsPageContent() {
         return;
       }
 
+      // Esc → back to home
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        router.push('/');
+        return;
+      }
+
+      // PageUp / PageDown → scroll the map or list container
+      if (e.key === 'PageUp') {
+        e.preventDefault();
+        if (mapRef.current) {
+          mapRef.current.scrollBy({ top: -300, behavior: 'smooth' });
+        } else {
+          window.scrollBy({ top: -300, behavior: 'smooth' });
+        }
+        return;
+      }
+      if (e.key === 'PageDown') {
+        e.preventDefault();
+        if (mapRef.current) {
+          mapRef.current.scrollBy({ top: 300, behavior: 'smooth' });
+        } else {
+          window.scrollBy({ top: 300, behavior: 'smooth' });
+        }
+        return;
+      }
+
       if (activeTab === 'campaign' && viewMode === 'map') {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
           e.preventDefault();
@@ -796,7 +823,7 @@ function LevelsPageContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab, viewMode, filteredPresets, gamepadSelectedNodeIndex, defaultActiveIdx, lockedSet, router]);
 
-  useGamepad({
+  const { isConnected } = useGamepad({
     onMove: (dir) => {
       if (activeTab === 'campaign' && viewMode === 'map') {
         if (dir === 'left') {
@@ -880,6 +907,22 @@ function LevelsPageContent() {
     onRestart: () => {
       if (activeTab === 'campaign') {
         setViewMode((prev) => (prev === 'map' ? 'list' : 'map'));
+      }
+    },
+    onAxisMove: (axisIndex, value) => {
+      if (Math.abs(value) < 0.15) return;
+      if (activeTab === 'campaign' && viewMode === 'map') {
+        if (mapRef.current) {
+          if (axisIndex === 2) {
+            mapRef.current.scrollLeft += value * 22;
+          } else if (axisIndex === 3) {
+            mapRef.current.scrollTop += value * 22;
+          }
+        }
+      } else {
+        if (axisIndex === 3) {
+          window.scrollBy({ top: value * 22, behavior: 'auto' });
+        }
       }
     }
   });
@@ -1019,6 +1062,24 @@ function LevelsPageContent() {
         >
           <span>←</span>
           {!isMobile && <span>{t('common.back_menu')}</span>}
+          {isConnected && (
+            <span style={{
+              background: '#ef4444',
+              color: '#fff',
+              fontSize: 9,
+              fontWeight: 800,
+              borderRadius: '50%',
+              width: 14,
+              height: 14,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginLeft: 4,
+              boxShadow: '0 0 5px #ef4444'
+            }}>
+              B
+            </span>
+          )}
         </button>
 
         {/* Central Segmented Tab Controls */}
@@ -1028,9 +1089,28 @@ function LevelsPageContent() {
             background: 'rgba(3, 7, 18, 0.6)', 
             borderRadius: 10, 
             padding: 2, 
-            border: '1px solid rgba(255, 255, 255, 0.05)' 
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            position: 'relative'
           }}
         >
+          {isConnected && (
+            <span style={{
+              position: 'absolute',
+              left: -24,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'rgba(255, 255, 255, 0.1)',
+              color: '#94a3b8',
+              fontSize: 9,
+              fontWeight: 800,
+              padding: '2px 4px',
+              borderRadius: 4,
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              pointerEvents: 'none'
+            }}>
+              ◀
+            </span>
+          )}
           <button
             onClick={() => setActiveTab('campaign')}
             style={{
@@ -1069,6 +1149,24 @@ function LevelsPageContent() {
           >
             {t('levels.custom')}
           </button>
+          {isConnected && (
+            <span style={{
+              position: 'absolute',
+              right: -24,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'rgba(255, 255, 255, 0.1)',
+              color: '#94a3b8',
+              fontSize: 9,
+              fontWeight: 800,
+              padding: '2px 4px',
+              borderRadius: 4,
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              pointerEvents: 'none'
+            }}>
+              ▶
+            </span>
+          )}
         </div>
 
         {/* Right Actions & Score */}
@@ -2019,7 +2117,29 @@ function LevelsPageContent() {
               }}
             >
               <span>{isLocked ? 'KİLİTLİ' : 'OYNAT'}</span>
-              {!isLocked && <span>▶</span>}
+              {!isLocked && (
+                <>
+                  <span>▶</span>
+                  {isConnected && (
+                    <span style={{
+                      background: '#00ff88',
+                      color: '#030712',
+                      fontSize: 9,
+                      fontWeight: 800,
+                      borderRadius: '50%',
+                      width: 14,
+                      height: 14,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginLeft: 4,
+                      boxShadow: '0 0 5px #00ff88'
+                    }}>
+                      A
+                    </span>
+                  )}
+                </>
+              )}
             </button>
           </div>
         );
@@ -2292,6 +2412,27 @@ function LevelsPageContent() {
           title={viewMode === 'map' ? t('levels.view_list') : t('levels.view_map')}
         >
           {viewMode === 'map' ? '📋' : '🗺️'}
+          {isConnected && (
+            <span style={{
+              position: 'absolute',
+              top: -6,
+              right: -6,
+              background: '#38bdf8',
+              color: '#030712',
+              fontSize: 8,
+              fontWeight: 900,
+              borderRadius: '50%',
+              width: 14,
+              height: 14,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 0 5px #38bdf8',
+              border: '1px solid #030712'
+            }}>
+              Y
+            </span>
+          )}
         </button>
       )}
 

@@ -136,6 +136,39 @@ export async function fsCommit(
   if (!res.ok) throw new Error(`Firestore commit failed: ${res.status} ${await res.text()}`);
 }
 
+/** PATCH (update) specific fields of a document. */
+export async function fsPatch(
+  projectId: string,
+  path: string,
+  data: Record<string, unknown>,
+  updateFields: string[],
+  accessToken: string,
+): Promise<void> {
+  const queryParams = updateFields.map(f => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join('&');
+  const url = `${base(projectId)}/${path}?${queryParams}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: authHeader(accessToken),
+    body: JSON.stringify({ fields: toFields(data) }),
+  });
+  if (!res.ok) throw new Error(`Firestore PATCH failed: ${res.status} ${await res.text()}`);
+}
+
+/** DELETE a document. */
+export async function fsDelete(
+  projectId: string,
+  path: string,
+  accessToken: string,
+): Promise<void> {
+  const res = await fetch(`${base(projectId)}/${path}`, {
+    method: 'DELETE',
+    headers: authHeader(accessToken),
+  });
+  if (res.status !== 200 && res.status !== 204 && res.status !== 404) {
+    throw new Error(`Firestore DELETE failed: ${res.status} ${await res.text()}`);
+  }
+}
+
 /** Build the full document resource name. */
 export function docPath(projectId: string, path: string): string {
   return `projects/${projectId}/databases/(default)/documents/${path}`;

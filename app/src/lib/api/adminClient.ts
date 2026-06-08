@@ -72,3 +72,57 @@ export async function fetchAdminApi<T = any>(
 
   return (await response.json()) as T;
 }
+
+export interface BanRecord {
+  id: string;
+  uid: string;
+  ban_type: 'platform' | 'tag' | 'social' | 'coop';
+  reason: string;
+  issued_by: string;
+  issued_at: string;
+  expires_at: string | null;
+  lifted_at: string | null;
+  lifted_by: string | null;
+}
+
+export interface ActiveBan {
+  id: string;
+  uid: string;
+  ban_type: 'platform' | 'tag' | 'social' | 'coop';
+  reason: string;
+  issued_by: string;
+  issued_at: string;
+  expires_at: string | null;
+}
+
+export interface UserBansResponse {
+  success: boolean;
+  bans: BanRecord[];
+  activeBans: ActiveBan[];
+}
+
+export interface IssueBanParams {
+  banType: 'platform' | 'tag' | 'social' | 'coop';
+  reason: string;
+  expiresAt?: string;
+}
+
+export async function getUserBans(uid: string): Promise<UserBansResponse> {
+  return fetchAdminApi<UserBansResponse>(`/admin/users/${uid}/bans`, {
+    method: 'GET',
+  });
+}
+
+export async function issueUserBan(uid: string, params: IssueBanParams): Promise<{ success: boolean }> {
+  return fetchAdminApi<{ success: boolean }>(`/admin/users/${uid}/bans`, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function liftUserBan(uid: string, banId: string): Promise<{ success: boolean }> {
+  return fetchAdminApi<{ success: boolean }>(`/admin/users/${uid}/bans/${banId}/lift`, {
+    method: 'POST',
+  });
+}
+

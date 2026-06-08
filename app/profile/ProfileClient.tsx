@@ -10,12 +10,14 @@ import { useAuthContext } from '../src/contexts/AuthContext';
 import { useT, useLanguage } from '../src/contexts/LanguageContext';
 import { db, functions } from '../src/lib/firebase/config';
 import { useBadges } from '../src/hooks/useBadges';
+import { Badge } from '../src/lib/api/badgesClient';
 import { useFriends } from '../src/hooks/useFriends';
 import BadgeShowcase from '../src/components/BadgeShowcase';
 import BadgePicker from '../src/components/BadgePicker';
 import BadgeIcon from '../src/components/BadgeIcon';
 import { LANGS, type Lang } from '../src/lib/i18n';
 import { useGamepad } from '../src/hooks/useGamepad';
+import { Copy, Check } from 'lucide-react';
 
 const NEON_TYPES = [
   { color: '#00ff88', glow: '0 0 6px #00ff88, 0 0 18px rgba(0,255,136,0.3)' },
@@ -70,6 +72,35 @@ export default function ProfileClient() {
   const [tagBusy, setTagBusy] = useState(false);
   const [tagError, setTagError] = useState('');
   const [tagSuccess, setTagSuccess] = useState(false);
+
+  const [copied, setCopied] = useState(false);
+  const handleCopyTag = () => {
+    if (!currentTag) return;
+    const tagText = `#${currentTag}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tagText)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch((err) => console.error('Copy failed', err));
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = tagText;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Fallback copy failed', err);
+      }
+      document.body.removeChild(textarea);
+    }
+  };
 
   // Background particles
   const [particles, setParticles] = useState<Particle[]>([]);
@@ -166,18 +197,44 @@ export default function ProfileClient() {
   // Gamepad / Keyboard back support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
       if (e.key === 'Escape' && !pickerOpen) {
         router.push('/');
+      }
+      // Page scrolling via keyboard
+      if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        window.scrollBy({ top: -180, behavior: 'smooth' });
+      }
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        window.scrollBy({ top: 180, behavior: 'smooth' });
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [router, pickerOpen]);
 
-  useGamepad({
+  const { isConnected } = useGamepad({
     onMenu: () => {
       if (!pickerOpen) router.push('/');
     },
+    // Gamepad D-Pad / Left Stick → scroll the profile page
+    onMove: (dir) => {
+      if (pickerOpen) return; // don't scroll behind modal
+      if (dir === 'up') {
+        window.scrollBy({ top: -180, behavior: 'smooth' });
+      } else if (dir === 'down') {
+        window.scrollBy({ top: 180, behavior: 'smooth' });
+      }
+    },
+    onAxisMove: (axisIndex, value) => {
+      if (pickerOpen) return;
+      // Scroll page vertically using Right Stick Y (axis 3)
+      if (axisIndex === 3 && Math.abs(value) > 0.15) {
+        window.scrollBy({ top: value * 22, behavior: 'auto' });
+      }
+    }
   });
 
   // Handle display names & tags
@@ -284,6 +341,7 @@ export default function ProfileClient() {
         alignItems: 'center',
         boxSizing: 'border-box',
         overflowX: 'hidden',
+        overflowY: 'auto',
         position: 'relative',
       }}
     >
@@ -354,6 +412,24 @@ export default function ProfileClient() {
             }}
           >
             {t('common.back_menu')}
+            {isConnected && (
+              <span style={{
+                background: '#ef4444',
+                color: '#fff',
+                fontSize: 9,
+                fontWeight: 800,
+                borderRadius: '50%',
+                width: 14,
+                height: 14,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginLeft: 6,
+                boxShadow: '0 0 5px #ef4444'
+              }}>
+                B
+              </span>
+            )}
           </button>
         </div>
 
@@ -406,22 +482,42 @@ export default function ProfileClient() {
 
           {/* User Tag */}
           {currentTag ? (
-            <span
+            <button
+              onClick={handleCopyTag}
+              title={lang === 'tr' ? 'Kopyala' : 'Copy tag'}
               style={{
-                marginTop: '6px',
-                fontSize: '15px',
+                marginTop: '8px',
+                fontSize: '14px',
                 fontWeight: 800,
                 color: '#00c4ff',
                 textShadow: '0 0 10px rgba(0, 196, 255, 0.4)',
                 background: 'rgba(0, 196, 255, 0.06)',
                 border: '1px solid rgba(0, 196, 255, 0.25)',
-                padding: '2px 10px',
+                padding: '4px 12px',
                 borderRadius: '6px',
                 letterSpacing: '0.1em',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 196, 255, 0.15)';
+                e.currentTarget.style.borderColor = 'rgba(0, 196, 255, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 196, 255, 0.06)';
+                e.currentTarget.style.borderColor = 'rgba(0, 196, 255, 0.25)';
               }}
             >
               #{currentTag}
-            </span>
+              {copied ? (
+                <Check size={12} style={{ color: '#00ff88' }} />
+              ) : (
+                <Copy size={12} />
+              )}
+            </button>
           ) : (
             isOwner && (
               <span style={{ fontSize: '12px', color: '#4b5563', marginTop: '6px' }}>
@@ -875,10 +971,32 @@ export default function ProfileClient() {
           isOpen={pickerOpen}
           onClose={() => setPickerOpen(false)}
           badges={badges}
-          initialShowcaseIds={showcaseBadges.map((b) => b.id)}
-          onSave={saveShowcase}
+          initialShowcaseIds={showcaseBadges.map((b: any) => b.id)}
+          onSave={async (ids) => { await saveShowcase(ids); }}
           saving={savingShowcase}
         />
+      )}
+      {isConnected && !pickerOpen && (
+        <div style={{
+          position: 'fixed',
+          bottom: 16,
+          right: 16,
+          background: 'rgba(8, 12, 28, 0.85)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(0, 255, 136, 0.2)',
+          borderRadius: 8,
+          padding: '6px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 10,
+          color: '#00ff88',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+          zIndex: 10,
+          pointerEvents: 'none',
+        }}>
+          <span>🎮 D-pad ↑/↓: {lang === 'tr' ? 'Kaydır' : 'Scroll'}</span>
+        </div>
       )}
     </div>
   );

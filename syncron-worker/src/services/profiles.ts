@@ -1,4 +1,3 @@
-import type { D1Database } from '@cloudflare/workers-types';
 
 /**
  * Upsert a user profile in the user_profiles table.

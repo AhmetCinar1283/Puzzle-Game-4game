@@ -103,3 +103,34 @@ export async function removeFriend(uid: string): Promise<{ success: boolean }> {
     requireAuth: true,
   });
 }
+
+/**
+ * Block another user.
+ */
+export async function blockUser(uid: string): Promise<{ success: boolean }> {
+  return workerFetch<{ success: boolean }>(`/friends/block/${uid}`, {
+    method: 'POST',
+    requireAuth: true,
+  });
+}
+
+/**
+ * Unblock a blocked user.
+ */
+export async function unblockUser(uid: string): Promise<{ success: boolean }> {
+  return workerFetch<{ success: boolean }>(`/friends/block/${uid}`, {
+    method: 'DELETE',
+    requireAuth: true,
+  });
+}
+
+/**
+ * Fetch list of blocked users.
+ */
+export async function getBlockedUsers(): Promise<{ success: boolean; blocked: Friend[] }> {
+  return workerFetch<{ success: boolean; blocked: Friend[] }>('/friends/blocked', {
+    method: 'GET',
+    requireAuth: true,
+  });
+}
+

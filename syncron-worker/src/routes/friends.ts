@@ -9,6 +9,7 @@ import {
 import { getAdminAccessToken, isValidServiceAccount } from '../services/serviceAccount';
 import { fsGet, fromDoc } from '../services/firestore';
 import { upsertUserProfile } from '../services/profiles';
+import { checkActiveBan } from '../services/banService';
 
 export const friendsRouter = new Hono<AppContext>();
 
@@ -20,6 +21,13 @@ function getCanonicalKeys(uid1: string, uid2: string) {
 // ─── POST /friends/request ───────────────────────────────────────────────────
 friendsRouter.post('/friends/request', firebaseAuth, async (c) => {
   const uid = c.get('uid');
+  const db = c.env.AUDIT_DB;
+
+  // Check for active social ban
+  const isSocialBanned = await checkActiveBan(db, uid, 'social');
+  if (isSocialBanned) {
+    return c.json({ success: false, error: 'Social features are restricted' }, 403);
+  }
 
   let body;
   try {
@@ -35,7 +43,6 @@ friendsRouter.post('/friends/request', firebaseAuth, async (c) => {
   }
 
   const { targetUid: bodyTargetUid, targetTag } = validation.data;
-  const db = c.env.AUDIT_DB;
 
   let targetUid = bodyTargetUid;
 
@@ -718,6 +725,148 @@ friendsRouter.get('/users/search', firebaseAuth, async (c) => {
     return c.json({ success: true, users });
   } catch (err) {
     console.error('[FriendsAPI] Tag search failed:', err);
+    return c.json({ success: false, error: 'Database error' }, 500);
+  }
+});
+
+// ─── POST /friends/block/:uid ───────────────────────────────────────────────
+
+friendsRouter.post('/friends/block/:uid', firebaseAuth, async (c) => {
+  const uid = c.get('uid');
+  const targetUid = c.req.param('uid');
+
+  if (!targetUid || targetUid.length > 128 || targetUid === uid) {
+    return c.json({ success: false, error: 'Invalid target user' }, 400);
+  }
+
+  const db = c.env.AUDIT_DB;
+  const { user_a, user_b } = getCanonicalKeys(uid, targetUid);
+  const now = new Date().toISOString();
+
+  try {
+    const existing = await db
+      .prepare('SELECT status, requested_by FROM friendships WHERE user_a = ?1 AND user_b = ?2')
+      .bind(user_a, user_b)
+      .first<{ status: string; requested_by: string }>();
+
+    if (existing) {
+      if (existing.status === 'blocked') {
+        return c.json({ success: false, error: 'Already blocked' }, 409);
+      }
+
+      // Update status to blocked, and set requested_by to uid (blocker)
+      await db
+        .prepare(
+          `UPDATE friendships
+           SET status = 'blocked', requested_by = ?3, updated_at = ?4
+           WHERE user_a = ?1 AND user_b = ?2`
+        )
+        .bind(user_a, user_b, uid, now)
+        .run();
+    } else {
+      // Insert new blocked relationship
+      await db
+        .prepare(
+          `INSERT INTO friendships (user_a, user_b, status, requested_by, created_at, updated_at)
+           VALUES (?1, ?2, 'blocked', ?3, ?4, ?4)`
+        )
+        .bind(user_a, user_b, uid, now)
+        .run();
+    }
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error('[FriendsAPI] Blocking user failed:', err);
+    return c.json({ success: false, error: 'Database error' }, 500);
+  }
+});
+
+// ─── DELETE /friends/block/:uid ─────────────────────────────────────────────
+
+friendsRouter.delete('/friends/block/:uid', firebaseAuth, async (c) => {
+  const uid = c.get('uid');
+  const targetUid = c.req.param('uid');
+
+  if (!targetUid || targetUid.length > 128) {
+    return c.json({ success: false, error: 'Invalid UID' }, 400);
+  }
+
+  const db = c.env.AUDIT_DB;
+  const { user_a, user_b } = getCanonicalKeys(uid, targetUid);
+
+  try {
+    const existing = await db
+      .prepare('SELECT status, requested_by FROM friendships WHERE user_a = ?1 AND user_b = ?2')
+      .bind(user_a, user_b)
+      .first<{ status: string; requested_by: string }>();
+
+    if (!existing || existing.status !== 'blocked') {
+      return c.json({ success: false, error: 'Block relationship not found' }, 404);
+    }
+
+    if (existing.requested_by !== uid) {
+      return c.json({ success: false, error: 'You cannot unblock this user' }, 403);
+    }
+
+    await db
+      .prepare('DELETE FROM friendships WHERE user_a = ?1 AND user_b = ?2')
+      .bind(user_a, user_b)
+      .run();
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error('[FriendsAPI] Unblocking user failed:', err);
+    return c.json({ success: false, error: 'Database error' }, 500);
+  }
+});
+
+// ─── GET /friends/blocked ───────────────────────────────────────────────────
+
+friendsRouter.get('/friends/blocked', firebaseAuth, async (c) => {
+  const uid = c.get('uid');
+  const db = c.env.AUDIT_DB;
+
+  try {
+    let { results } = await db
+      .prepare(
+        `SELECT
+           CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END AS blockedUid,
+           p.display_name AS displayName,
+           p.tag,
+           p.showcase_badges AS showcaseBadges
+         FROM friendships f
+         LEFT JOIN user_profiles p ON p.uid = CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END
+         WHERE (f.user_a = ?1 OR f.user_b = ?1)
+           AND f.status = 'blocked'
+           AND f.requested_by = ?1`
+      )
+      .bind(uid)
+      .all<any>();
+
+    results = results ?? [];
+
+    const blocked = results.map((row) => {
+      let showcaseBadges = [];
+      if (typeof row.showcaseBadges === 'string') {
+        try {
+          showcaseBadges = JSON.parse(row.showcaseBadges);
+        } catch (e) {
+          console.error('Failed to parse showcaseBadges JSON:', e);
+        }
+      } else if (Array.isArray(row.showcaseBadges)) {
+        showcaseBadges = row.showcaseBadges;
+      }
+      return {
+        uid: row.blockedUid,
+        displayName: row.displayName ?? 'Player',
+        tag: row.tag,
+        showcaseBadges,
+      };
+    });
+
+    return c.json({ success: true, blocked });
+  } catch (err) {
+    console.error('[FriendsAPI] Fetching blocked users list failed:', err);
     return c.json({ success: false, error: 'Database error' }, 500);
   }
 });

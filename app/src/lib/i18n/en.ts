@@ -393,6 +393,13 @@ const en: Record<string, string> = {
   'friends.login_required': 'Please sign in to manage friends.',
   'friends.back_menu': '← Menu',
   'leaderboard.go_to_friends': 'Go to Friends Page',
+  'friends.blocked_title': 'BLOCKED USERS',
+  'friends.block_friend': 'Block',
+  'friends.unblock_friend': 'Unblock',
+  'friends.no_blocked_desc': 'No blocked users.',
+  'friends.success_blocked': 'User blocked successfully.',
+  'friends.success_unblocked': 'User unblocked successfully.',
+  'friends.block_confirm': 'Are you sure you want to block this user?',
 };
 
 export default en;

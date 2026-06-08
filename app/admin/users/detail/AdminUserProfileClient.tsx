@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/app/src/contexts/LanguageContext';
 import { AdminGuard } from '@/app/src/components/AdminGuard';
-import { fetchAdminApi } from '@/app/src/lib/api/adminClient';
+import { fetchAdminApi, getUserBans, issueUserBan, liftUserBan, BanRecord, ActiveBan } from '@/app/src/lib/api/adminClient';
 import { useAuth } from '@/app/src/hooks/useAuth';
 
 // Types derived from Worker API endpoints
@@ -88,6 +88,127 @@ export default function AdminUserProfileClient() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(true);
 
+  // Ban states
+  const [bans, setBans] = useState<BanRecord[]>([]);
+  const [activeBans, setActiveBans] = useState<ActiveBan[]>([]);
+  const [loadingBans, setLoadingBans] = useState(true);
+
+  // Modal and Ban action states
+  const [showBanModal, setShowBanModal] = useState(false);
+  const [banType, setBanType] = useState<'platform' | 'tag' | 'social' | 'coop'>('platform');
+  const [durationOption, setDurationOption] = useState<'permanent' | 'temporary'>('permanent');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [banReason, setBanReason] = useState('');
+  const [submittingBan, setSubmittingBan] = useState(false);
+  const [banError, setBanError] = useState<string | null>(null);
+
+  // Helper date generators
+  const getMinDateTime = () => {
+    const now = new Date();
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  };
+
+  const getRemainingTimeText = (expiresAtStr: string | null) => {
+    if (!expiresAtStr) return isTr ? 'Kalıcı' : 'Permanent';
+    const diff = new Date(expiresAtStr).getTime() - Date.now();
+    if (diff <= 0) return isTr ? 'Süresi Doldu' : 'Expired';
+    
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (days > 0) return isTr ? `${days} gün kaldı` : `${days} days remaining`;
+    if (hours > 0) return isTr ? `${hours} saat kaldı` : `${hours} hours remaining`;
+    return isTr ? `${minutes} dakika kaldı` : `${minutes} minutes remaining`;
+  };
+
+  async function reloadBans() {
+    setLoadingBans(true);
+    try {
+      const res = await getUserBans(uid);
+      if (res.success) {
+        setBans(res.bans || []);
+        setActiveBans(res.activeBans || []);
+      }
+    } catch (err) {
+      console.error('[AdminWorkspace] Error reloading bans:', err);
+    } finally {
+      setLoadingBans(false);
+    }
+  }
+
+  const handleIssueBan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!banReason.trim()) {
+      setBanError(isTr ? 'Lütfen bir gerekçe girin.' : 'Please enter a reason.');
+      return;
+    }
+    if (banReason.length > 500) {
+      setBanError(isTr ? 'Gerekçe en fazla 500 karakter olabilir.' : 'Reason must be at most 500 characters.');
+      return;
+    }
+
+    const confirmMsg = isTr 
+      ? 'Bu işlem geri alınabilir. Devam etmek istiyor musunuz?' 
+      : 'This action can be reverted. Do you want to proceed?';
+    if (!window.confirm(confirmMsg)) return;
+
+    setSubmittingBan(true);
+    setBanError(null);
+
+    try {
+      const expiresAtParam = durationOption === 'temporary' && expiresAt
+        ? new Date(expiresAt).toISOString()
+        : undefined;
+
+      const res = await issueUserBan(uid, {
+        banType,
+        reason: banReason.trim(),
+        expiresAt: expiresAtParam,
+      });
+
+      if (res.success) {
+        setShowBanModal(false);
+        setBanReason('');
+        setExpiresAt('');
+        setDurationOption('permanent');
+        setBanType('platform');
+        await reloadBans();
+        // Also reload profile in case tag/role got affected
+        const profileRes = await fetchAdminApi(`/admin/users/${uid}`);
+        if (profileRes.success) {
+          setProfile(profileRes.user);
+        }
+      }
+    } catch (err: any) {
+      setBanError(err.message || (isTr ? 'Ban işlemi başarısız oldu.' : 'Failed to issue ban.'));
+    } finally {
+      setSubmittingBan(false);
+    }
+  };
+
+  const handleLiftBan = async (banId: string) => {
+    const confirmMsg = isTr 
+      ? 'Bu ban kaydını kaldırmak istediğinizden emin misiniz?' 
+      : 'Are you sure you want to lift this ban?';
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const res = await liftUserBan(uid, banId);
+      if (res.success) {
+        await reloadBans();
+        // Also reload profile
+        const profileRes = await fetchAdminApi(`/admin/users/${uid}`);
+        if (profileRes.success) {
+          setProfile(profileRes.user);
+        }
+      }
+    } catch (err: any) {
+      alert(err.message || (isTr ? 'Ban kaldırma işlemi başarısız oldu.' : 'Failed to lift ban.'));
+    }
+  };
+
   // Debouncing Action search filter
   useEffect(() => {
     const t = setTimeout(() => setDebouncedActionQuery(actionQuery.trim()), 400);
@@ -98,11 +219,13 @@ export default function AdminUserProfileClient() {
   useEffect(() => {
     async function loadWorkspaceData() {
       setLoadingProfile(true);
+      setLoadingBans(true);
       try {
-        const [profileRes, statsRes, levelsRes] = await Promise.all([
+        const [profileRes, statsRes, levelsRes, bansRes] = await Promise.all([
           fetchAdminApi(`/admin/users/${uid}`),
           fetchAdminApi(`/admin/users/${uid}/stats`),
           fetchAdminApi(`/admin/users/${uid}/played-levels?limit=100`),
+          getUserBans(uid),
         ]);
 
         if (profileRes.success) {
@@ -126,10 +249,15 @@ export default function AdminUserProfileClient() {
         if (levelsRes.success) {
           setPlayedLevels(levelsRes.playedLevels || []);
         }
+        if (bansRes.success) {
+          setBans(bansRes.bans || []);
+          setActiveBans(bansRes.activeBans || []);
+        }
       } catch (err) {
         console.error('[AdminWorkspace] Error loading workspace data:', err);
       } finally {
         setLoadingProfile(false);
+        setLoadingBans(false);
       }
     }
 
@@ -448,6 +576,88 @@ export default function AdminUserProfileClient() {
             </div>
           ) : (
             <>
+              {/* Active Ban Banner */}
+              {activeBans.length > 0 && (
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.02) 100%)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    borderRadius: '16px',
+                    padding: '20px 24px',
+                    boxShadow: '0 4px 20px rgba(239, 68, 68, 0.1), inset 0 0 12px rgba(239, 68, 68, 0.02)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    position: 'relative',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '18px' }}>🚫</span>
+                      <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#f87171', letterSpacing: '0.05em' }}>
+                        {isTr ? 'BU HESAP KISITLIDIR:' : 'THIS ACCOUNT IS RESTRICTED:'}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => document.getElementById('ban-management-section')?.scrollIntoView({ behavior: 'smooth' })}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: '#f87171',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '4px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                      }}
+                    >
+                      {isTr ? 'Banları Yönet ↓' : 'Manage Bans ↓'}
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingLeft: '28px' }}>
+                    {activeBans.map((ban) => {
+                      let typeLabel = '';
+                      let typeColor = '';
+                      switch (ban.ban_type) {
+                        case 'platform':
+                          typeLabel = isTr ? 'Platform Banı' : 'Platform Ban';
+                          typeColor = '#ef4444';
+                          break;
+                        case 'tag':
+                          typeLabel = isTr ? 'Tag Banı' : 'Tag Ban';
+                          typeColor = '#fb923c';
+                          break;
+                        case 'social':
+                          typeLabel = isTr ? 'Sosyal Ban' : 'Social Ban';
+                          typeColor = '#f59e0b';
+                          break;
+                        case 'coop':
+                          typeLabel = isTr ? 'Co-op Banı' : 'Co-op Ban';
+                          typeColor = '#9333ea';
+                          break;
+                      }
+
+                      return (
+                        <div key={ban.id} style={{ fontSize: '13px', color: '#cbd5e1', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 700, color: typeColor }}>{typeLabel}</span>
+                          <span style={{ color: '#64748b' }}>—</span>
+                          <span style={{ color: '#fbbf24', fontWeight: 600 }}>{getRemainingTimeText(ban.expires_at)}</span>
+                          <span style={{ color: '#64748b' }}>—</span>
+                          <span style={{ fontStyle: 'italic', color: '#94a3b8' }}>"{ban.reason}"</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Grid 1: Profile Summary Panel */}
               <section
                 style={{
@@ -774,6 +984,193 @@ export default function AdminUserProfileClient() {
                 </section>
               </div>
 
+              {/* Ban & Restriction Management Section */}
+              <section
+                id="ban-management-section"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.01)',
+                  border: '1px solid rgba(147, 51, 234, 0.12)',
+                  borderRadius: '16px',
+                  padding: '24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '20px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                  <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 800, letterSpacing: '0.1em', color: '#9333ea', textTransform: 'uppercase' }}>
+                    🚫 {isTr ? 'BAN / KISITLAMA YÖNETİMİ' : 'BAN & RESTRICTION MANAGEMENT'}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setBanError(null);
+                      setShowBanModal(true);
+                    }}
+                    style={{
+                      background: 'rgba(147, 51, 234, 0.1)',
+                      border: '1px solid rgba(147, 51, 234, 0.3)',
+                      color: '#a855f7',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '6px 16px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#9333ea';
+                      e.currentTarget.style.color = '#ffffff';
+                      e.currentTarget.style.boxShadow = '0 0 12px rgba(147, 51, 234, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(147, 51, 234, 0.1)';
+                      e.currentTarget.style.color = '#a855f7';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    {isTr ? '+ YENİ BAN' : '+ ISSUE BAN'}
+                  </button>
+                </div>
+
+                {/* Active Restrictions Sub-List */}
+                <div>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '12px', fontWeight: 700, color: '#f87171', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                    {isTr ? 'Aktif Kısıtlamalar:' : 'Active Restrictions:'}
+                  </h4>
+                  {activeBans.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: '12.5px', color: '#475569', fontStyle: 'italic' }}>
+                      {isTr ? 'Aktif kısıtlama bulunmuyor.' : 'No active restrictions.'}
+                    </p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {activeBans.map((ban) => {
+                        let typeLabel = '';
+                        let typeColor = '';
+                        switch (ban.ban_type) {
+                          case 'platform':
+                            typeLabel = isTr ? 'Platform' : 'Platform';
+                            typeColor = '#ef4444';
+                            break;
+                          case 'tag':
+                            typeLabel = isTr ? 'Tag' : 'Tag';
+                            typeColor = '#fb923c';
+                            break;
+                          case 'social':
+                            typeLabel = isTr ? 'Sosyal' : 'Social';
+                            typeColor = '#f59e0b';
+                            break;
+                          case 'coop':
+                            typeLabel = isTr ? 'Co-op' : 'Co-op';
+                            typeColor = '#9333ea';
+                            break;
+                        }
+
+                        return (
+                          <div
+                            key={ban.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '8px 12px',
+                              background: 'rgba(255,255,255,0.01)',
+                              border: '1px solid rgba(255,255,255,0.03)',
+                              borderRadius: '8px',
+                              fontSize: '12.5px',
+                              flexWrap: 'wrap',
+                              gap: '8px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '240px' }}>
+                              <span style={{ color: typeColor, fontSize: '14px' }}>●</span>
+                              <span style={{ fontWeight: 700, color: '#cbd5e1' }}>{typeLabel}</span>
+                              <span style={{ color: '#475569' }}>—</span>
+                              <span style={{ color: '#fbbf24', fontWeight: 600 }}>{getRemainingTimeText(ban.expires_at)}</span>
+                              <span style={{ color: '#475569' }}>—</span>
+                              <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>"{ban.reason}"</span>
+                            </div>
+                            <button
+                              onClick={() => handleLiftBan(ban.id)}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.05)',
+                                border: '1px solid rgba(239, 68, 68, 0.25)',
+                                color: '#ef4444',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                padding: '4px 10px',
+                                borderRadius: '5px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#ef4444';
+                                e.currentTarget.style.color = '#030712';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)';
+                                e.currentTarget.style.color = '#ef4444';
+                              }}
+                            >
+                              {isTr ? 'Kaldır' : 'Lift'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Ban History Sub-List */}
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '16px' }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '12px', fontWeight: 700, color: '#64748b', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                    {isTr ? 'Kısıtlama Geçmişi (Kaldırılmış/Süresi Dolmuş):' : 'Ban History (Lifted/Expired):'}
+                  </h4>
+                  {bans.filter(b => !activeBans.some(ab => ab.id === b.id)).length === 0 ? (
+                    <p style={{ margin: 0, fontSize: '12.5px', color: '#475569', fontStyle: 'italic' }}>
+                      {isTr ? 'Kayıtlı ban geçmişi bulunmuyor.' : 'No ban history records.'}
+                    </p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
+                      {bans
+                        .filter(b => !activeBans.some(ab => ab.id === b.id))
+                        .map((ban) => {
+                          const issuedDate = new Date(ban.issued_at).toLocaleDateString(isTr ? 'tr-TR' : 'en-US');
+                          let statusText = '';
+                          if (ban.lifted_at) {
+                            statusText = isTr 
+                              ? `Engeli Kaldıran: ${ban.lifted_by?.slice(0, 8)}...` 
+                              : `Lifted by: ${ban.lifted_by?.slice(0, 8)}...`;
+                          } else {
+                            statusText = isTr ? 'Süresi Doldu' : 'Expired';
+                          }
+
+                          return (
+                            <div
+                              key={ban.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                fontSize: '12px',
+                                color: '#94a3b8',
+                              }}
+                            >
+                              <span style={{ color: '#475569' }}>○</span>
+                              <span style={{ fontWeight: 700, color: '#cbd5e1', textTransform: 'capitalize' }}>{ban.ban_type}</span>
+                              <span style={{ color: '#475569' }}>—</span>
+                              <span>{issuedDate}</span>
+                              <span style={{ color: '#475569' }}>—</span>
+                              <span style={{ color: '#fb923c', fontWeight: 600 }}>{statusText}</span>
+                              <span style={{ color: '#475569' }}>—</span>
+                              <span style={{ fontStyle: 'italic' }}>"{ban.reason}"</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              </section>
+
               {/* Grid 3: Operational Filterable Audit Log Timeline */}
               <section
                 style={{
@@ -1066,6 +1463,242 @@ export default function AdminUserProfileClient() {
           )}
         </main>
       </div>
+
+      {/* Issue Ban Modal */}
+      <AnimatePresence>
+        {showBanModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(3, 7, 18, 0.85)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 100,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              style={{
+                width: '100%',
+                maxWidth: '500px',
+                background: 'linear-gradient(to bottom, #0a0f1a, #070a12)',
+                border: '1px solid rgba(147, 51, 234, 0.3)',
+                boxShadow: '0 0 40px rgba(147, 51, 234, 0.15)',
+                borderRadius: '16px',
+                padding: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#f1f5f9', letterSpacing: '0.05em' }}>
+                  🚫 {isTr ? 'YENİ BAN / KISITLAMA TANIMLA' : 'ISSUE NEW RESTRICTION'}
+                </h3>
+                <button
+                  onClick={() => setShowBanModal(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#475569',
+                    fontSize: '18px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {banError && (
+                <div style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', color: '#f87171', fontSize: '12px' }}>
+                  ⚠️ {banError}
+                </div>
+              )}
+
+              <form onSubmit={handleIssueBan} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Ban Type selector */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
+                    {isTr ? 'Ban Tipi:' : 'Ban Type:'}
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    {(['platform', 'tag', 'social', 'coop'] as const).map((type) => {
+                      let label = '';
+                      switch (type) {
+                        case 'platform': label = isTr ? 'Platform' : 'Platform'; break;
+                        case 'tag': label = isTr ? 'Tag' : 'Tag'; break;
+                        case 'social': label = isTr ? 'Sosyal' : 'Social'; break;
+                        case 'coop': label = isTr ? 'Co-op' : 'Co-op'; break;
+                      }
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setBanType(type)}
+                          style={{
+                            background: banType === type ? 'rgba(147, 51, 234, 0.15)' : '#060d1a',
+                            border: '1px solid ' + (banType === type ? '#9333ea' : 'rgba(255,255,255,0.06)'),
+                            color: banType === type ? '#ffffff' : '#94a3b8',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Ban type description */}
+                  <span style={{ fontSize: '11px', color: '#475569', fontStyle: 'italic', marginTop: '4px' }}>
+                    {banType === 'platform' && (isTr ? 'Worker\'a her isteği engeller (oyun oynama, sosyal işlemler vb.)' : 'Blocks all backend endpoints (playing levels, social features, etc.)')}
+                    {banType === 'tag' && (isTr ? 'Tag değişikliğini engeller ve mevcut tag\'i boşa çıkarır' : 'Blocks changing tag and clears current tag registration')}
+                    {banType === 'social' && (isTr ? 'Arkadaşlık isteği göndermeyi engeller' : 'Prevents sending outgoing friend requests')}
+                    {banType === 'coop' && (isTr ? 'Gelecekte co-op özellikleri için kısıtlama' : 'Co-op feature restriction (reserved for future use)')}
+                  </span>
+                </div>
+
+                {/* Duration option selector */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
+                    {isTr ? 'Süre:' : 'Duration:'}
+                  </label>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="durationOption"
+                        checked={durationOption === 'permanent'}
+                        onChange={() => setDurationOption('permanent')}
+                        style={{ accentColor: '#9333ea' }}
+                      />
+                      {isTr ? 'Kalıcı (Kaldırılana dek)' : 'Permanent (Until lifted)'}
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="durationOption"
+                        checked={durationOption === 'temporary'}
+                        onChange={() => setDurationOption('temporary')}
+                        style={{ accentColor: '#9333ea' }}
+                      />
+                      {isTr ? 'Süreli' : 'Temporary'}
+                    </label>
+                  </div>
+
+                  {durationOption === 'temporary' && (
+                    <input
+                      type="datetime-local"
+                      value={expiresAt}
+                      min={getMinDateTime()}
+                      required
+                      onChange={(e) => setExpiresAt(e.target.value)}
+                      style={{
+                        background: '#060d1a',
+                        border: '1px solid rgba(147, 51, 234, 0.15)',
+                        color: '#e2e8f0',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        fontSize: '12.5px',
+                        outline: 'none',
+                        marginTop: '6px',
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* Ban Reason input */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
+                      {isTr ? 'Neden / Gerekçe:' : 'Reason / Justification:'}
+                    </label>
+                    <span style={{ fontSize: '10px', color: banReason.length > 500 ? '#ef4444' : '#475569' }}>
+                      {banReason.length}/500
+                    </span>
+                  </div>
+                  <textarea
+                    value={banReason}
+                    onChange={(e) => setBanReason(e.target.value.slice(0, 550))}
+                    placeholder={isTr ? 'Lütfen banlanma sebebini açıklayın...' : 'Provide details on the rule violation...'}
+                    rows={3}
+                    required
+                    style={{
+                      background: '#060d1a',
+                      border: '1px solid rgba(147, 51, 234, 0.15)',
+                      color: '#e2e8f0',
+                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      fontSize: '13px',
+                      outline: 'none',
+                      resize: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowBanModal(false)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      color: '#94a3b8',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {isTr ? 'İptal' : 'Cancel'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingBan}
+                    style={{
+                      background: '#9333ea',
+                      border: 'none',
+                      color: '#ffffff',
+                      padding: '8px 20px',
+                      borderRadius: '8px',
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: '0 0 12px rgba(147, 51, 234, 0.3)',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!submittingBan) {
+                        e.currentTarget.style.boxShadow = '0 0 18px rgba(147, 51, 234, 0.5)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = '0 0 12px rgba(147, 51, 234, 0.3)';
+                    }}
+                  >
+                    {submittingBan ? '...' : (isTr ? 'BAN UYGULA' : 'ISSUE BAN')}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </AdminGuard>
   );
 }

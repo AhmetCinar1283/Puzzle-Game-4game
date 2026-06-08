@@ -393,6 +393,13 @@ const tr: Record<string, string> = {
   'friends.login_required': 'Arkadaşlarınızı yönetmek için giriş yapın.',
   'friends.back_menu': '← Menü',
   'leaderboard.go_to_friends': 'Arkadaş Listesine Git',
+  'friends.blocked_title': 'ENGELLENEN KULLANICILAR',
+  'friends.block_friend': 'Engelle',
+  'friends.unblock_friend': 'Engeli Kaldır',
+  'friends.no_blocked_desc': 'Engellenen kullanıcı yok.',
+  'friends.success_blocked': 'Kullanıcı başarıyla engellendi.',
+  'friends.success_unblocked': 'Kullanıcının engeli kaldırıldı.',
+  'friends.block_confirm': 'Bu kullanıcıyı engellemek istediğinize emin misiniz?',
 };
 
 export default tr;
