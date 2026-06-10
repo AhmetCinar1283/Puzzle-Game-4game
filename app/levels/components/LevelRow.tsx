@@ -324,7 +324,7 @@ export function LevelRow({
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}
             onClick={(e) => e.stopPropagation()} // Prevent card play click when clicking small control buttons
           >
-            {canAct && (hovered || gamepadSelected || !isMobile) && (
+            {canAct && !isMobile && (hovered || gamepadSelected) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 {!isPreset && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -335,6 +335,31 @@ export function LevelRow({
                 <SmallBtn onClick={onEdit} color="#00c4ff" label="✎" title={t('list.edit')} />
                 <SmallBtn onClick={onDelete} color="#ef4444" label="✕" title={t('list.delete')} />
               </div>
+            )}
+
+            {canAct && isMobile && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  openCtx(rect.left, rect.bottom);
+                }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 14,
+                }}
+              >
+                ⋮
+              </button>
             )}
 
             {/* Main Action Button */}

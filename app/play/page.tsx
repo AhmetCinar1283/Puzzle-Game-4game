@@ -70,20 +70,6 @@ function PlayContent() {
     const [showWin, setShowWin] = useState(false);
     const [workerResult, setWorkerResult] = useState<WorkerResult | null>(null);
 
-    // ── Geri tuşu (popstate) ──────────────────────────────────────
-    useEffect(() => {
-        // Sayfaya girince history'ye bir durum ekle, öyle ki geri basılınca popstate tetiklenir
-        window.history.pushState({ play: true }, '');
-        function handlePopState() {
-            router.replace('/levels');
-        }
-        window.addEventListener('popstate', handlePopState);
-        return () => {
-            window.removeEventListener('popstate', handlePopState);
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     // ── Seviye yükleme ───────────────────────────────────────
     useEffect(() => {
         if (levelId === null) { router.replace('/levels'); return; }

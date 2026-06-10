@@ -5,6 +5,7 @@ import { AuthProvider } from "./src/contexts/AuthContext";
 import { LanguageProvider } from "./src/contexts/LanguageContext";
 import FirestoreSync from "./src/components/FirestoreSync";
 import UserBadge from "./src/components/UserBadge";
+import BackButtonManager from "./src/components/BackButtonManager";
 import StoreProvider from "./src/store/StoreProvider";
 
 const BASE_URL = 'https://syncron.polyvoclub.com';
@@ -97,6 +98,7 @@ export default function RootLayout({
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3798429741438186"
           crossOrigin="anonymous"
           strategy="afterInteractive"
+          // eslint-disable-next-line react-hooks/exhaustive-deps
         />
         {GA_ID && (
           <>
@@ -147,6 +149,7 @@ export default function RootLayout({
             <AuthProvider>
               <FirestoreSync />
               <UserBadge />
+              <BackButtonManager />
               {children}
             </AuthProvider>
           </StoreProvider>

@@ -88,21 +88,32 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
     const [prevSnapshots, setPrevSnapshots] = useState<TickSnapshot[] | null>(snapshots);
     const [currentFrame, setCurrentFrame] = useState(0);
 
-    // Yeni snapshot dizisi gelince başa sar (Render-phase state adjustment)
+    // Yeni snapshot dizisi gelince başa sar veya uzantısı ise kaldığı yerden devam et
     if (snapshots !== prevSnapshots) {
         setPrevSnapshots(snapshots);
-        setCurrentFrame(0);
+        const isExtension = prevSnapshots && 
+                            prevSnapshots.length > 0 && 
+                            snapshots && 
+                            snapshots.length > prevSnapshots.length && 
+                            prevSnapshots[0] === snapshots[0];
+        if (!isExtension) {
+            setCurrentFrame(0);
+        }
     }
 
     const onAnimationEndRef = useRef(onAnimationEnd);
     onAnimationEndRef.current = onAnimationEnd;
 
-    // Toplam animasyon süresini ~300ms ile sınırlamak için dinamik kare süresi hesaplaması
+    // Kalan kare sayısına göre dinamik hızlanma (catch-up) hesabı
+    const remainingFrames = snapshots ? snapshots.length - 1 - currentFrame : 0;
     const frameMs = snapshots
-        ? Math.max(50, Math.min(120, 300 / snapshots.length))
+        ? remainingFrames > 3
+            ? Math.max(20, Math.min(80, 240 / remainingFrames))
+            : Math.max(50, Math.min(120, 300 / snapshots.length))
         : 80;
 
     // Frame ilerletme — 1 framelik snapshot animasyonu tetiklemez (sadece ekrana çizer)
+    // requestAnimationFrame ile 60fps akıcılık ve mobil tarayıcı performansı
     useEffect(() => {
         if (!snapshots || snapshots.length === 0) return;
         if (snapshots.length === 1) return; // Başlangıç durumu: animasyon yok
@@ -124,8 +135,22 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
             return;
         }
 
-        const timer = setTimeout(() => setCurrentFrame(c => c + 1), frameMs);
-        return () => clearTimeout(timer);
+        let start: number | null = null;
+        let animationFrameId: number;
+
+        const step = (timestamp: number) => {
+            if (!start) start = timestamp;
+            const progress = timestamp - start;
+
+            if (progress >= frameMs) {
+                setCurrentFrame(c => c + 1);
+            } else {
+                animationFrameId = requestAnimationFrame(step);
+            }
+        };
+
+        animationFrameId = requestAnimationFrame(step);
+        return () => cancelAnimationFrame(animationFrameId);
     }, [currentFrame, snapshots, frameMs]);
 
     // VFX ses çalma

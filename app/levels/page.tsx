@@ -105,8 +105,8 @@ function LevelsPageContent() {
     isDragging?: boolean;
   }
 
-  const canvasWidth = 800;
-  const canvasHeight = 1050;
+  const [canvasWidth, setCanvasWidth] = useState(800);
+  const [canvasHeight, setCanvasHeight] = useState(1050);
 
   const nodesRef = useRef<PhysicsNode[]>([]);
   const elementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -120,67 +120,18 @@ function LevelsPageContent() {
   const animationFrameId = useRef<number | null>(null);
   const keyboardSelectedIdxRef = useRef<number | null>(null);
 
-  const handleNodePointerDown = useCallback((nodeId: string, e: React.PointerEvent) => {
-    e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    draggingNodeIdRef.current = nodeId;
-
-    const nodes = nodesRef.current;
-    const node = nodes.find(n => n.id === nodeId);
-    if (node) {
-      node.isDragging = true;
-      const canvas = document.getElementById('physics-canvas');
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect();
-        dragTargetRef.current = {
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top
-        };
-      }
-    }
-  }, []);
-
-  const handleNodePointerMove = useCallback((nodeId: string, e: React.PointerEvent) => {
-    if (draggingNodeIdRef.current === nodeId) {
-      const canvas = document.getElementById('physics-canvas');
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect();
-        dragTargetRef.current = {
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top
-        };
-      }
-    }
-  }, []);
-
-  const handleNodePointerUp = useCallback((nodeId: string, e: React.PointerEvent) => {
-    e.stopPropagation();
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    draggingNodeIdRef.current = null;
-
-    const nodes = nodesRef.current;
-    const node = nodes.find(n => n.id === nodeId);
-    if (node) {
-      node.isDragging = false;
-    }
-  }, []);
-
-
-
-  // ── Geri tuşu (popstate) ─────────────────────────────
-  useEffect(() => {
-    window.history.pushState({ levels: true }, '');
-    function handlePopState() {
-      router.replace('/');
-    }
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => {
     function check() {
-      setIsMobile(window.innerWidth < 600);
+      const width = window.innerWidth;
+      const mobile = width < 600;
+      setIsMobile(mobile);
+      if (mobile) {
+        setCanvasWidth(width);
+        setCanvasHeight(950);
+      } else {
+        setCanvasWidth(800);
+        setCanvasHeight(1050);
+      }
     }
     check();
     window.addEventListener('resize', check);
@@ -473,38 +424,7 @@ function LevelsPageContent() {
     }
   }, []);
 
-  const [gamepadSelectedNodeIndex, setGamepadSelectedNodeIndex] = useState<number | null>(null);
-
-  const defaultActiveIdx = useMemo(() => {
-    const idx = filteredPresets.findIndex((lv) => {
-      const isCompleted = lv.firestoreId ? playedMap.has(lv.firestoreId) : false;
-      const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
-      return !isLocked && !isCompleted;
-    });
-    return idx !== -1 ? idx : 0;
-  }, [filteredPresets, playedMap, lockedSet]);
-
-  useEffect(() => {
-    setGamepadSelectedNodeIndex(activeTab === 'campaign' ? defaultActiveIdx : 0);
-  }, [activeTab, viewMode, defaultActiveIdx]);
-
-  // Handle selected node kick (impulse) and centering when index changes
-  useEffect(() => {
-    if (activeTab === 'campaign' && viewMode === 'map' && gamepadSelectedNodeIndex !== null) {
-      const targetNode = nodesRef.current.find(n => n.levelIndex === gamepadSelectedNodeIndex);
-      if (targetNode) {
-        targetNode.vx += (Math.random() - 0.5) * 16;
-        targetNode.vy += (Math.random() - 0.5) * 16;
-      }
-      // Delay centering slightly to let physics load
-      const timer = setTimeout(() => {
-        if (initialScrolledRef.current) {
-          centerNodeAtIndex(gamepadSelectedNodeIndex);
-        }
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [gamepadSelectedNodeIndex, activeTab, viewMode, centerNodeAtIndex]);
+  const isLoopRunning = useRef(false);
 
   // Main Physics loop
   const loop = useCallback(() => {
@@ -553,11 +473,13 @@ function LevelsPageContent() {
     const k_anchor = 0.07;
     const damping = 0.83;
     const time = Date.now() * 0.0035;
+    let allSettled = true;
 
     for (let i = 0; i < count; i++) {
       const n = nodes[i];
 
       if (n.isDragging) {
+        allSettled = false;
         n.x += (dragTargetRef.current.x - n.x) * 0.4;
         n.y += (dragTargetRef.current.y - n.y) * 0.4;
         n.vx = 0;
@@ -579,6 +501,12 @@ function LevelsPageContent() {
         n.vy *= damping;
         n.x += n.vx;
         n.y += n.vy;
+
+        const vel = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+        const dist = Math.sqrt((n.x - n.anchorX) ** 2 + (n.y - n.anchorY) ** 2);
+        if (vel > 0.015 || dist > 0.15) {
+          allSettled = false;
+        }
       }
 
       const el = elementsRef.current.get(n.id);
@@ -638,8 +566,105 @@ function LevelsPageContent() {
       }
     }
 
+    if (allSettled && draggingNodeIdRef.current === null) {
+      isLoopRunning.current = false;
+      animationFrameId.current = null;
+      return;
+    }
+
     animationFrameId.current = requestAnimationFrame(loop);
   }, [centerActiveNode]);
+
+  const wakePhysics = useCallback(() => {
+    if (!isLoopRunning.current) {
+      isLoopRunning.current = true;
+      animationFrameId.current = requestAnimationFrame(loop);
+    }
+  }, [loop]);
+
+  const handleNodePointerDown = useCallback((nodeId: string, e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    draggingNodeIdRef.current = nodeId;
+
+    const nodes = nodesRef.current;
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) {
+      node.isDragging = true;
+      const canvas = document.getElementById('physics-canvas');
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        dragTargetRef.current = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+      }
+      wakePhysics();
+    }
+  }, [wakePhysics]);
+
+  const handleNodePointerMove = useCallback((nodeId: string, e: React.PointerEvent) => {
+    if (draggingNodeIdRef.current === nodeId) {
+      const canvas = document.getElementById('physics-canvas');
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        dragTargetRef.current = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+      }
+      wakePhysics();
+    }
+  }, [wakePhysics]);
+
+  const handleNodePointerUp = useCallback((nodeId: string, e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    draggingNodeIdRef.current = null;
+
+    const nodes = nodesRef.current;
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) {
+      node.isDragging = false;
+      wakePhysics();
+    }
+  }, [wakePhysics]);
+
+  const [gamepadSelectedNodeIndex, setGamepadSelectedNodeIndex] = useState<number | null>(null);
+
+  const defaultActiveIdx = useMemo(() => {
+    const idx = filteredPresets.findIndex((lv) => {
+      const isCompleted = lv.firestoreId ? playedMap.has(lv.firestoreId) : false;
+      const isLocked = lv.firestoreId ? lockedSet.has(lv.firestoreId) : false;
+      return !isLocked && !isCompleted;
+    });
+    return idx !== -1 ? idx : 0;
+  }, [filteredPresets, playedMap, lockedSet]);
+
+  useEffect(() => {
+    setGamepadSelectedNodeIndex(activeTab === 'campaign' ? defaultActiveIdx : 0);
+  }, [activeTab, viewMode, defaultActiveIdx]);
+
+  // Handle selected node kick (impulse) and centering when index changes
+  useEffect(() => {
+    if (activeTab === 'campaign' && viewMode === 'map' && gamepadSelectedNodeIndex !== null) {
+      const targetNode = nodesRef.current.find(n => n.levelIndex === gamepadSelectedNodeIndex);
+      if (targetNode) {
+        targetNode.vx += (Math.random() - 0.5) * 16;
+        targetNode.vy += (Math.random() - 0.5) * 16;
+        wakePhysics();
+      }
+      // Delay centering slightly to let physics load
+      const timer = setTimeout(() => {
+        if (initialScrolledRef.current) {
+          centerNodeAtIndex(gamepadSelectedNodeIndex);
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [gamepadSelectedNodeIndex, activeTab, viewMode, centerNodeAtIndex, wakePhysics]);
+
+
 
   // Initialize and update nodesRef on level data changes
   useEffect(() => {
@@ -738,9 +763,7 @@ function LevelsPageContent() {
 
     nodesRef.current = nodesList;
 
-    if (!animationFrameId.current) {
-      animationFrameId.current = requestAnimationFrame(loop);
-    }
+    wakePhysics();
 
     // Apply startup kick to make nodes float and settle
     setTimeout(() => {
@@ -748,6 +771,7 @@ function LevelsPageContent() {
         n.vx += (Math.random() - 0.5) * 8;
         n.vy += (Math.random() - 0.5) * 8;
       });
+      wakePhysics();
     }, 100);
 
     return () => {
@@ -755,8 +779,9 @@ function LevelsPageContent() {
         cancelAnimationFrame(animationFrameId.current);
         animationFrameId.current = null;
       }
+      isLoopRunning.current = false;
     };
-  }, [filteredPresets, selectedPartId, viewMode, activeTab, partsMap, lockedSet, playedMap, loop]);
+  }, [filteredPresets, selectedPartId, viewMode, activeTab, partsMap, lockedSet, playedMap, loop, wakePhysics, canvasWidth, canvasHeight]);
 
   // Keyboard Navigation Listener
   useEffect(() => {
@@ -1025,19 +1050,19 @@ function LevelsPageContent() {
       <div 
         style={{ 
           position: 'absolute', 
-          top: 12, 
-          left: 12, 
-          right: 12, 
+          top: isMobile ? 8 : 12, 
+          left: isMobile ? 8 : 12, 
+          right: isMobile ? 8 : 12, 
           zIndex: 10,
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'space-between', 
-          padding: '8px 16px', 
+          padding: isMobile ? '6px 10px' : '8px 16px', 
           background: 'rgba(8, 12, 28, 0.75)', 
           backdropFilter: 'blur(14px)',
           WebkitBackdropFilter: 'blur(14px)',
           border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: 14,
+          borderRadius: isMobile ? 10 : 14,
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 16px rgba(0, 255, 136, 0.03)'
         }}
       >
@@ -1048,7 +1073,7 @@ function LevelsPageContent() {
             background: 'rgba(255,255,255,0.03)', 
             border: '1px solid rgba(255,255,255,0.08)', 
             borderRadius: 8,
-            padding: '6px 12px',
+            padding: isMobile ? '6px 8px' : '6px 12px',
             color: '#94a3b8', 
             fontSize: 11, 
             fontWeight: 700,
@@ -1114,7 +1139,7 @@ function LevelsPageContent() {
           <button
             onClick={() => setActiveTab('campaign')}
             style={{
-              padding: '6px 14px', 
+              padding: isMobile ? '5px 8px' : '6px 14px', 
               fontSize: 11, 
               fontWeight: 700,
               background: activeTab === 'campaign' ? 'rgba(0, 255, 136, 0.08)' : 'transparent',
@@ -1133,7 +1158,7 @@ function LevelsPageContent() {
           <button
             onClick={() => setActiveTab('custom')}
             style={{
-              padding: '6px 14px', 
+              padding: isMobile ? '5px 8px' : '6px 14px', 
               fontSize: 11, 
               fontWeight: 700,
               background: activeTab === 'custom' ? 'rgba(0, 196, 255, 0.08)' : 'transparent',
@@ -1170,20 +1195,20 @@ function LevelsPageContent() {
         </div>
 
         {/* Right Actions & Score */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 8 }}>
           {/* Trophy Score Badge */}
           {totalScore > 0 && (
             <div 
               style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
-                gap: 4, 
+                gap: 2, 
                 background: 'rgba(255, 215, 0, 0.06)',
                 border: '1px solid rgba(255, 215, 0, 0.2)',
                 borderRadius: 8,
-                padding: '4px 8px',
+                padding: isMobile ? '3px 6px' : '4px 8px',
                 color: '#ffd700',
-                fontSize: 11,
+                fontSize: isMobile ? 10 : 11,
                 fontWeight: 800,
                 textShadow: '0 0 6px rgba(255,215,0,0.3)'
               }}
@@ -1222,7 +1247,7 @@ function LevelsPageContent() {
             onClick={() => router.push('/editor')}
             style={{ 
               fontSize: 11, 
-              padding: '6px 12px', 
+              padding: isMobile ? '6px 8px' : '6px 12px', 
               fontWeight: 800, 
               letterSpacing: '0.04em', 
               background: 'linear-gradient(135deg, rgba(0, 196, 255, 0.1) 0%, rgba(0, 196, 255, 0.2) 100%)', 
@@ -1325,13 +1350,13 @@ function LevelsPageContent() {
                 width: '100%',
                 height: '100%',
                 overflowY: 'auto',
-                overflowX: 'auto',
+                overflowX: isMobile ? 'hidden' : 'auto',
                 position: 'absolute',
                 inset: 0,
                 zIndex: 1,
                 cursor: isPanning ? 'grabbing' : 'grab',
                 userSelect: 'none',
-                touchAction: 'pan-x pan-y',
+                touchAction: isMobile ? 'pan-y' : 'pan-x pan-y',
                 WebkitOverflowScrolling: 'touch',
                 paddingBottom: 110,
                 paddingTop: 76
@@ -1501,7 +1526,7 @@ function LevelsPageContent() {
                             strokeWidth="10"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            style={{ opacity: 0.15, filter: 'blur(5px)' }}
+                            style={{ opacity: isMobile ? 0.35 : 0.15, filter: isMobile ? 'none' : 'blur(5px)' }}
                           />
                         )}
 
@@ -1531,7 +1556,7 @@ function LevelsPageContent() {
                             strokeWidth="3.2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            style={{ opacity: 0.8, filter: `drop-shadow(0 0 3px ${strokeColor})` }}
+                            style={{ opacity: 0.8, filter: isMobile ? 'none' : `drop-shadow(0 0 3px ${strokeColor})` }}
                           />
                         )}
 
@@ -1837,14 +1862,14 @@ function LevelsPageContent() {
                           <div
                             style={{
                               position: 'absolute',
-                              width: 50,
-                              height: 50,
+                              width: isMobile ? 56 : 50,
+                              height: isMobile ? 56 : 50,
                               borderRadius: '50%',
                               border: `2px solid ${activeColor}`,
                               animation: 'activeHalo 2.5s ease-in-out infinite',
                               pointerEvents: 'none',
                               left: '50%',
-                              top: '16px',
+                              top: isMobile ? '19px' : '16px',
                               transform: 'translate(-50%, -50%)'
                             }}
                           />
@@ -1856,7 +1881,7 @@ function LevelsPageContent() {
                             style={{
                               position: 'absolute',
                               left: '50%',
-                              top: '16px',
+                              top: isMobile ? '19px' : '16px',
                               width: 0,
                               height: 0,
                               pointerEvents: 'none',
@@ -1866,10 +1891,10 @@ function LevelsPageContent() {
                             <div
                               style={{
                                 position: 'absolute',
-                                width: 46,
-                                height: 46,
-                                left: -23,
-                                top: -23,
+                                width: isMobile ? 52 : 46,
+                                height: isMobile ? 52 : 46,
+                                left: isMobile ? -26 : -23,
+                                top: isMobile ? -26 : -23,
                                 borderRadius: '50%',
                                 border: `2.5px solid #ffd700`,
                                 boxShadow: '0 0 15px #ffd700',
@@ -1885,7 +1910,7 @@ function LevelsPageContent() {
                             style={{
                               position: 'absolute',
                               left: '50%',
-                              top: '16px',
+                              top: isMobile ? '19px' : '16px',
                               width: 0,
                               height: 0,
                               pointerEvents: 'none',
@@ -1895,10 +1920,10 @@ function LevelsPageContent() {
                             <div
                               style={{
                                 position: 'absolute',
-                                width: 54,
-                                height: 54,
-                                left: -27,
-                                top: -27,
+                                width: isMobile ? 60 : 54,
+                                height: isMobile ? 60 : 54,
+                                left: isMobile ? -30 : -27,
+                                top: isMobile ? -30 : -27,
                                 animation: 'starOrbit 15s linear infinite',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -1908,7 +1933,7 @@ function LevelsPageContent() {
                               {[1, 2, 3].map((n) => {
                                 const angle = (n - 1) * 120;
                                 const rad = (angle * Math.PI) / 180;
-                                const radius = 24;
+                                const radius = isMobile ? 27 : 24;
                                 const sx = Math.cos(rad) * radius;
                                 const sy = Math.sin(rad) * radius;
 
@@ -1934,8 +1959,8 @@ function LevelsPageContent() {
                         {/* Core Node Button */}
                         <div
                           style={{
-                            width: 32,
-                            height: 32,
+                            width: isMobile ? 38 : 32,
+                            height: isMobile ? 38 : 32,
                             borderRadius: '50%',
                             background: isLocked ? '#090d16' : (isCompleted ? `${activeColor}15` : '#060b13'),
                             border: `2px solid ${isLocked ? '#1e293b' : (isCurrent ? '#ffd700' : activeColor)}`,
@@ -1943,7 +1968,7 @@ function LevelsPageContent() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: 12,
+                            fontSize: isMobile ? 14 : 12,
                             fontWeight: 800,
                             boxShadow: isLocked 
                               ? 'none' 
@@ -1959,7 +1984,7 @@ function LevelsPageContent() {
                         <div
                           style={{
                             position: 'absolute',
-                            top: 36,
+                            top: isMobile ? 42 : 36,
                             background: 'rgba(3,7,18,0.92)',
                             border: '1px solid rgba(255,255,255,0.08)',
                             borderRadius: 6,
@@ -2015,23 +2040,23 @@ function LevelsPageContent() {
           <div
             style={{
               position: 'absolute',
-              bottom: 86, // sits just above the horizontal world cards
+              bottom: isMobile ? 74 : 86, // sits just above the horizontal world cards
               left: '50%',
               transform: 'translateX(-50%)',
-              width: 'calc(100% - 24px)',
+              width: isMobile ? 'calc(100% - 16px)' : 'calc(100% - 24px)',
               maxWidth: 420,
               zIndex: 15,
               background: 'rgba(8, 12, 28, 0.85)',
               backdropFilter: 'blur(16px)',
               WebkitBackdropFilter: 'blur(16px)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: 16,
-              padding: '12px 16px',
+              borderRadius: isMobile ? 12 : 16,
+              padding: isMobile ? '8px 12px' : '12px 16px',
               boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(0, 255, 136, 0.03)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 12,
+              gap: isMobile ? 8 : 12,
               transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'
             }}
           >
@@ -2268,12 +2293,12 @@ function LevelsPageContent() {
         <div 
           style={{ 
             position: 'absolute', 
-            bottom: 16, 
-            left: 12, 
-            right: 12, 
+            bottom: isMobile ? 8 : 16, 
+            left: isMobile ? 8 : 12, 
+            right: isMobile ? 8 : 12, 
             zIndex: 10,
             display: 'flex',
-            gap: 10,
+            gap: isMobile ? 8 : 10,
             overflowX: 'auto',
             padding: '6px 4px',
             WebkitOverflowScrolling: 'touch',
@@ -2301,9 +2326,9 @@ function LevelsPageContent() {
                 onClick={() => setSelectedPartId(p.id)}
                 style={{
                   flexShrink: 0,
-                  padding: '10px 16px',
-                  minWidth: 165,
-                  borderRadius: 12,
+                  padding: isMobile ? '6px 10px' : '10px 16px',
+                  minWidth: isMobile ? 130 : 165,
+                  borderRadius: isMobile ? 10 : 12,
                   background: isActive ? 'rgba(255, 215, 0, 0.09)' : 'rgba(8, 12, 28, 0.7)',
                   backdropFilter: 'blur(12px)',
                   WebkitBackdropFilter: 'blur(12px)',
@@ -2315,13 +2340,13 @@ function LevelsPageContent() {
                   transition: 'all 0.22s cubic-bezier(0.25, 0.8, 0.25, 1)',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 3
+                  gap: isMobile ? 2 : 3
                 }}
               >
-                <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: isActive ? '#ffd700' : '#475569' }}>
+                <span style={{ fontSize: isMobile ? 8 : 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: isActive ? '#ffd700' : '#475569' }}>
                   CHAPTER {idx + 1}
                 </span>
-                <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                <span style={{ fontSize: isMobile ? 11 : 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
                   {p.name}
                 </span>
                 {totalCount > 0 && (
@@ -2359,7 +2384,9 @@ function LevelsPageContent() {
           }}
           style={{
             position: 'absolute',
-            bottom: 134, 
+            bottom: isMobile
+              ? (gamepadSelectedNodeIndex !== null ? 186 : 126)
+              : 134,
             right: 16,
             zIndex: 15,
             width: 44,
@@ -2376,7 +2403,7 @@ function LevelsPageContent() {
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            transition: 'all 0.2s ease',
+            transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
           }}
           title="Kaldığım Seviyeye Git"
         >
@@ -2390,7 +2417,9 @@ function LevelsPageContent() {
           onClick={() => setViewMode(prev => prev === 'map' ? 'list' : 'map')}
           style={{
             position: 'absolute',
-            bottom: viewMode === 'map' ? 82 : 24, 
+            bottom: viewMode === 'map'
+              ? (isMobile ? (gamepadSelectedNodeIndex !== null ? 138 : 78) : 82)
+              : (isMobile ? 16 : 24),
             right: 16,
             zIndex: 15,
             width: 44,
@@ -2407,7 +2436,7 @@ function LevelsPageContent() {
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            transition: 'all 0.2s ease',
+            transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
           }}
           title={viewMode === 'map' ? t('levels.view_list') : t('levels.view_map')}
         >

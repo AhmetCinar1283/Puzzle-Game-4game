@@ -42,6 +42,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
     const entitiesRef = useRef<Entity[]>(initialEntities);
     const gridRef = useRef<Cell[][]>(initialGrid);
     const isGameOverRef = useRef(false);
+    const isAnimatingInternalRef = useRef(false);
 
     const [snapshots, setSnapshots] = useState<TickSnapshot[]>(() => [{
         tickNumber: 0,
@@ -108,6 +109,11 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
 
             tickNumber++;
 
+            const tickVfxEvents = [...result.vfxEvents];
+            if (tickNumber === 1) {
+                tickVfxEvents.unshift('sound_move');
+            }
+
             // Yok edilen entity'leri grid'den silmeden önce klonla (animasyonun doğru karede görünmesi için)
             const snapshotEntities = cloneEntities(entitiesRef.current);
 
@@ -142,7 +148,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
                 tickNumber,
                 grid: cloneGrid(gridRef.current),
                 entities: snapshotEntities,
-                vfxEvents: result.vfxEvents,
+                vfxEvents: tickVfxEvents,
                 uiEvents: tickUiEvents,
             });
 
@@ -155,7 +161,12 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
             }
         }
 
-        setSnapshots(collectedSnapshots);
+        setSnapshots(prev => {
+            if (prev.length === 0 || !isAnimatingInternalRef.current) {
+                return collectedSnapshots;
+            }
+            return [...prev, ...collectedSnapshots.slice(1)];
+        });
         if (collectedUi.length > 0) {
             setUiEvents(prev => [...prev, ...collectedUi]);
         }
@@ -164,11 +175,31 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
         }
         if (collectedSnapshots.length > 1) {
             setIsAnimating(true);
+            isAnimatingInternalRef.current = true;
         }
     }, [levelEdges, trailCollision]);
 
     const onAnimationEnd = useCallback(() => {
         setIsAnimating(false);
+        isAnimatingInternalRef.current = false;
+        setSnapshots(prev => {
+            if (prev.length > 0) {
+                return [prev[prev.length - 1]];
+            }
+            return prev;
+        });
+    }, []);
+
+    const cancelAnimation = useCallback(() => {
+        if (!isAnimatingInternalRef.current) return;
+        setSnapshots(prev => {
+            if (prev.length > 0) {
+                return [prev[prev.length - 1]];
+            }
+            return prev;
+        });
+        setIsAnimating(false);
+        isAnimatingInternalRef.current = false;
     }, []);
 
     const clearUiEvents = useCallback(() => setUiEvents([]), []);
@@ -181,6 +212,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
         setSnapshots([]);
         setUiEvents([]);
         setIsAnimating(false);
+        isAnimatingInternalRef.current = false;
     }, []);
 
     return {
@@ -190,6 +222,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
         uiEvents,
         executeTurn,
         onAnimationEnd,
+        cancelAnimation,
         clearUiEvents,
         reset,
         getEntities,

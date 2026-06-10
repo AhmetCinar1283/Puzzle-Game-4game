@@ -79,16 +79,13 @@ export function PlayScreen({
         uiEvents,
         executeTurn,
         onAnimationEnd,
+        cancelAnimation,
         clearUiEvents,
         getEntities,
     } = useGameEngine({ initialEntities, initialGrid, levelEdges, trailCollision });
 
-    const isAnimatingRef = useRef(isAnimating);
     const isGameOverRef  = useRef(isGameOver);
-    isAnimatingRef.current = isAnimating;
     isGameOverRef.current  = isGameOver;
-
-    const bufferedInputRef = useRef<Direction | null>(null);
 
     // ── Ses tetikleyicileri ─────────────────────────────────────────────────
     const prevIsGameOver = useRef(false);
@@ -134,7 +131,6 @@ export function PlayScreen({
     // ── UI Button Handler ───────────────────────────────────────────────────
     const handleButtonPress = useCallback((buttonType: UIButtonType) => {
         clearUiEvents();
-        bufferedInputRef.current = null;
         if (buttonType === 'restart') {
             setMoveCount(0);
         }
@@ -143,6 +139,10 @@ export function PlayScreen({
 
     // ── Klavye kontrolü ────────────────────────────────────────────────────
     const triggerMove = useCallback((rawDirection: Direction) => {
+        if (isAnimating) {
+            cancelAnimation();
+        }
+
         const intents: ActionIntent[] = getEntities()
             .filter(ent => ent.type === 'player' && !ent.customData.isLocked)
             .map(ent => {
@@ -162,9 +162,8 @@ export function PlayScreen({
             executeTurn(intents);
             onMoveExecuted?.(rawDirection);
             setMoveCount(c => c + 1);
-            play('move');
         }
-    }, [getEntities, executeTurn, onMoveExecuted, play]);
+    }, [getEntities, executeTurn, onMoveExecuted, isAnimating, cancelAnimation]);
 
     const handleKey = useCallback((e: KeyboardEvent) => {
         if (e.key === 'r' || e.key === 'R') {
@@ -182,22 +181,12 @@ export function PlayScreen({
         const rawDirection = KEY_TO_DIRECTION[e.key];
         if (!rawDirection) return;
         e.preventDefault();
-        if (isAnimatingRef.current) {
-            bufferedInputRef.current = rawDirection;
-            return;
-        }
-        bufferedInputRef.current = null;
         triggerMove(rawDirection);
     }, [triggerMove, handleButtonPress]);
 
     const handleAnimationEnd = useCallback(() => {
         onAnimationEnd();
-        if (bufferedInputRef.current && !isGameOverRef.current) {
-            const nextDir = bufferedInputRef.current;
-            bufferedInputRef.current = null;
-            triggerMove(nextDir);
-        }
-    }, [onAnimationEnd, triggerMove]);
+    }, [onAnimationEnd]);
 
     useEffect(() => {
         window.addEventListener('keydown', handleKey);
@@ -208,11 +197,6 @@ export function PlayScreen({
     useGamepad({
         onMove: useCallback((dir: Direction) => {
             if (isGameOverRef.current) return;
-            if (isAnimatingRef.current) {
-                bufferedInputRef.current = dir;
-                return;
-            }
-            bufferedInputRef.current = null;
             triggerMove(dir);
         }, [triggerMove]),
         onRestart: useCallback(() => {
@@ -255,11 +239,7 @@ export function PlayScreen({
             direction = dy > 0 ? 'down' : 'up';
         }
 
-        if (isAnimatingRef.current) {
-            bufferedInputRef.current = direction;
-        } else {
-            triggerMove(direction);
-        }
+        triggerMove(direction);
     }, [triggerMove]);
 
     // ── UI Button Handler ───────────────────────────────────────────────────
