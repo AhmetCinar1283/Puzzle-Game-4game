@@ -109,7 +109,7 @@ function PlayContent() {
                     if (cancelled) return;
                     if (!raw) { setError(true); setLoading(false); return; }
                     
-                    if ((raw.isNeedSync || !raw.grid?.length) && raw.firestoreId) {
+                    if ((raw.isNeedSync || !raw.grid?.length || raw.rooms === undefined) && raw.firestoreId) {
                         try {
                             const { fetchAndCacheLevel } = await import('@/app/src/lib/firebase/sync');
                             await fetchAndCacheLevel(raw.firestoreId, raw.id!);

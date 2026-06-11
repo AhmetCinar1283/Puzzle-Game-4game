@@ -67,6 +67,9 @@ export async function approveLevelRequest(
     prevLevelId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+    ...(req.rooms && { rooms: req.rooms }),
+    ...(req.controlMode && { controlMode: req.controlMode }),
+    ...(req.initialControlledRooms && { initialControlledRooms: req.initialControlledRooms }),
   });
 
   // 3. Build order entry

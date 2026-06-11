@@ -36,6 +36,9 @@ export interface LevelRequest {
   initialBoxes?: StoredLevel['initialBoxes'];
   conveyorPowerRequired?: StoredLevel['conveyorPowerRequired'];
   difficulty?: 1 | 2 | 3 | 4;
+  rooms?: any[];
+  controlMode?: 'all_rooms' | 'selected_room';
+  initialControlledRooms?: string[];
   // Submission metadata
   submittedBy: string;
   creatorName: string;
@@ -156,6 +159,11 @@ export async function submitLevelRequest(
   difficulty?: 1 | 2 | 3 | 4,
   creatorName?: string,
 ): Promise<string> {
+  const rooms = levelData.rooms ? levelData.rooms.map((r: any) => ({
+    ...r,
+    grid: typeof r.grid === 'string' ? r.grid : JSON.stringify(r.grid)
+  })) : undefined;
+
   const ref = await addDoc(collection(db, 'levelRequests'), {
     name: levelData.name,
     width: levelData.width,
@@ -174,6 +182,9 @@ export async function submitLevelRequest(
     status: 'pending',
     submittedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+    ...(rooms && { rooms }),
+    ...(levelData.controlMode && { controlMode: levelData.controlMode }),
+    ...(levelData.initialControlledRooms && { initialControlledRooms: levelData.initialControlledRooms }),
   });
   return ref.id;
 }
@@ -187,6 +198,11 @@ export async function updateLevelRequest(
   levelData: LevelData,
   difficulty?: 1 | 2 | 3 | 4,
 ): Promise<void> {
+  const rooms = levelData.rooms ? levelData.rooms.map((r: any) => ({
+    ...r,
+    grid: typeof r.grid === 'string' ? r.grid : JSON.stringify(r.grid)
+  })) : undefined;
+
   await updateDoc(doc(db, 'levelRequests', requestId), {
     name: levelData.name,
     width: levelData.width,
@@ -200,6 +216,9 @@ export async function updateLevelRequest(
     conveyorPowerRequired: levelData.conveyorPowerRequired ?? [],
     difficulty: difficulty ?? null,
     updatedAt: serverTimestamp(),
+    rooms: rooms ?? null,
+    controlMode: levelData.controlMode ?? null,
+    initialControlledRooms: levelData.initialControlledRooms ?? null,
   });
 }
 
@@ -243,6 +262,9 @@ export async function getLevelRequests(
       submittedAt: toMs(data.submittedAt),
       updatedAt: toMs(data.updatedAt),
       adminNote: data.adminNote,
+      rooms: data.rooms ?? undefined,
+      controlMode: data.controlMode ?? undefined,
+      initialControlledRooms: data.initialControlledRooms ?? undefined,
     } as LevelRequest;
   });
 }
