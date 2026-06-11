@@ -37,10 +37,19 @@ export const boxBehavior: EntityBehavior = {
         return intents;
     },
 
-    onPushed: (self, pusher, appliedForce, direction?: Direction) => {
+    onPushed: (self, pusher, appliedForce, direction?: Direction, pusherPlayerIndex?: number) => {
         if (self.traits.has('heavy'))                           return { status: 'reject' };
         if (appliedForce <= 0)                                  return { status: 'reject' };
         if (self.customData.requiresPower && !self.customData.isPowered) return { status: 'reject' };
+
+        // Color Filter check
+        if (self.customData.colorFilterEnabled) {
+            const allowedIndex = self.customData.colorFilterIndex as number;
+            const actualPusherIndex = pusherPlayerIndex ?? (pusher.type === 'player' ? (pusher.customData.playerIndex as number) : undefined);
+            if (actualPusherIndex !== undefined && actualPusherIndex !== allowedIndex) {
+                return { status: 'reject' };
+            }
+        }
 
         // İtme yönü pozisyon farkından hesaplanır — pusher'ın physics.direction'ına
         // güvenilmez çünkü zincir iterken pusher başka yöne bakıyor olabilir.
@@ -65,6 +74,7 @@ export const boxBehavior: EntityBehavior = {
                     col: self.position.col + dc,
                 },
                 force: appliedForce,
+                isPush: true,
             },
             forceRemaining: appliedForce,
         };

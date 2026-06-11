@@ -25,6 +25,7 @@ export const playerBehavior: EntityBehavior = {
                     col: self.position.col + delta.col,
                 },
                 force: self.physics.force,
+                pusherPlayerIndex: self.customData.playerIndex as number,
             });
         }
 

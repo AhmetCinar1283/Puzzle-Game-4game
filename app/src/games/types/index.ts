@@ -74,6 +74,10 @@ export interface BoxDef {
   position: Position;
   /** If true, box can only be pushed when adjacent to a powered cell. Default: always pushable. */
   requiresPower?: boolean;
+  durabilityEnabled?: boolean;
+  durability?: number;
+  colorFilterEnabled?: boolean;
+  colorFilterIndex?: number;
 }
 
 export interface TrampolineCellConfig {

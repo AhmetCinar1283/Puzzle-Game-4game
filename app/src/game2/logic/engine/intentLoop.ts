@@ -682,9 +682,12 @@ function attemptPushing(
         const blockerBehavior = ENTITY_BEHAVIORS[blocker.type];
         if (!blockerBehavior?.onPushed) continue;
 
-        const response = blockerBehavior.onPushed(blocker, intentEntity, intent.force ?? 0, moveDir);
+        const response = blockerBehavior.onPushed(blocker, intentEntity, intent.force ?? 0, moveDir, intent.pusherPlayerIndex);
 
         if (response.status === 'accept') {
+            if (intent.pusherPlayerIndex !== undefined) {
+                response.resultingIntent.pusherPlayerIndex = intent.pusherPlayerIndex;
+            }
             let boxTarget = response.resultingIntent.targetPos;
             if (boxTarget) {
                 const boxDir = inferMoveDirection(blocker.position, boxTarget, levelBounds);

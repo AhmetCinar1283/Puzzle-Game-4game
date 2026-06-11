@@ -93,6 +93,8 @@ export interface ActionIntent {
     // 'move' için:
     targetPos?: Position;
     force?: number;
+    pusherPlayerIndex?: number;
+    isPush?: boolean;
 
     // 'fall' için:
     newZ?: number;
