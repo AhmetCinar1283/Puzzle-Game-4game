@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useT } from '@/app/src/contexts/LanguageContext';
+import { useGamepad } from '@/app/src/hooks/useGamepad';
 
 interface WorkerResult {
   stars: 1 | 2 | 3;
@@ -77,6 +79,34 @@ function Star({ n, loading, workerResult }: { n: 1 | 2 | 3; loading: boolean; wo
 export default function WinOverlay({ moveCount, onRestart, onNextLevel, workerResult }: WinOverlayProps) {
   const t = useT();
   const loading = workerResult == null;
+
+  // Handle keyboard Enter key
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (onNextLevel) {
+          onNextLevel();
+        } else {
+          onRestart();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onNextLevel, onRestart]);
+
+  // Handle Gamepad Confirm / Restart buttons
+  useGamepad({
+    onConfirm: () => {
+      if (onNextLevel) {
+        onNextLevel();
+      } else {
+        onRestart();
+      }
+    },
+    onRestart,
+  });
 
   return (
     <AnimatePresence>

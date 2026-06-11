@@ -5,6 +5,7 @@ export type CellType =
   | 'target_1'
   | 'target_2'
   | 'direction_toggle'
+  | 'control_switch'
   | 'ice'
   | 'power_node'
   | 'conveyor_up'
@@ -37,6 +38,7 @@ export type MoveAnimType = 'portal' | 'teleport' | 'ice' | 'conveyor' | 'normal'
 export interface Position {
   row: number;
   col: number;
+  roomId?: string;
 }
 
 /** A position waypoint that also carries the entity's height (z) at that step.
@@ -118,7 +120,10 @@ export interface LevelData {
   trampolineConfig?: TrampolineCellConfig[];
 
   difficulty?: 1 | 2 | 3 | 4;
-  creatorName?: string
+  creatorName?: string;
+  rooms?: any[];
+  controlMode?: 'all_rooms' | 'selected_room';
+  initialControlledRooms?: string[];
 }
 
 export interface GameObjectState {

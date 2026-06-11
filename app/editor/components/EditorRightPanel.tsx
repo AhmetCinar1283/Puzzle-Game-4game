@@ -19,6 +19,7 @@ export default function EditorRightPanel({ isMobile, visible }: { isMobile: bool
     firestoreEditId, setFirestoreEditId, publishStatus, doPublish,
     generateLevelData, setGeneratorDialogOpen,
     optimalSolution, optimalSolutionMoves,
+    rooms, edges, setEdges,
   } = useEditorContext();
 
   const [pasteError, setPasteError] = useState('');
@@ -75,6 +76,80 @@ export default function EditorRightPanel({ isMobile, visible }: { isMobile: bool
         </label>
       </Sec>
 
+      {/* Room boundary portals targets configuration */}
+      {Object.entries(edges).some(([_, config]) => config?.type === 'portal') && (
+        <Sec title="🚪 Portal Connections">
+          {(['top', 'bottom', 'left', 'right'] as const).map((side) => {
+            const config = edges[side];
+            if (config?.type !== 'portal') return null;
+            return (
+              <div key={side} style={{ marginBottom: 12, borderBottom: '1px solid rgba(148,163,184,0.1)', paddingBottom: 8 }}>
+                <Lbl style={{ textTransform: 'capitalize', color: '#a855f7' }}>{side} Portal:</Lbl>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                  <div>
+                    <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Target Room:</span>
+                    <select
+                      value={config.targetRoomId ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEdges((prev) => ({
+                          ...prev,
+                          [side]: { ...prev[side], targetRoomId: val || undefined }
+                        }));
+                      }}
+                      style={{
+                        background: '#0f172a',
+                        border: '1px solid rgba(148,163,184,0.2)',
+                        borderRadius: 4,
+                        color: '#e2e8f0',
+                        width: '100%',
+                        fontSize: 11,
+                        padding: '2px 4px',
+                        outline: 'none',
+                      }}
+                    >
+                      <option value="">-- Opposite Edge (Wrapping) --</option>
+                      {rooms.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name} ({r.id})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Target Edge:</span>
+                    <select
+                      value={config.targetEdge ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEdges((prev) => ({
+                          ...prev,
+                          [side]: { ...prev[side], targetEdge: val || undefined }
+                        }));
+                      }}
+                      style={{
+                        background: '#0f172a',
+                        border: '1px solid rgba(148,163,184,0.2)',
+                        borderRadius: 4,
+                        color: '#e2e8f0',
+                        width: '100%',
+                        fontSize: 11,
+                        padding: '2px 4px',
+                        outline: 'none',
+                      }}
+                    >
+                      <option value="">-- Opposite --</option>
+                      <option value="top">Top Edge</option>
+                      <option value="bottom">Bottom Edge</option>
+                      <option value="left">Left Edge</option>
+                      <option value="right">Right Edge</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </Sec>
+      )}
+
       {objects.map((obj) => {
         const color = obj.id === 1 ? '#00ff88' : '#00c4ff';
         const emoji = obj.id === 1 ? '🟢' : '🔵';
@@ -83,7 +158,7 @@ export default function EditorRightPanel({ isMobile, visible }: { isMobile: bool
             <div style={{ marginBottom: 8 }}>
               <Lbl>{t('editor.position')}</Lbl>
               <span style={{ fontSize: 12, color: obj.row !== null ? color : '#334155' }}>
-                {obj.row !== null ? `(${obj.row}, ${obj.col})` : t('editor.not_placed')}
+                {obj.row !== null ? `${obj.roomId ?? 'main'} (${obj.row}, ${obj.col})` : t('editor.not_placed')}
               </span>
               {obj.row !== null && (
                 <button

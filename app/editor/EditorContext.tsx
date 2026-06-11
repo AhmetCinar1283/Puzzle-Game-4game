@@ -26,8 +26,22 @@ export interface EditorContextValue {
   trailCollision: boolean; setTrailCollision: (v: boolean) => void;
   difficulty: 1 | 2 | 3 | 4; setDifficulty: (d: 1 | 2 | 3 | 4) => void;
   savedRequestId: string | null;
-  edges: Record<'top' | 'bottom' | 'left' | 'right', EdgeBehavior>;
-  setEdges: React.Dispatch<React.SetStateAction<Record<'top' | 'bottom' | 'left' | 'right', EdgeBehavior>>>;
+  
+  // Multi-room support
+  rooms: any[];
+  setRooms: React.Dispatch<React.SetStateAction<any[]>>;
+  activeRoomId: string;
+  setActiveRoomId: (id: string) => void;
+  controlMode: 'all_rooms' | 'selected_room';
+  setControlMode: (mode: 'all_rooms' | 'selected_room') => void;
+  switchActiveRoom: (id: string) => void;
+  addRoom: () => void;
+  deleteRoom: (id: string) => void;
+  updateRoomName: (id: string, name: string) => void;
+  updateRoomLayoutPosition: (id: string, x: number, y: number) => void;
+
+  edges: Record<'top' | 'bottom' | 'left' | 'right', any>;
+  setEdges: React.Dispatch<React.SetStateAction<Record<'top' | 'bottom' | 'left' | 'right', any>>>;
   grid: CellType[][];
   setGrid: React.Dispatch<React.SetStateAction<CellType[][]>>;
   lockedCells: Record<string, boolean>;

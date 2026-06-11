@@ -63,6 +63,7 @@ function EditorInner() {
     conveyorConfig: s.conveyorConfig, setConveyorConfig: s.setConveyorConfig,
     trampolineConfig: s.trampolineConfig, setTrampolineConfig: s.setTrampolineConfig,
     pushGridHistory: s.pushGridHistory,
+    activeRoomId: s.activeRoomId,
   });
 
   // Ctrl+Z undo
@@ -176,10 +177,13 @@ function EditorInner() {
                 key={s.testLevel.id}
                 levelName={s.testLevel.name}
                 initialEntities={convertToGame2State(s.testLevel as any).entities}
-                initialGrid={convertToGame2State(s.testLevel as any).grid}
+                initialRooms={convertToGame2State(s.testLevel as any).rooms}
+                controlMode={convertToGame2State(s.testLevel as any).controlMode}
+                initialControlledRooms={convertToGame2State(s.testLevel as any).initialControlledRooms}
                 levelEdges={s.testLevel.edges as any}
                 trailCollision={!!s.testLevel.trailCollision}
                 onMoveExecuted={() => {}}
+                isTestMode={true}
                 onButtonPressed={(btn) => {
                   if (btn === 'menu' || btn === 'next_level') {
                     s.setTestLevel(null);

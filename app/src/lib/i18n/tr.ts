@@ -222,6 +222,8 @@ const tr: Record<string, string> = {
   'win.solved_in': '{n} hamlede çözüldü',
   'win.restart': 'YENİDEN',
   'win.next_level': 'SONRAKI LEVEL →',
+  'win.end_test': 'Testi Sonlandır',
+  'win.test_success': 'Test Başarılı!',
 
   // Lost overlay
   'lost.forbidden_title': 'Yasak Bölge',

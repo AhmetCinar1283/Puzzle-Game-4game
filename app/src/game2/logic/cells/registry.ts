@@ -14,6 +14,7 @@ import { conveyorBehavior,   conveyorDef   } from './conveyorCell';
 import { trampolineBehavior, trampolineDef } from './trampolineCell';
 import { teleportBehavior,   teleportDef   } from './teleporterCell';
 import { targetBehavior,     targetDef     } from './targetCell';
+import { controlSwitchBehavior, controlSwitchDef } from './controlSwitchCell';
 
 export const CELL_BEHAVIORS: Record<Cell['type'], CellBehavior> = {
     'normal':     normalBehavior,
@@ -26,6 +27,7 @@ export const CELL_BEHAVIORS: Record<Cell['type'], CellBehavior> = {
     'trampoline': trampolineBehavior,
     'teleport':   teleportBehavior,
     'target':     targetBehavior,
+    'control_switch': controlSwitchBehavior,
 };
 
 export const CELL_DEFS: Record<Cell['type'], CellDef> = {
@@ -39,4 +41,5 @@ export const CELL_DEFS: Record<Cell['type'], CellDef> = {
     'trampoline': trampolineDef,
     'teleport':   teleportDef,
     'target':     targetDef,
+    'control_switch': controlSwitchDef,
 };

@@ -4,6 +4,7 @@
 import { CellBehavior, CellDef } from '../cellTypes';
 import { Direction, DIRECTION_DELTA } from '../types';
 import { getNextTopologyPosition } from '../engine/getNextTopologyPosition';
+import { getCellAt } from '../engine/rooms';
 
 const TRAMPOLINE_FORCE  = 3;
 
@@ -21,7 +22,6 @@ export const trampolineBehavior: CellBehavior = {
         const baseForce = (cell.customData.force as number) ?? TRAMPOLINE_FORCE;
 
         // Fırlatılacak yöndeki kareleri tarayıp en uzak yürünebilir/güvenli hedef kareyi bul
-        // Eğer levelBounds tanımlıysa kenar kurallarını (portal sarmalama, lav vb.) da göz önünde bulundur.
         let safeForce = 0;
 
         if (levelBounds) {
@@ -43,7 +43,7 @@ export const trampolineBehavior: CellBehavior = {
                     break;
                 } else {
                     // Portal veya normal hücre (Position)
-                    const targetCell = grid[nextPos.row]?.[nextPos.col];
+                    const targetCell = getCellAt(grid, nextPos);
                     if (targetCell) {
                         if (targetCell.def.isWalkable) {
                             lastWalkableD = d;
@@ -71,10 +71,11 @@ export const trampolineBehavior: CellBehavior = {
             const dc = DIRECTION_DELTA[direction].col;
             for (let d = baseForce; d >= 1; d--) {
                 const targetPos = {
+                    roomId: cell.position.roomId,
                     row: cell.position.row + d * dr,
                     col: cell.position.col + d * dc,
                 };
-                const targetCell = grid[targetPos.row]?.[targetPos.col];
+                const targetCell = getCellAt(grid, targetPos);
                 if (targetCell && targetCell.def.isWalkable) {
                     safeForce = d;
                     break;

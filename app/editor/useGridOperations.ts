@@ -26,9 +26,12 @@ interface GridOpsParams {
   trampolineConfig?: TrampolineCellConfig[];
   setTrampolineConfig?: React.Dispatch<React.SetStateAction<TrampolineCellConfig[]>>;
   pushGridHistory?: () => void;
+  activeRoomId?: string;
 }
 
 export function useGridOperations(p: GridOpsParams) {
+  const activeRoomId = p.activeRoomId ?? 'main';
+
   const addRow = useCallback((afterIndex: number) => {
     p.pushGridHistory?.();
     // afterIndex=0 → insert before row 0 (top), afterIndex=height → append (bottom)
@@ -39,21 +42,21 @@ export function useGridOperations(p: GridOpsParams) {
     ]);
     p.setHeight((h) => h + 1);
     p.setObjects((os) => os.map((o) =>
-      o.row !== null && o.row >= afterIndex ? { ...o, row: o.row + 1 } : o
+      (o.roomId ?? 'main') === activeRoomId && o.row !== null && o.row >= afterIndex ? { ...o, row: o.row + 1 } : o
     ));
     p.setBoxes((bs) => bs.map((b) =>
-      b.row !== null && b.row >= afterIndex ? { ...b, row: b.row + 1 } : b
+      (b.roomId ?? 'main') === activeRoomId && b.row !== null && b.row >= afterIndex ? { ...b, row: b.row + 1 } : b
     ));
     p.setConveyorPowerRequired((cpr) => cpr.map((pos) =>
-      pos.row >= afterIndex ? { ...pos, row: pos.row + 1 } : pos
+      (pos.roomId ?? 'main') === activeRoomId && pos.row >= afterIndex ? { ...pos, row: pos.row + 1 } : pos
     ));
     p.setConveyorConfig?.((cc) => cc.map((c) =>
-      c.position.row >= afterIndex ? { ...c, position: { ...c.position, row: c.position.row + 1 } } : c
+      (c.position.roomId ?? 'main') === activeRoomId && c.position.row >= afterIndex ? { ...c, position: { ...c.position, row: c.position.row + 1 } } : c
     ));
     p.setTrampolineConfig?.((tc) => tc.map((c) =>
-      c.position.row >= afterIndex ? { ...c, position: { ...c.position, row: c.position.row + 1 } } : c
+      (c.position.roomId ?? 'main') === activeRoomId && c.position.row >= afterIndex ? { ...c, position: { ...c.position, row: c.position.row + 1 } } : c
     ));
-  }, [p]);
+  }, [p, activeRoomId]);
 
   const removeRow = useCallback((index: number) => {
     if (p.height <= 3) return;
@@ -61,31 +64,33 @@ export function useGridOperations(p: GridOpsParams) {
     p.setGrid((g) => g.filter((_, r) => r !== index));
     p.setHeight((h) => h - 1);
     p.setObjects((os) => os.map((o) => {
+      if ((o.roomId ?? 'main') !== activeRoomId) return o;
       if (o.row === index) return { ...o, row: null, col: null };
       if (o.row !== null && o.row > index) return { ...o, row: o.row - 1 };
       return o;
     }));
     p.setBoxes((bs) => bs.map((b) => {
+      if ((b.roomId ?? 'main') !== activeRoomId) return b;
       if (b.row === index) return { ...b, row: null, col: null };
       if (b.row !== null && b.row > index) return { ...b, row: b.row - 1 };
       return b;
     }));
     p.setConveyorPowerRequired((cpr) =>
-      cpr.filter((pos) => pos.row !== index).map((pos) =>
-        pos.row > index ? { ...pos, row: pos.row - 1 } : pos
+      cpr.filter((pos) => (pos.roomId ?? 'main') !== activeRoomId || pos.row !== index).map((pos) =>
+        (pos.roomId ?? 'main') === activeRoomId && pos.row > index ? { ...pos, row: pos.row - 1 } : pos
       )
     );
     p.setConveyorConfig?.((cc) =>
-      cc.filter((c) => c.position.row !== index).map((c) =>
-        c.position.row > index ? { ...c, position: { ...c.position, row: c.position.row - 1 } } : c
+      cc.filter((c) => (c.position.roomId ?? 'main') !== activeRoomId || c.position.row !== index).map((c) =>
+        (c.position.roomId ?? 'main') === activeRoomId && c.position.row > index ? { ...c, position: { ...c.position, row: c.position.row - 1 } } : c
       )
     );
     p.setTrampolineConfig?.((tc) =>
-      tc.filter((c) => c.position.row !== index).map((c) =>
-        c.position.row > index ? { ...c, position: { ...c.position, row: c.position.row - 1 } } : c
+      tc.filter((c) => (c.position.roomId ?? 'main') !== activeRoomId || c.position.row !== index).map((c) =>
+        (c.position.roomId ?? 'main') === activeRoomId && c.position.row > index ? { ...c, position: { ...c.position, row: c.position.row - 1 } } : c
       )
     );
-  }, [p]);
+  }, [p, activeRoomId]);
 
   const addCol = useCallback((afterIndex: number) => {
     p.pushGridHistory?.();
@@ -96,21 +101,21 @@ export function useGridOperations(p: GridOpsParams) {
     ]));
     p.setWidth((w) => w + 1);
     p.setObjects((os) => os.map((o) =>
-      o.col !== null && o.col >= afterIndex ? { ...o, col: o.col + 1 } : o
+      (o.roomId ?? 'main') === activeRoomId && o.col !== null && o.col >= afterIndex ? { ...o, col: o.col + 1 } : o
     ));
     p.setBoxes((bs) => bs.map((b) =>
-      b.col !== null && b.col >= afterIndex ? { ...b, col: b.col + 1 } : b
+      (b.roomId ?? 'main') === activeRoomId && b.col !== null && b.col >= afterIndex ? { ...b, col: b.col + 1 } : b
     ));
     p.setConveyorPowerRequired((cpr) => cpr.map((pos) =>
-      pos.col >= afterIndex ? { ...pos, col: pos.col + 1 } : pos
+      (pos.roomId ?? 'main') === activeRoomId && pos.col >= afterIndex ? { ...pos, col: pos.col + 1 } : pos
     ));
     p.setConveyorConfig?.((cc) => cc.map((c) =>
-      c.position.col >= afterIndex ? { ...c, position: { ...c.position, col: c.position.col + 1 } } : c
+      (c.position.roomId ?? 'main') === activeRoomId && c.position.col >= afterIndex ? { ...c, position: { ...c.position, col: c.position.col + 1 } } : c
     ));
     p.setTrampolineConfig?.((tc) => tc.map((c) =>
-      c.position.col >= afterIndex ? { ...c, position: { ...c.position, col: c.position.col + 1 } } : c
+      (c.position.roomId ?? 'main') === activeRoomId && c.position.col >= afterIndex ? { ...c, position: { ...c.position, col: c.position.col + 1 } } : c
     ));
-  }, [p]);
+  }, [p, activeRoomId]);
 
   const removeCol = useCallback((index: number) => {
     if (p.width <= 3) return;
@@ -118,31 +123,33 @@ export function useGridOperations(p: GridOpsParams) {
     p.setGrid((g) => g.map((row) => row.filter((_, c) => c !== index)));
     p.setWidth((w) => w - 1);
     p.setObjects((os) => os.map((o) => {
+      if ((o.roomId ?? 'main') !== activeRoomId) return o;
       if (o.col === index) return { ...o, row: null, col: null };
       if (o.col !== null && o.col > index) return { ...o, col: o.col - 1 };
       return o;
     }));
     p.setBoxes((bs) => bs.map((b) => {
+      if ((b.roomId ?? 'main') !== activeRoomId) return b;
       if (b.col === index) return { ...b, row: null, col: null };
       if (b.col !== null && b.col > index) return { ...b, col: b.col - 1 };
       return b;
     }));
     p.setConveyorPowerRequired((cpr) =>
-      cpr.filter((pos) => pos.col !== index).map((pos) =>
-        pos.col > index ? { ...pos, col: pos.col - 1 } : pos
+      cpr.filter((pos) => (pos.roomId ?? 'main') !== activeRoomId || pos.col !== index).map((pos) =>
+        (pos.roomId ?? 'main') === activeRoomId && pos.col > index ? { ...pos, col: pos.col - 1 } : pos
       )
     );
     p.setConveyorConfig?.((cc) =>
-      cc.filter((c) => c.position.col !== index).map((c) =>
-        c.position.col > index ? { ...c, position: { ...c.position, col: c.position.col - 1 } } : c
+      cc.filter((c) => (c.position.roomId ?? 'main') !== activeRoomId || c.position.col !== index).map((c) =>
+        (c.position.roomId ?? 'main') === activeRoomId && c.position.col > index ? { ...c, position: { ...c.position, col: c.position.col - 1 } } : c
       )
     );
     p.setTrampolineConfig?.((tc) =>
-      tc.filter((c) => c.position.col !== index).map((c) =>
-        c.position.col > index ? { ...c, position: { ...c.position, col: c.position.col - 1 } } : c
+      tc.filter((c) => (c.position.roomId ?? 'main') !== activeRoomId || c.position.col !== index).map((c) =>
+        (c.position.roomId ?? 'main') === activeRoomId && c.position.col > index ? { ...c, position: { ...c.position, col: c.position.col - 1 } } : c
       )
     );
-  }, [p]);
+  }, [p, activeRoomId]);
 
   const moveSelection = useCallback((sel: SelectionRect, dr: number, dc: number) => {
     if (dr === 0 && dc === 0) return;
@@ -178,6 +185,7 @@ export function useGridOperations(p: GridOpsParams) {
 
     // Shift objects/boxes that were in the source selection
     p.setObjects((os) => os.map((o) => {
+      if ((o.roomId ?? 'main') !== activeRoomId) return o;
       if (o.row === null) return o;
       if (o.row >= r0 && o.row <= r1 && o.col !== null && o.col >= c0 && o.col <= c1) {
         const nr = o.row + dr;
@@ -189,6 +197,7 @@ export function useGridOperations(p: GridOpsParams) {
       return o;
     }));
     p.setBoxes((bs) => bs.map((b) => {
+      if ((b.roomId ?? 'main') !== activeRoomId) return b;
       if (b.row === null) return b;
       if (b.row >= r0 && b.row <= r1 && b.col !== null && b.col >= c0 && b.col <= c1) {
         const nr = b.row + dr;
@@ -199,7 +208,7 @@ export function useGridOperations(p: GridOpsParams) {
       }
       return b;
     }));
-  }, [p]);
+  }, [p, activeRoomId]);
 
   return { addRow, removeRow, addCol, removeCol, moveSelection };
 }

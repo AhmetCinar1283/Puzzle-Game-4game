@@ -5,7 +5,7 @@ import { useEditorContext } from '../EditorContext';
 import { useT } from '@/app/src/contexts/LanguageContext';
 
 export default function BottomSettingsPanel({ isMobile, visible }: { isMobile: boolean; visible?: boolean }) {
-  const { grid, width, height, boxes, setBoxes, activePlacingBoxId, setActivePlacingBoxId,
+  const { grid, setGrid, rooms, width, height, boxes, setBoxes, activePlacingBoxId, setActivePlacingBoxId,
     setActiveTool, conveyorPowerRequired, setConveyorPowerRequired,
     conveyorConfig, setConveyorConfig,
     trampolineConfig, setTrampolineConfig } = useEditorContext();
@@ -16,17 +16,33 @@ export default function BottomSettingsPanel({ isMobile, visible }: { isMobile: b
   const conveyorCells: { r: number; c: number }[] = [];
   for (let r = 0; r < height; r++)
     for (let c = 0; c < width; c++)
-      if (['conveyor_up', 'conveyor_down', 'conveyor_left', 'conveyor_right'].includes(grid[r][c]))
+      if (grid[r] && grid[r][c] && ['conveyor_up', 'conveyor_down', 'conveyor_left', 'conveyor_right'].includes(grid[r][c]))
         conveyorCells.push({ r, c });
 
   // Collect trampoline cells
   const trampolineCells: { r: number; c: number }[] = [];
   for (let r = 0; r < height; r++)
     for (let c = 0; c < width; c++)
-      if (['trampoline_up', 'trampoline_down', 'trampoline_left', 'trampoline_right'].includes(grid[r][c]))
+      if (grid[r] && grid[r][c] && ['trampoline_up', 'trampoline_down', 'trampoline_left', 'trampoline_right'].includes(grid[r][c]))
         trampolineCells.push({ r, c });
 
-  const hasContent = boxes.length > 0 || conveyorCells.length > 0 || trampolineCells.length > 0;
+  // Collect control_switch cells
+  const controlSwitchCells: { r: number; c: number }[] = [];
+  for (let r = 0; r < height; r++)
+    for (let c = 0; c < width; c++)
+      if (grid[r] && grid[r][c] && grid[r][c].startsWith('control_switch'))
+        controlSwitchCells.push({ r, c });
+
+  const updateControlSwitch = (r: number, c: number, newAction: string, newTargetRooms: string[]) => {
+    const newVal = `control_switch_${newAction}_${newTargetRooms.join(',')}`;
+    setGrid((g) => {
+      const next = g.map((row) => [...row]);
+      next[r][c] = newVal as any;
+      return next;
+    });
+  };
+
+  const hasContent = boxes.length > 0 || conveyorCells.length > 0 || trampolineCells.length > 0 || controlSwitchCells.length > 0;
 
   if (!hasContent) return null;
   if (isMobile && !visible) return null;
@@ -56,6 +72,9 @@ export default function BottomSettingsPanel({ isMobile, visible }: { isMobile: b
           )}
           {trampolineCells.length > 0 && (
             <span style={{ fontSize: 11, color: '#22d3ee' }}>▲ {trampolineCells.length} trampoline{trampolineCells.length > 1 ? 's' : ''}</span>
+          )}
+          {controlSwitchCells.length > 0 && (
+            <span style={{ fontSize: 11, color: '#a855f7' }}>❖ {controlSwitchCells.length} control switch{controlSwitchCells.length > 1 ? 'es' : ''}</span>
           )}
         </div>
         <span style={{ fontSize: 12, color: '#334155', transition: 'transform 0.2s', display: 'inline-block', transform: expanded ? 'rotate(180deg)' : 'none' }}>▼</span>
@@ -225,6 +244,94 @@ export default function BottomSettingsPanel({ isMobile, visible }: { isMobile: b
                           }}
                         />
                       </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Control Switch Config */}
+          {controlSwitchCells.length > 0 && (
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#a855f7', marginBottom: 8 }}>
+                Control Switches
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {controlSwitchCells.map(({ r, c }) => {
+                  const cellVal = grid[r][c];
+                  let action = 'set';
+                  let targetRooms: string[] = [];
+                  if (cellVal.startsWith('control_switch_')) {
+                    const parts = cellVal.split('_');
+                    action = parts[2] || 'set';
+                    targetRooms = parts[3] ? parts[3].split(',') : [];
+                  }
+
+                  return (
+                    <div key={`${r},${c}`} style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                      padding: '8px 10px',
+                      minWidth: 150,
+                      background: 'rgba(168,85,247,0.05)',
+                      border: '1px solid rgba(168,85,247,0.2)',
+                      borderRadius: 6,
+                    }}>
+                      <span style={{ fontSize: 10, color: '#a855f7', fontWeight: 700 }}>
+                        Switch ({r},{c})
+                      </span>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: 9, color: '#64748b' }}>Action:</span>
+                        <select
+                          value={action}
+                          onChange={(e) => {
+                            updateControlSwitch(r, c, e.target.value, targetRooms);
+                          }}
+                          style={{
+                            background: '#0f172a',
+                            border: '1px solid rgba(168,85,247,0.3)',
+                            borderRadius: 4,
+                            color: '#a855f7',
+                            fontSize: 10,
+                            padding: '2px 4px',
+                            outline: 'none',
+                          }}
+                        >
+                          <option value="set">Set</option>
+                          <option value="toggle">Toggle</option>
+                          <option value="cycle">Cycle</option>
+                          <option value="add">Add</option>
+                          <option value="remove">Remove</option>
+                        </select>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span style={{ fontSize: 9, color: '#64748b' }}>Target Rooms:</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 80, overflowY: 'auto', background: '#090d16', padding: '4px 6px', borderRadius: 4, border: '1px solid rgba(148,163,184,0.1)' }}>
+                          {rooms.map((room) => {
+                            const isChecked = targetRooms.includes(room.id);
+                            return (
+                              <label key={room.id} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 9, color: isChecked ? '#a855f7' : '#94a3b8' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    const nextTargets = e.target.checked
+                                      ? [...targetRooms, room.id]
+                                      : targetRooms.filter((id) => id !== room.id);
+                                    updateControlSwitch(r, c, action, nextTargets);
+                                  }}
+                                  style={{ accentColor: '#a855f7', width: 10, height: 10 }}
+                                />
+                                {room.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   );
                 })}

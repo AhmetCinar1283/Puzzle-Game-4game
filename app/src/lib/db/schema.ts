@@ -26,6 +26,9 @@ export interface StoredLevel {
   part?: string;          // Firestore part id (preset levels only)
   requestId?: string;     // Firestore levelRequests doc ID (tracks pending submission)
   isNeedSync?: boolean;   // true = fetch fresh full data from Firestore before playing
+  rooms?: any[];          // Multi-room support list
+  controlMode?: 'all_rooms' | 'selected_room';
+  initialControlledRooms?: string[];
   createdAt: number;
   position: number;
   updatedAt: number;

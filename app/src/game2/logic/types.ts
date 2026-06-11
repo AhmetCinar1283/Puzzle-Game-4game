@@ -10,6 +10,29 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
 export interface Position {
     row: number;
     col: number;
+    roomId?: string; // Optional, defaults to 'main'
+}
+
+export interface EdgeConfig {
+    type: 'wall' | 'portal' | 'lava';
+    targetRoomId?: string;
+    targetEdge?: 'top' | 'bottom' | 'left' | 'right';
+}
+
+export interface RoomState {
+    id: string;
+    name: string;
+    width: number;
+    height: number;
+    x: number;
+    y: number;
+    edges: {
+        top: EdgeConfig;
+        bottom: EdgeConfig;
+        left: EdgeConfig;
+        right: EdgeConfig;
+    };
+    grid: Cell[][];
 }
 
 // Yön → Izgara adımı (hücreler bu sabitten hareket hesaplar)
@@ -47,7 +70,10 @@ export type UITextType = 'info' | 'warning' | 'success' | 'error';
 // Nesneler ve hücreler ekrana buton veya yazı çıkartma isteği yollayabilir.
 export type UIEvent =
     | { kind: 'button'; buttonType: UIButtonType; label: string }
-    | { kind: 'text';   textType: UITextType;   message: string };
+    | { kind: 'text';   textType: UITextType;   message: string }
+    | { kind: 'change_control'; action: 'set' | 'toggle' | 'cycle' | 'add' | 'remove'; targetRooms: string[] };
+
+export type ControlMode = 'all_rooms' | 'selected_room';
 
 // ============================================================
 // NİYETLER (INTENTS)
@@ -97,7 +123,7 @@ export type VFXEvent = string; // Açık string — GameBoard type-guard ile ay�
 
 export interface TickSnapshot {
     tickNumber: number;
-    grid: Cell[][];
+    rooms: Record<string, RoomState>;
     entities: Entity[];
     vfxEvents: VFXEvent[];
     uiEvents: UIEvent[];

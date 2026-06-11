@@ -1,17 +1,10 @@
 // components/GameBoard.tsx
 // Film oynatıcı — sadece TickSnapshot[] çizer, oyun mantığı içermez.
-//
-// SORUMLULUK:
-//   • Grid hücrelerini CELL_RENDERERS ile çizmek
-//   • Entity'leri PhysicsWrapper içinde ENTITY_RENDERERS ile çizmek
-//   • Snapshot'ları FRAME_MS aralıkla ilerletmek
-//   • VFX seslerini çalmak
-//   • Animasyon bitince onAnimationEnd callback'ini çağırmak
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { TickSnapshot, VFXEvent } from '../logic/types';
+import { useEffect, useRef, useState, ReactNode } from 'react';
+import { TickSnapshot, VFXEvent, RoomState, EdgeConfig } from '../logic/types';
 import { Cell } from '../logic/cellTypes';
 import { Entity } from '../logic/entityTypes';
 import { CELL_RENDERERS } from './cells/CELL_RENDERERS';
@@ -20,6 +13,7 @@ import { PhysicsWrapper } from './physicsWrapper';
 import { LevelEdges } from '../logic/engine/getNextTopologyPosition';
 import { GAME_ANIMATION_KEYFRAMES } from './effects/animationStyles';
 import { getPlayerColor } from './playerColors';
+import { calculateRoomLayoutOffsets } from '../logic/engine/rooms';
 
 const CELL_SIZE = 64;
 
@@ -43,7 +37,8 @@ function playAudio(src: string) {
 
 interface GameBoardProps {
     snapshots: TickSnapshot[] | null;
-    levelEdges?: LevelEdges;
+    controlledRoomIds?: string[]; // Aktif/kontrol edilen odalar
+    levelEdges?: LevelEdges; // Legacy single-room edge behavior
     onAnimationEnd?: () => void;
 }
 
@@ -82,13 +77,28 @@ const edgeStyles = `
         from { transform: rotate(0deg); }
         to { transform: rotate(360deg); }
     }
+    @keyframes crawlPath {
+        to { stroke-dashoffset: -20; }
+    }
 `;
 
-const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) => {
+function getEdgePoint(offset: { left: number; top: number; width: number; height: number }, side: 'top' | 'bottom' | 'left' | 'right') {
+    switch (side) {
+        case 'top':
+            return { x: offset.left + offset.width / 2, y: offset.top };
+        case 'bottom':
+            return { x: offset.left + offset.width / 2, y: offset.top + offset.height };
+        case 'left':
+            return { x: offset.left, y: offset.top + offset.height / 2 };
+        case 'right':
+            return { x: offset.left + offset.width, y: offset.top + offset.height / 2 };
+    }
+}
+
+const GameBoard = ({ snapshots, controlledRoomIds, levelEdges, onAnimationEnd }: GameBoardProps) => {
     const [prevSnapshots, setPrevSnapshots] = useState<TickSnapshot[] | null>(snapshots);
     const [currentFrame, setCurrentFrame] = useState(0);
 
-    // Yeni snapshot dizisi gelince başa sar veya uzantısı ise kaldığı yerden devam et
     if (snapshots !== prevSnapshots) {
         setPrevSnapshots(snapshots);
         const isExtension = prevSnapshots && 
@@ -104,7 +114,6 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
     const onAnimationEndRef = useRef(onAnimationEnd);
     onAnimationEndRef.current = onAnimationEnd;
 
-    // Kalan kare sayısına göre dinamik hızlanma (catch-up) hesabı
     const remainingFrames = snapshots ? snapshots.length - 1 - currentFrame : 0;
     const frameMs = snapshots
         ? remainingFrames > 3
@@ -112,14 +121,11 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
             : Math.max(50, Math.min(120, 300 / snapshots.length))
         : 80;
 
-    // Frame ilerletme — 1 framelik snapshot animasyonu tetiklemez (sadece ekrana çizer)
-    // requestAnimationFrame ile 60fps akıcılık ve mobil tarayıcı performansı
     useEffect(() => {
         if (!snapshots || snapshots.length === 0) return;
-        if (snapshots.length === 1) return; // Başlangıç durumu: animasyon yok
+        if (snapshots.length === 1) return;
 
         if (currentFrame >= snapshots.length - 1) {
-            // Son frame'e ulaşıldı. Bu frame'de bir ölüm veya zafer varsa animasyonunun tamamlanması için bekle
             const finalSnapshot = snapshots[snapshots.length - 1];
             const hasDeath = finalSnapshot?.entities.some(e => e.customData.deathReason) ?? false;
             const hasVictory = finalSnapshot?.entities.some(e => e.customData.isVictory) ?? false;
@@ -127,7 +133,7 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
             if (hasDeath || hasVictory) {
                 const timer = setTimeout(() => {
                     onAnimationEndRef.current?.();
-                }, 800); // 800ms ölüm/zafer animasyonu için bekle
+                }, 800);
                 return () => clearTimeout(timer);
             } else {
                 onAnimationEndRef.current?.();
@@ -153,7 +159,6 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
         return () => cancelAnimationFrame(animationFrameId);
     }, [currentFrame, snapshots, frameMs]);
 
-    // VFX ses çalma
     useEffect(() => {
         if (!snapshots) return;
         const snapshot = snapshots[currentFrame];
@@ -163,11 +168,12 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
         });
     }, [currentFrame, snapshots]);
 
-    const renderEdgeStrip = (side: 'top' | 'bottom' | 'left' | 'right', behavior?: 'wall' | 'portal' | 'lava') => {
+    const renderEdgeStrip = (side: 'top' | 'bottom' | 'left' | 'right', behavior?: 'wall' | 'portal' | 'lava' | EdgeConfig) => {
         if (!behavior) return null;
 
-        const isLava = behavior === 'lava';
-        const isPortal = behavior === 'portal';
+        const ruleType = typeof behavior === 'string' ? behavior : behavior.type;
+        const isLava = ruleType === 'lava';
+        const isPortal = ruleType === 'portal';
         const isHorizontal = side === 'top' || side === 'bottom';
 
         const style: React.CSSProperties = {
@@ -202,11 +208,14 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
         return <div style={style} />;
     };
 
-    const renderEdgeLabel = (side: 'top' | 'bottom' | 'left' | 'right', behavior?: 'wall' | 'portal' | 'lava') => {
-        if (!behavior || behavior === 'wall') return null;
+    const renderEdgeLabel = (side: 'top' | 'bottom' | 'left' | 'right', behavior?: 'wall' | 'portal' | 'lava' | EdgeConfig) => {
+        if (!behavior) return null;
 
-        const isLava = behavior === 'lava';
-        const isPortal = behavior === 'portal';
+        const ruleType = typeof behavior === 'string' ? behavior : behavior.type;
+        if (ruleType === 'wall') return null;
+
+        const isLava = ruleType === 'lava';
+        const isPortal = ruleType === 'portal';
 
         const style: React.CSSProperties = {
             position: 'absolute',
@@ -252,173 +261,273 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
     const snapshot = snapshots[frameIndex];
     if (!snapshot) return null;
 
-    const rows = snapshot.grid.length;
-    const cols = snapshot.grid[0]?.length ?? 0;
-    const boardWidth  = cols * CELL_SIZE;
-    const boardHeight = rows * CELL_SIZE;
+    // Odaların yerleşim ofsetlerini ve toplam boyutları hesapla
+    const { roomPositions, totalWidth, totalHeight } = calculateRoomLayoutOffsets(snapshot.rooms, CELL_SIZE, 40);
+
+    // Bağlantılı portal çizgilerini oluştur
+    const drawnConnections = new Set<string>();
+    const connectionPaths: ReactNode[] = [];
+
+    for (const [rId, room] of Object.entries(snapshot.rooms)) {
+        for (const side of ['top', 'bottom', 'left', 'right'] as const) {
+            const edge = room.edges[side];
+            if (edge && edge.type === 'portal' && edge.targetRoomId) {
+                const targetRoomId = edge.targetRoomId;
+                const targetEdge = edge.targetEdge ?? 'left';
+
+                const connectionKey = [rId, side, targetRoomId, targetEdge].sort().join('-');
+                if (drawnConnections.has(connectionKey)) continue;
+                drawnConnections.add(connectionKey);
+
+                const offsetA = roomPositions[rId];
+                const offsetB = roomPositions[targetRoomId];
+                if (offsetA && offsetB) {
+                    const pA = getEdgePoint(offsetA, side);
+                    const pB = getEdgePoint(offsetB, targetEdge);
+
+                    const controlOffset = 60;
+                    let cp1x = pA.x;
+                    let cp1y = pA.y;
+                    if (side === 'left') cp1x -= controlOffset;
+                    else if (side === 'right') cp1x += controlOffset;
+                    else if (side === 'top') cp1y -= controlOffset;
+                    else if (side === 'bottom') cp1y += controlOffset;
+
+                    let cp2x = pB.x;
+                    let cp2y = pB.y;
+                    if (targetEdge === 'left') cp2x -= controlOffset;
+                    else if (targetEdge === 'right') cp2x += controlOffset;
+                    else if (targetEdge === 'top') cp2y -= controlOffset;
+                    else if (targetEdge === 'bottom') cp2y += controlOffset;
+
+                    const pathD = `M ${pA.x} ${pA.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${pB.x} ${pB.y}`;
+
+                    connectionPaths.push(
+                        <g key={connectionKey}>
+                            <path
+                                d={pathD}
+                                fill="none"
+                                stroke="rgba(168, 85, 247, 0.4)"
+                                strokeWidth={6}
+                                strokeLinecap="round"
+                                filter="blur(4px)"
+                            />
+                            <path
+                                d={pathD}
+                                fill="none"
+                                stroke="#c084fc"
+                                strokeWidth={2.5}
+                                strokeLinecap="round"
+                                strokeDasharray="6, 6"
+                                style={{
+                                    animation: 'crawlPath 1.2s linear infinite',
+                                }}
+                            />
+                        </g>
+                    );
+                }
+            }
+        }
+    }
 
     const combinedStyles = edgeStyles + GAME_ANIMATION_KEYFRAMES;
 
     return (
-        <div style={{ position: 'relative', width: boardWidth, height: boardHeight }}>
+        <div style={{ position: 'relative', width: totalWidth, height: totalHeight }}>
             <style dangerouslySetInnerHTML={{ __html: combinedStyles }} />
 
-            {/* Edge neon border strips & animated labels */}
-            {levelEdges && (
-                <>
-                    {renderEdgeStrip('top', levelEdges.top)}
-                    {renderEdgeStrip('bottom', levelEdges.bottom)}
-                    {renderEdgeStrip('left', levelEdges.left)}
-                    {renderEdgeStrip('right', levelEdges.right)}
-
-                    {renderEdgeLabel('top', levelEdges.top)}
-                    {renderEdgeLabel('bottom', levelEdges.bottom)}
-                    {renderEdgeLabel('left', levelEdges.left)}
-                    {renderEdgeLabel('right', levelEdges.right)}
-                </>
+            {/* Portal Bağlantı SVG Overlay */}
+            {connectionPaths.length > 0 && (
+                <svg
+                    style={{
+                        position: 'absolute',
+                        top: 0, left: 0,
+                        width: totalWidth,
+                        height: totalHeight,
+                        pointerEvents: 'none',
+                        zIndex: 80,
+                    }}
+                >
+                    {connectionPaths}
+                </svg>
             )}
 
-            {/* Hücre katmanı */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${cols}, ${CELL_SIZE}px)`,
-                width: boardWidth,
-                height: boardHeight,
-            }}>
-                {snapshot.grid.map((row: Cell[]) =>
-                    row.map((cell: Cell) => {
-                        const Renderer = CELL_RENDERERS[cell.type];
-                        const prevSnapshot = frameIndex > 0 ? snapshots[frameIndex - 1] : null;
-                        const entityOnCell = snapshot.entities.find(e => e.position.row === cell.position.row && e.position.col === cell.position.col) ?? null;
-                        const prevEntityOnCell = prevSnapshot?.entities.find(e => e.position.row === cell.position.row && e.position.col === cell.position.col) ?? null;
-                        return (
-                            <Renderer 
-                                key={cell.id} 
-                                cell={cell} 
-                                entityOnCell={entityOnCell}
-                                prevEntityOnCell={prevEntityOnCell}
-                            />
-                        );
-                    })
-                )}
+            {/* Odaların Çizilmesi */}
+            {Object.values(snapshot.rooms).map((room: RoomState) => {
+                const offset = roomPositions[room.id];
+                if (!offset) return null;
+
+                const isControlled = !controlledRoomIds || controlledRoomIds.length === 0 || controlledRoomIds.includes(room.id);
+
+                return (
+                    <div
+                        key={room.id}
+                        style={{
+                            position: 'absolute',
+                            left: offset.left,
+                            top: offset.top,
+                            width: offset.width,
+                            height: offset.height,
+                            boxSizing: 'border-box',
+                            transition: 'opacity 0.25s, box-shadow 0.25s',
+                            opacity: isControlled ? 1.0 : 0.4,
+                            border: '2px solid transparent',
+                            boxShadow: isControlled ? '0 0 20px rgba(0, 196, 255, 0.6), inset 0 0 10px rgba(0, 196, 255, 0.3)' : 'none',
+                            borderRadius: 6,
+                        }}
+                    >
+                        {/* Oda başlığı */}
+                        <div style={{
+                            position: 'absolute',
+                            top: -20, left: 2,
+                            fontSize: 10, fontWeight: 700,
+                            color: isControlled ? '#00c4ff' : '#475569',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.08em',
+                        }}>
+                            {room.name}
+                        </div>
+
+                        {/* Edge Neon Borders & Labels */}
+                        {renderEdgeStrip('top', room.edges.top)}
+                        {renderEdgeStrip('bottom', room.edges.bottom)}
+                        {renderEdgeStrip('left', room.edges.left)}
+                        {renderEdgeStrip('right', room.edges.right)}
+
+                        {renderEdgeLabel('top', room.edges.top)}
+                        {renderEdgeLabel('bottom', room.edges.bottom)}
+                        {renderEdgeLabel('left', room.edges.left)}
+                        {renderEdgeLabel('right', room.edges.right)}
+
+                        {/* Grid cells */}
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: `repeat(${room.width}, ${CELL_SIZE}px)`,
+                            width: offset.width - 4, // 2px border offset correction
+                            height: offset.height - 4,
+                        }}>
+                            {room.grid.map((row: Cell[]) =>
+                                row.map((cell: Cell) => {
+                                    const Renderer = CELL_RENDERERS[cell.type];
+                                    const prevSnapshot = frameIndex > 0 ? snapshots[frameIndex - 1] : null;
+                                    const entityOnCell = snapshot.entities.find(e =>
+                                        (e.position.roomId ?? 'main') === room.id &&
+                                        e.position.row === cell.position.row &&
+                                        e.position.col === cell.position.col
+                                    ) ?? null;
+                                    const prevEntityOnCell = prevSnapshot?.entities.find(e =>
+                                        (e.position.roomId ?? 'main') === room.id &&
+                                        e.position.row === cell.position.row &&
+                                        e.position.col === cell.position.col
+                                    ) ?? null;
+                                    
+                                    // Custom renderer fallback
+                                    const ActiveRenderer = Renderer || CELL_RENDERERS['normal'];
+                                    return (
+                                        <ActiveRenderer 
+                                            key={cell.id} 
+                                            cell={cell} 
+                                            entityOnCell={entityOnCell}
+                                            prevEntityOnCell={prevEntityOnCell}
+                                        />
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+
+            {/* Trail Layer */}
+            <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', width: totalWidth, height: totalHeight }}>
+                {Object.values(snapshot.rooms).map((room: RoomState) => {
+                    const offset = roomPositions[room.id];
+                    if (!offset) return null;
+
+                    return room.grid.map((row: Cell[]) =>
+                        row.map((cell: Cell) => {
+                            const trailPlayerIndex = cell.customData.trailPlayerIndex as number | undefined;
+                            if (trailPlayerIndex === undefined) return null;
+
+                            const { hex: color, glow } = getPlayerColor(trailPlayerIndex);
+                            const r = cell.position.row;
+                            const c = cell.position.col;
+
+                            const hasLeft  = room.grid[r]?.[c - 1]?.customData.trailPlayerIndex === trailPlayerIndex;
+                            const hasRight = room.grid[r]?.[c + 1]?.customData.trailPlayerIndex === trailPlayerIndex;
+                            const hasUp    = room.grid[r - 1]?.[c]?.customData.trailPlayerIndex === trailPlayerIndex;
+                            const hasDown  = room.grid[r + 1]?.[c]?.customData.trailPlayerIndex === trailPlayerIndex;
+
+                            const player = snapshot.entities.find(e => 
+                                e.type === 'player' && 
+                                !e.customData._destroyed && 
+                                (e.position.roomId ?? 'main') === room.id &&
+                                ((e.customData.playerIndex as number) ?? 0) === trailPlayerIndex
+                            );
+                            
+                            const isPlayerLeft  = player && player.position.row === r && player.position.col === c - 1;
+                            const isPlayerRight = player && player.position.row === r && player.position.col === c + 1;
+                            const isPlayerUp    = player && player.position.row === r - 1 && player.position.col === c;
+                            const isPlayerDown  = player && player.position.row === r + 1 && player.position.col === c;
+
+                            return (
+                                <div 
+                                    key={`trail-${cell.id}`}
+                                    style={{
+                                        position: 'absolute',
+                                        top: offset.top + r * CELL_SIZE,
+                                        left: offset.left + c * CELL_SIZE,
+                                        width: CELL_SIZE,
+                                        height: CELL_SIZE,
+                                        pointerEvents: 'none',
+                                        zIndex: 5,
+                                    }}
+                                >
+                                    {(hasLeft || isPlayerLeft) && (
+                                        <div style={{
+                                            position: 'absolute', left: 0, top: 29, width: 32, height: 6,
+                                            backgroundColor: color, boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
+                                        }} />
+                                    )}
+                                    {(hasRight || isPlayerRight) && (
+                                        <div style={{
+                                            position: 'absolute', left: 32, top: 29, width: 32, height: 6,
+                                            backgroundColor: color, boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
+                                        }} />
+                                    )}
+                                    {(hasUp || isPlayerUp) && (
+                                        <div style={{
+                                            position: 'absolute', left: 29, top: 0, width: 6, height: 32,
+                                            backgroundColor: color, boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
+                                        }} />
+                                    )}
+                                    {(hasDown || isPlayerDown) && (
+                                        <div style={{
+                                            position: 'absolute', left: 29, top: 32, width: 6, height: 32,
+                                            backgroundColor: color, boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
+                                        }} />
+                                    )}
+                                    <div style={{
+                                        position: 'absolute', left: 25, top: 25, width: 14, height: 14,
+                                        borderRadius: '50%', backgroundColor: '#ffffff', border: `3px solid ${color}`,
+                                        boxShadow: `0 0 10px ${color}, 0 0 20px ${color}`, zIndex: 6,
+                                    }} />
+                                </div>
+                            );
+                        })
+                    );
+                })}
             </div>
 
-            {/* Trail Katmanı ── Fütüristik Neon İzler */}
-            <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', width: boardWidth, height: boardHeight }}>
-                {snapshot.grid.map((row: Cell[]) =>
-                    row.map((cell: Cell) => {
-                        const trailPlayerIndex = cell.customData.trailPlayerIndex as number | undefined;
-                        if (trailPlayerIndex === undefined) return null;
-
-                        const { hex: color, glow } = getPlayerColor(trailPlayerIndex);
-
-                        const r = cell.position.row;
-                        const c = cell.position.col;
-
-                        // Komşu hücrelerin iz durumlarını kontrol et
-                        const hasLeft  = snapshot.grid[r]?.[c - 1]?.customData.trailPlayerIndex === trailPlayerIndex;
-                        const hasRight = snapshot.grid[r]?.[c + 1]?.customData.trailPlayerIndex === trailPlayerIndex;
-                        const hasUp    = snapshot.grid[r - 1]?.[c]?.customData.trailPlayerIndex === trailPlayerIndex;
-                        const hasDown  = snapshot.grid[r + 1]?.[c]?.customData.trailPlayerIndex === trailPlayerIndex;
-
-                        // Oyuncunun asıl konumuna kusursuz bağlantı sağla
-                        const player = snapshot.entities.find(e => e.type === 'player' && !e.customData._destroyed && ((e.customData.playerIndex as number) ?? 0) === trailPlayerIndex);
-                        const isPlayerLeft  = player && player.position.row === r && player.position.col === c - 1;
-                        const isPlayerRight = player && player.position.row === r && player.position.col === c + 1;
-                        const isPlayerUp    = player && player.position.row === r - 1 && player.position.col === c;
-                        const isPlayerDown  = player && player.position.row === r + 1 && player.position.col === c;
-
-                        return (
-                            <div 
-                                key={`trail-${cell.id}`}
-                                style={{
-                                    position: 'absolute',
-                                    top: r * CELL_SIZE,
-                                    left: c * CELL_SIZE,
-                                    width: CELL_SIZE,
-                                    height: CELL_SIZE,
-                                    pointerEvents: 'none',
-                                    zIndex: 5,
-                                }}
-                            >
-                                {/* Sol bağlantı çizgisi */}
-                                {(hasLeft || isPlayerLeft) && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        left: 0,
-                                        top: 29,
-                                        width: 32,
-                                        height: 6,
-                                        backgroundColor: color,
-                                        boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
-                                    }} />
-                                )}
-
-                                {/* Sağ bağlantı çizgisi */}
-                                {(hasRight || isPlayerRight) && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        left: 32,
-                                        top: 29,
-                                        width: 32,
-                                        height: 6,
-                                        backgroundColor: color,
-                                        boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
-                                    }} />
-                                )}
-
-                                {/* Yukarı bağlantı çizgisi */}
-                                {(hasUp || isPlayerUp) && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        left: 29,
-                                        top: 0,
-                                        width: 6,
-                                        height: 32,
-                                        backgroundColor: color,
-                                        boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
-                                    }} />
-                                )}
-
-                                {/* Aşağı bağlantı çizgisi */}
-                                {(hasDown || isPlayerDown) && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        left: 29,
-                                        top: 32,
-                                        width: 6,
-                                        height: 32,
-                                        backgroundColor: color,
-                                        boxShadow: `0 0 8px ${color}, 0 0 16px ${glow}`,
-                                    }} />
-                                )}
-
-                                {/* Merkezdeki parlak lazer düğümü / yuvarlak (parlak beyaz çekirdekli neon) */}
-                                <div style={{
-                                    position: 'absolute',
-                                    left: 25,
-                                    top: 25,
-                                    width: 14,
-                                    height: 14,
-                                    borderRadius: '50%',
-                                    backgroundColor: '#ffffff',
-                                    border: `3px solid ${color}`,
-                                    boxShadow: `0 0 10px ${color}, 0 0 20px ${color}`,
-                                    zIndex: 6,
-                                }} />
-                            </div>
-                        );
-                    })
-                )}
-            </div>
-
-            {/* Entity katmanı — PhysicsWrapper ile mutlak konumlandırma */}
+            {/* Entity Layer */}
             <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
                 {snapshot.entities.map((entity: Entity) => {
                     const Renderer = ENTITY_RENDERERS[entity.type];
-                    const currentCell = snapshot.grid[entity.position.row]?.[entity.position.col];
+                    const rId = entity.position.roomId ?? 'main';
+                    const currentCell = snapshot.rooms[rId]?.grid[entity.position.row]?.[entity.position.col];
                     const prevSnapshot = frameIndex > 0 ? snapshots[frameIndex - 1] : null;
                     const prevEntity = prevSnapshot?.entities.find(e => e.id === entity.id) ?? null;
+                    
                     return (
                         <PhysicsWrapper
                             key={entity.id}
@@ -426,6 +535,7 @@ const GameBoard = ({ snapshots, levelEdges, onAnimationEnd }: GameBoardProps) =>
                             prevEntity={prevEntity}
                             currentCellType={currentCell?.type ?? 'normal'}
                             frameMs={frameMs}
+                            roomOffsets={roomPositions}
                         >
                             <Renderer entity={entity} />
                         </PhysicsWrapper>

@@ -8,6 +8,7 @@ export interface ObjConfig {
   id: number;
   row: number | null;
   col: number | null;
+  roomId?: string;
   mode: MovementMode;
   lockOnTarget: boolean;
 }
@@ -16,13 +17,14 @@ export interface BoxConfig {
   id: number;
   row: number | null;
   col: number | null;
+  roomId?: string;
   requiresPower: boolean;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 export const CELL_TYPES_BASIC: CellType[] = [
-  'empty', 'obstacle', 'forbidden', 'target_1', 'target_2', 'direction_toggle',
+  'empty', 'obstacle', 'forbidden', 'target_1', 'target_2', 'direction_toggle', 'control_switch',
 ];
 export const CELL_TYPES_ICE: CellType[] = ['ice'];
 export const CELL_TYPES_POWER: CellType[] = ['power_node'];
@@ -71,7 +73,7 @@ export function getGroupColor(group: string): string {
 
 const RAW_CELL_LABEL: Record<string, string> = {
   empty: 'Empty', obstacle: 'Obstacle', forbidden: 'Forbidden',
-  target_1: 'Target 1', target_2: 'Target 2', direction_toggle: 'Toggle', erase: 'Erase',
+  target_1: 'Target 1', target_2: 'Target 2', direction_toggle: 'Toggle', control_switch: 'Control Switch', erase: 'Erase',
   ice: 'Ice',
   power_node: 'Power',
   conveyor_up: 'Conv ▲', conveyor_down: 'Conv ▼',
@@ -101,7 +103,7 @@ export const CELL_LABEL = new Proxy(RAW_CELL_LABEL, {
 
 const RAW_CELL_ICON: Record<string, string> = {
   empty: '▫', obstacle: '■', forbidden: '✕',
-  target_1: '◎', target_2: '◎', direction_toggle: '⇄', erase: '⌫',
+  target_1: '◎', target_2: '◎', direction_toggle: '⇄', control_switch: '❖', erase: '⌫',
   ice: '❄',
   power_node: '⚡',
   conveyor_up: '▲', conveyor_down: '▼', conveyor_left: '◄', conveyor_right: '►',
@@ -127,7 +129,7 @@ export const CELL_ICON = new Proxy(RAW_CELL_ICON, {
 
 const RAW_CELL_COLOR: Record<string, string> = {
   empty: '#475569', obstacle: '#94a3b8', forbidden: '#ef4444',
-  target_1: '#00ff88', target_2: '#00c4ff', direction_toggle: '#ffd700', erase: '#64748b',
+  target_1: '#00ff88', target_2: '#00c4ff', direction_toggle: '#ffd700', control_switch: '#a855f7', erase: '#64748b',
   ice: '#a5f3fc',
   power_node: '#fbbf24',
   conveyor_up: '#c4b5fd', conveyor_down: '#c4b5fd',

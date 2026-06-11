@@ -5,7 +5,7 @@ import { processSingleTick } from '../logic/engine/intentLoop';
 import { checkWinCondition } from '../logic/winCondition';
 import { Entity } from '../logic/entityTypes';
 import { Cell } from '../logic/cellTypes';
-import { ActionIntent, TickSnapshot, UIEvent } from '../logic/types';
+import { ActionIntent, TickSnapshot, UIEvent, RoomState } from '../logic/types';
 import { LevelEdges, LevelBounds } from '../logic/engine/getNextTopologyPosition';
 
 const MAX_TICKS = 50;
@@ -21,32 +21,92 @@ function cloneEntities(entities: Entity[]): Entity[] {
     }));
 }
 
-function cloneGrid(grid: Cell[][]): Cell[][] {
-    return grid.map(row =>
-        row.map(cell => ({
-            ...cell,
-            def: { ...cell.def },
-            customData: { ...cell.customData },
-        }))
-    );
+function cloneRooms(rooms: Record<string, RoomState>): Record<string, RoomState> {
+    const clone: Record<string, RoomState> = {};
+    for (const [rId, room] of Object.entries(rooms)) {
+        clone[rId] = {
+            ...room,
+            edges: { ...room.edges },
+            grid: room.grid.map(row =>
+                row.map(cell => ({
+                    ...cell,
+                    def: { ...cell.def },
+                    customData: { ...cell.customData },
+                }))
+            ),
+        };
+    }
+    return clone;
 }
 
 interface UseGameEngineOptions {
     initialEntities: Entity[];
-    initialGrid: Cell[][];
+    initialGrid?: Cell[][];
+    initialRooms?: Record<string, RoomState>;
+    controlMode?: 'all_rooms' | 'selected_room';
+    initialControlledRooms?: string[];
     levelEdges?: LevelEdges;
     trailCollision?: boolean;
 }
 
-export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailCollision }: UseGameEngineOptions) {
+export function useGameEngine({
+    initialEntities,
+    initialGrid,
+    initialRooms,
+    controlMode = 'all_rooms',
+    initialControlledRooms,
+    levelEdges,
+    trailCollision
+}: UseGameEngineOptions) {
+    
+    // Normalleştirilmiş odalar sözlüğünü oluştur
+    const normalizedInitialRooms = (() => {
+        if (initialRooms) return cloneRooms(initialRooms);
+        
+        // Geriye dönük uyumluluk: initialGrid'i tek bir odaya sar
+        const roomId = 'main';
+        const grid = initialGrid ? initialGrid.map(row =>
+            row.map(cell => ({
+                ...cell,
+                position: { ...cell.position, roomId },
+                def: { ...cell.def },
+                customData: { ...cell.customData },
+            }))
+        ) : [];
+        
+        const edges = {
+            top:    typeof levelEdges?.top === 'string' ? { type: levelEdges.top } : (levelEdges?.top || { type: 'wall' }),
+            bottom: typeof levelEdges?.bottom === 'string' ? { type: levelEdges.bottom } : (levelEdges?.bottom || { type: 'wall' }),
+            left:   typeof levelEdges?.left === 'string' ? { type: levelEdges.left } : (levelEdges?.left || { type: 'wall' }),
+            right:  typeof levelEdges?.right === 'string' ? { type: levelEdges.right } : (levelEdges?.right || { type: 'wall' }),
+        } as RoomState['edges'];
+
+        return {
+            [roomId]: {
+                id: roomId,
+                name: 'Main Room',
+                width: grid[0]?.length ?? 0,
+                height: grid.length,
+                x: 0, y: 0,
+                edges,
+                grid,
+            }
+        };
+    })();
+
     const entitiesRef = useRef<Entity[]>(initialEntities);
-    const gridRef = useRef<Cell[][]>(initialGrid);
+    const roomsRef = useRef<Record<string, RoomState>>(normalizedInitialRooms);
+    
+    const resolvedInitialControlledRooms = initialControlledRooms ?? Object.keys(normalizedInitialRooms);
+    const [controlledRoomIds, setControlledRoomIds] = useState<string[]>(resolvedInitialControlledRooms);
+    const controlledRoomIdsRef = useRef<string[]>(resolvedInitialControlledRooms);
+    
     const isGameOverRef = useRef(false);
     const isAnimatingInternalRef = useRef(false);
 
     const [snapshots, setSnapshots] = useState<TickSnapshot[]>(() => [{
         tickNumber: 0,
-        grid: cloneGrid(initialGrid),
+        rooms: cloneRooms(normalizedInitialRooms),
         entities: cloneEntities(initialEntities),
         vfxEvents: [],
         uiEvents: [],
@@ -68,11 +128,12 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
             delete ent.customData.isVictory;
         }
 
-        // Grid boyutlarından level bounds hesapla
+        // Seviye sınırlarını ve odaları derle
         const levelBounds: LevelBounds = {
-            rows: gridRef.current.length,
-            cols: gridRef.current[0]?.length ?? 0,
-            edges: levelEdges ?? { top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' },
+            rooms: Object.entries(roomsRef.current).reduce((acc, [rId, room]) => {
+                acc[rId] = { rows: room.height, cols: room.width, edges: room.edges };
+                return acc;
+            }, {} as Record<string, { rows: number; cols: number; edges: RoomState['edges'] }>),
             trailCollision: !!trailCollision,
         };
 
@@ -81,7 +142,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
 
         collectedSnapshots.push({
             tickNumber: 0,
-            grid: cloneGrid(gridRef.current),
+            rooms: cloneRooms(roomsRef.current),
             entities: cloneEntities(entitiesRef.current),
             vfxEvents: [],
             uiEvents: [],
@@ -91,8 +152,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
         let tickNumber = 0;
 
         while (tickNumber < MAX_TICKS) {
-            // Beklenen intent yoksa bile entity'lerde aktif fizik (uçuş/kayma)
-            // varsa döngüyü sürdür — onTick bir sonraki tick'te intent üretir.
+            // Fiziksel hareket devam ediyorsa loop sürdürülür
             const hasActivePhysics = entitiesRef.current.some(e =>
                 !e.customData._destroyed && (e.physics.force > 0 || e.physics.z > 0)
             );
@@ -102,7 +162,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
 
             const result = processSingleTick(
                 entitiesRef.current,
-                gridRef.current,
+                roomsRef.current,
                 pending,
                 levelBounds,
             );
@@ -114,7 +174,6 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
                 tickVfxEvents.unshift('sound_move');
             }
 
-            // Yok edilen entity'leri grid'den silmeden önce klonla (animasyonun doğru karede görünmesi için)
             const snapshotEntities = cloneEntities(entitiesRef.current);
 
             entitiesRef.current = entitiesRef.current.filter(
@@ -124,7 +183,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
             const playerCountAfter = entitiesRef.current.filter(e => e.type === 'player').length;
             const playerDestroyed = playerCountAfter < playerCountBefore;
 
-            const isWin = checkWinCondition(entitiesRef.current, gridRef.current);
+            const isWin = checkWinCondition(entitiesRef.current, roomsRef.current);
 
             if (isWin) {
                 for (const ent of entitiesRef.current) {
@@ -137,6 +196,37 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
 
             const tickUiEvents: UIEvent[] = [...result.uiEvents];
 
+            // Oda kontrol değişikliklerini dinle ve ref'i güncelle
+            for (const uiEv of tickUiEvents) {
+                if (uiEv.kind === 'change_control') {
+                    const { action, targetRooms } = uiEv;
+                    let nextIds = [...controlledRoomIdsRef.current];
+                    if (action === 'set') {
+                        nextIds = targetRooms;
+                    } else if (action === 'add') {
+                        nextIds = Array.from(new Set([...nextIds, ...targetRooms]));
+                    } else if (action === 'remove') {
+                        nextIds = nextIds.filter(id => !targetRooms.includes(id));
+                    } else if (action === 'toggle') {
+                        for (const tr of targetRooms) {
+                            if (nextIds.includes(tr)) {
+                                nextIds = nextIds.filter(id => id !== tr);
+                            } else {
+                                nextIds.push(tr);
+                            }
+                        }
+                    } else if (action === 'cycle') {
+                        const roomKeys = Object.keys(roomsRef.current);
+                        if (roomKeys.length > 0) {
+                            const currentIdx = roomKeys.indexOf(nextIds[0] ?? '');
+                            const nextIdx = (currentIdx + 1) % roomKeys.length;
+                            nextIds = [roomKeys[nextIdx]];
+                        }
+                    }
+                    controlledRoomIdsRef.current = nextIds;
+                }
+            }
+
             if (isWin) {
                 tickUiEvents.push(
                     { kind: 'text', textType: 'success', message: 'Tebrikler! Bölüm tamamlandı!' },
@@ -146,7 +236,7 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
 
             collectedSnapshots.push({
                 tickNumber,
-                grid: cloneGrid(gridRef.current),
+                rooms: cloneRooms(roomsRef.current),
                 entities: snapshotEntities,
                 vfxEvents: tickVfxEvents,
                 uiEvents: tickUiEvents,
@@ -177,7 +267,10 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
             setIsAnimating(true);
             isAnimatingInternalRef.current = true;
         }
-    }, [levelEdges, trailCollision]);
+        
+        // Turn sonunda state'i ref'ten besle
+        setControlledRoomIds(controlledRoomIdsRef.current);
+    }, [trailCollision]);
 
     const onAnimationEnd = useCallback(() => {
         setIsAnimating(false);
@@ -204,19 +297,69 @@ export function useGameEngine({ initialEntities, initialGrid, levelEdges, trailC
 
     const clearUiEvents = useCallback(() => setUiEvents([]), []);
 
-    const reset = useCallback((newEntities: Entity[], newGrid: Cell[][]) => {
+    const reset = useCallback((newEntities: Entity[], newRooms: Record<string, RoomState> | Cell[][], newControlledRooms?: string[]) => {
+        let normalizedRooms: Record<string, RoomState> = {};
+        if (Array.isArray(newRooms)) {
+            const roomId = 'main';
+            const grid = newRooms.map(row =>
+                row.map(cell => ({
+                    ...cell,
+                    position: { ...cell.position, roomId },
+                    def: { ...cell.def },
+                    customData: { ...cell.customData },
+                }))
+            );
+            const edges = {
+                top:    typeof levelEdges?.top === 'string' ? { type: levelEdges.top } : (levelEdges?.top || { type: 'wall' }),
+                bottom: typeof levelEdges?.bottom === 'string' ? { type: levelEdges.bottom } : (levelEdges?.bottom || { type: 'wall' }),
+                left:   typeof levelEdges?.left === 'string' ? { type: levelEdges.left } : (levelEdges?.left || { type: 'wall' }),
+                right:  typeof levelEdges?.right === 'string' ? { type: levelEdges.right } : (levelEdges?.right || { type: 'wall' }),
+            } as RoomState['edges'];
+
+            normalizedRooms = {
+                [roomId]: {
+                    id: roomId,
+                    name: 'Main Room',
+                    width: grid[0]?.length ?? 0,
+                    height: grid.length,
+                    x: 0, y: 0,
+                    edges,
+                    grid,
+                }
+            };
+        } else {
+            normalizedRooms = cloneRooms(newRooms);
+        }
+
         entitiesRef.current = newEntities;
-        gridRef.current = newGrid;
+        roomsRef.current = normalizedRooms;
+
+        const resolvedControlled = newControlledRooms ?? Object.keys(normalizedRooms);
+        controlledRoomIdsRef.current = resolvedControlled;
+        setControlledRoomIds(resolvedControlled);
+
         isGameOverRef.current = false;
         setIsGameOver(false);
-        setSnapshots([]);
+        setSnapshots([{
+            tickNumber: 0,
+            rooms: cloneRooms(normalizedRooms),
+            entities: cloneEntities(newEntities),
+            vfxEvents: [],
+            uiEvents: [],
+        }]);
         setUiEvents([]);
         setIsAnimating(false);
         isAnimatingInternalRef.current = false;
-    }, []);
+    }, [levelEdges]);
 
     return {
         snapshots,
+        rooms: roomsRef.current,
+        controlledRoomIds,
+        setControlledRoomIds: (ids: string[]) => {
+            controlledRoomIdsRef.current = ids;
+            setControlledRoomIds(ids);
+        },
         isAnimating,
         isGameOver,
         uiEvents,

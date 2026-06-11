@@ -25,7 +25,7 @@ export const teleportBehavior: CellBehavior = {
 
         // Eğer bir önceki pozisyon hedeflenen ışınlanma çıkış noktası ile aynıysa, 
         // bu nesne yeni ışınlanmıştır. Sonsuz döngüyü önlemek için tekrar ışınlamıyoruz.
-        if (prevPos && prevPos.row === targetPos.row && prevPos.col === targetPos.col) {
+        if (prevPos && (prevPos.roomId ?? 'main') === (targetPos.roomId ?? 'main') && prevPos.row === targetPos.row && prevPos.col === targetPos.col) {
             return [];
         }
 

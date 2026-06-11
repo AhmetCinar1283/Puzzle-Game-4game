@@ -3,7 +3,7 @@ import { processSingleTick } from '@/app/src/game2/logic/engine/intentLoop';
 import { checkWinCondition } from '@/app/src/game2/logic/winCondition';
 import type { Entity } from '@/app/src/game2/logic/entityTypes';
 import type { Cell } from '@/app/src/game2/logic/cellTypes';
-import type { ActionIntent } from '@/app/src/game2/logic/types';
+import type { ActionIntent, RoomState } from '@/app/src/game2/logic/types';
 import type { LevelBounds } from '@/app/src/game2/logic/engine/getNextTopologyPosition';
 import type { LevelData, Direction, Position } from '../types';
 
@@ -33,40 +33,52 @@ function cloneEntities(entities: Entity[]): Entity[] {
   }));
 }
 
-/** Deep clone grid */
-function cloneGrid(grid: Cell[][]): Cell[][] {
-  return grid.map((row) =>
-    row.map((cell) => ({
-      ...cell,
-      def: { ...cell.def },
-      customData: { ...cell.customData },
-    }))
-  );
+/** Deep clone rooms */
+function cloneRooms(rooms: Record<string, RoomState>): Record<string, RoomState> {
+  const cloned: Record<string, RoomState> = {};
+  for (const [id, room] of Object.entries(rooms)) {
+    cloned[id] = {
+      ...room,
+      edges: JSON.parse(JSON.stringify(room.edges)),
+      grid: room.grid.map((row) =>
+        row.map((cell) => ({
+          ...cell,
+          def: { ...cell.def },
+          customData: { ...cell.customData },
+        }))
+      ),
+    };
+  }
+  return cloned;
 }
 
 /**
  * Compact serialization of the game2 state.
  * Fully captures entity positions, forces, modes, heights, and active/destroyed statuses.
  */
-function serializeState(entities: Entity[], grid: Cell[][]): string {
+function serializeState(entities: Entity[], rooms: Record<string, RoomState>): string {
   const activeEnts = entities
     .filter((e) => !e.customData._destroyed)
     .sort((a, b) => a.id - b.id)
     .map((e) => {
       const mode = e.customData.mode ?? '';
-      return `${e.id}:${e.type}:${e.position.row},${e.position.col}:${e.physics.direction}:${e.physics.force}:${e.physics.z}:${mode}`;
+      const roomId = e.position.roomId ?? 'main';
+      return `${e.id}:${e.type}:${roomId}:${e.position.row},${e.position.col}:${e.physics.direction}:${e.physics.force}:${e.physics.z}:${mode}`;
     })
     .join('|');
 
-  // Serialize grid mutations (like crushed obstacles)
-  const mutatedCells = grid
-    .flat()
-    .filter((c) => c.type === 'normal' && c.customData.wasObstacle)
-    .map((c) => c.id)
-    .sort()
-    .join('|');
+  // Serialize grid mutations (like crushed obstacles) in all rooms
+  const mutatedCells: string[] = [];
+  for (const [rId, room] of Object.entries(rooms)) {
+    room.grid.flat().forEach((c) => {
+      if (c.type === 'normal' && c.customData.wasObstacle) {
+        mutatedCells.push(`${rId}:${c.id}`);
+      }
+    });
+  }
+  const mutatedStr = mutatedCells.sort().join('|');
 
-  return `${activeEnts}#${mutatedCells}`;
+  return `${activeEnts}#${mutatedStr}`;
 }
 
 /**
@@ -75,12 +87,12 @@ function serializeState(entities: Entity[], grid: Cell[][]): string {
  */
 function transition(
   entities: Entity[],
-  grid: Cell[][],
+  rooms: Record<string, RoomState>,
   rawDirection: Direction,
   levelBounds?: LevelBounds
-): { entities: Entity[]; grid: Cell[][]; won: boolean; lost: boolean } {
+): { entities: Entity[]; rooms: Record<string, RoomState>; won: boolean; lost: boolean } {
   const clonedEnts = cloneEntities(entities);
-  const clonedGrid = cloneGrid(grid);
+  const clonedRooms = cloneRooms(rooms);
 
   // Construct initial mutate intents exactly like PlayScreen
   const intents: ActionIntent[] = clonedEnts
@@ -111,13 +123,14 @@ function transition(
 
     const playerCountBefore = clonedEnts.filter((e) => e.type === 'player' && !e.customData._destroyed).length;
 
-    const result = processSingleTick(clonedEnts, clonedGrid, pending, levelBounds);
+    const result = processSingleTick(clonedEnts, clonedRooms, pending, levelBounds);
     tickNumber++;
 
     // Mark cells that were obstacles but got crushed
     result.pendingNextTick.forEach((intent) => {
       if (intent.type === 'mutate_cell' && intent.targetCellPos && intent.newCellType === 'normal') {
-        const cell = clonedGrid[intent.targetCellPos.row]?.[intent.targetCellPos.col];
+        const roomId = intent.targetCellPos.roomId ?? 'main';
+        const cell = clonedRooms[roomId]?.grid[intent.targetCellPos.row]?.[intent.targetCellPos.col];
         if (cell) cell.customData.wasObstacle = true;
       }
     });
@@ -128,7 +141,7 @@ function transition(
 
     const playerCountAfter = clonedEnts.filter((e) => e.type === 'player').length;
     
-    won = checkWinCondition(clonedEnts, clonedGrid);
+    won = checkWinCondition(clonedEnts, clonedRooms);
     lost = playerCountAfter < playerCountBefore;
 
     if (won || lost) {
@@ -139,7 +152,7 @@ function transition(
 
   return {
     entities: clonedEnts,
-    grid: clonedGrid,
+    rooms: clonedRooms,
     won,
     lost,
   };
@@ -154,17 +167,16 @@ export function solvePuzzle(
   maxMoves: number = 25,
   maxStates: number = 8000
 ): SolverResult {
-  // Convert standard LevelData -> game2 Entity[] and Cell[][]
   const game2State = convertToGame2State(level as any);
   
   const levelBounds: LevelBounds | undefined = {
-    rows: game2State.grid.length,
-    cols: game2State.grid[0]?.length ?? 0,
+    rows: 0,
+    cols: 0,
     edges: level.edges as any,
     trailCollision: !!level.trailCollision,
   };
 
-  const initialWon = checkWinCondition(game2State.entities, game2State.grid);
+  const initialWon = checkWinCondition(game2State.entities, game2State.rooms);
   if (initialWon) {
     return {
       solvable: true,
@@ -174,15 +186,15 @@ export function solvePuzzle(
     };
   }
 
-  const queue: { entities: Entity[]; grid: Cell[][]; path: Direction[] }[] = [];
+  const queue: { entities: Entity[]; rooms: Record<string, RoomState>; path: Direction[] }[] = [];
   queue.push({
     entities: game2State.entities,
-    grid: game2State.grid,
+    rooms: game2State.rooms,
     path: [],
   });
 
   const visited = new Set<string>();
-  visited.add(serializeState(game2State.entities, game2State.grid));
+  visited.add(serializeState(game2State.entities, game2State.rooms));
 
   const directions: Direction[] = ['up', 'down', 'left', 'right'];
   let statesExplored = 0;
@@ -191,7 +203,7 @@ export function solvePuzzle(
     const current = queue.shift();
     if (!current) break;
 
-    const { entities, grid, path } = current;
+    const { entities, rooms, path } = current;
     statesExplored++;
 
     if (statesExplored >= maxStates) {
@@ -199,7 +211,7 @@ export function solvePuzzle(
     }
 
     for (const dir of directions) {
-      const next = transition(entities, grid, dir, levelBounds);
+      const next = transition(entities, rooms, dir, levelBounds);
 
       if (next.won) {
         const fullSolution = [...path, dir];
@@ -215,14 +227,14 @@ export function solvePuzzle(
         continue;
       }
 
-      const stateKey = serializeState(next.entities, next.grid);
+      const stateKey = serializeState(next.entities, next.rooms);
       if (!visited.has(stateKey)) {
         visited.add(stateKey);
 
         if (path.length + 1 < maxMoves) {
           queue.push({
             entities: next.entities,
-            grid: next.grid,
+            rooms: next.rooms,
             path: [...path, dir],
           });
         }
@@ -245,8 +257,8 @@ export function getSolutionTrajectories(
   const game2State = convertToGame2State(level as any);
   
   const levelBounds: LevelBounds | undefined = {
-    rows: game2State.grid.length,
-    cols: game2State.grid[0]?.length ?? 0,
+    rows: 0,
+    cols: 0,
     edges: level.edges as any,
     trailCollision: !!level.trailCollision,
   };
@@ -257,22 +269,21 @@ export function getSolutionTrajectories(
   const recordPositions = (entities: Entity[]) => {
     const p1 = entities.find((e) => e.type === 'player' && e.id === 1);
     const p2 = entities.find((e) => e.type === 'player' && e.id === 2);
-    if (p1) p1Path.push({ row: p1.position.row, col: p1.position.col });
-    if (p2) p2Path.push({ row: p2.position.row, col: p2.position.col });
+    if (p1) p1Path.push({ roomId: p1.position.roomId ?? 'main', row: p1.position.row, col: p1.position.col });
+    if (p2) p2Path.push({ roomId: p2.position.roomId ?? 'main', row: p2.position.row, col: p2.position.col });
   };
 
   recordPositions(game2State.entities);
 
   let currentEntities = game2State.entities;
-  let currentGrid = game2State.grid;
+  let currentRooms = game2State.rooms;
 
   for (const dir of solution) {
-    const next = transition(currentEntities, currentGrid, dir, levelBounds);
+    const next = transition(currentEntities, currentRooms, dir, levelBounds);
     currentEntities = next.entities;
-    currentGrid = next.grid;
+    currentRooms = next.rooms;
     recordPositions(currentEntities);
   }
 
   return { player1: p1Path, player2: p2Path };
 }
-

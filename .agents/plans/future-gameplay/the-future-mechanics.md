@@ -11,6 +11,7 @@ Mevcut CELL_BEHAVIORS registry sistemine eklenebilecek yeni hücre tipleri:
 - Yön Saptırıcılar (Rotators): conveyor sisteminden farklı olarak nesnenin hareketini değil, içsel yön algısını değiştiren zeminler. Örneğin bu zemin türüne giren bir nesne için "Yukarı" ok tuşu artık "Sağ" yönünde tepki verir.
 - [x] Multi-Conveyor: İkili ya da daha fazla kare ittiren conveyorlar, Bir engel çıkmadığı sürece ve geçtiği kareleri de tetikleyerek n sayıda kare ittiren conveyorler. (Mevcut conveyorlere gelen bir özellik olsa daha güzel olur. Kaç n ittireceğini göstermeli üzerinde)
 - [x] Mancınıklar ya da yaylı zıplatıcılar: Conveyorler gibi n sayıda kare ileriye götürecek fakat yukarıdan götürecek. Bu da eğer ice varsa başka yönde ittiren conveyor ya da obstacle'lardan etkilenmeden yani aradaki karelerden etkilenmeden yukarıdan götürecek.
+- [ ] Playerlerin yerlerini değiştiren kareler. Bir kare ya da ikisi de aynı yere gelince yer değiştirirler.
 
 ### 2. Oyun Teorisi ve Stratejik Dinamikler
 Basit grid mantığına derinlik ve karar verme mekanizmaları katan eklentiler:

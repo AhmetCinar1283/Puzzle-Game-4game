@@ -65,17 +65,24 @@ export default function GridEdgeStrip() {
 
   const cycleEdge = (side: 'top' | 'bottom' | 'left' | 'right') => {
     setEdges((e) => {
-      const current = e[side];
+      const current = e[side]?.type ?? 'wall';
       const idx = EDGE_OPTIONS.indexOf(current);
-      const next = EDGE_OPTIONS[(idx + 1) % EDGE_OPTIONS.length];
-      return { ...e, [side]: next };
+      const nextType = EDGE_OPTIONS[(idx + 1) % EDGE_OPTIONS.length] as any;
+      return {
+        ...e,
+        [side]: {
+          ...e[side],
+          type: nextType,
+          ...(nextType !== 'portal' ? { targetRoomId: undefined, targetEdge: undefined } : {})
+        }
+      };
     });
   };
 
   return (
     <>
       {(['top', 'bottom', 'left', 'right'] as const).map((side) => (
-        <EdgeStrip key={side} side={side} behavior={edges[side]} onCycle={() => cycleEdge(side)} />
+        <EdgeStrip key={side} side={side} behavior={edges[side]?.type ?? 'wall'} onCycle={() => cycleEdge(side)} />
       ))}
     </>
   );

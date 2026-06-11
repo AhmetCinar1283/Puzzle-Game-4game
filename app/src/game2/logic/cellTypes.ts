@@ -1,4 +1,4 @@
-import { ActionIntent, Position } from "./types";
+import { ActionIntent, Position, RoomState } from "./types";
 import { Entity } from "./entityTypes";
 import { LevelBounds } from "./engine/getNextTopologyPosition";
 
@@ -12,7 +12,8 @@ export type CellTypes =
     | 'normal' | 'obstacle' | 'forbidden' | 'ice'
     | 'power' | 'toggle'
     | 'conveyor' | 'trampoline' | 'teleport'
-    | 'target';    // Oyuncunun ulaşması gereken hedef hücre
+    | 'target'
+    | 'control_switch'; // Yeni hücre tipi: oda kontrolünü değiştirir
 
 // SAF VERİ — JSON'a çevrilebilir, behavior içermez.
 // Motor, davranışları her zaman CELL_BEHAVIORS[cell.type] registry'sinden okur.
@@ -31,7 +32,7 @@ export interface CellBehavior {
     onEnter?: (
         cell: Cell,
         entity: Entity,
-        grid: Cell[][],
+        rooms: Record<string, RoomState> | Cell[][],
         entities: Entity[],
         prevPos?: Position,
         levelBounds?: LevelBounds

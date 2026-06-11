@@ -1,8 +1,7 @@
-'use client';
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CellType, EdgeBehavior, LevelData, Position, ConveyorCellConfig, TrampolineCellConfig } from '@/app/src/games/types';
+import type { EdgeConfig, ControlMode } from '@/app/src/game2/logic/types';
 import type { StoredLevel } from '@/app/src/lib/db';
 import type { FirestoreLevel, LevelPart } from '@/app/src/lib/firebase/admin';
 import { useAuth } from '@/app/src/hooks/useAuth';
@@ -12,8 +11,8 @@ import { makeGrid, resizeGrid, type ToolType, type ObjConfig, type BoxConfig } f
 import type { SelectionRect } from './useGridOperations';
 
 const DEFAULT_OBJS: ObjConfig[] = [
-  { id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true },
-  { id: 2, row: null, col: null, mode: 'normal', lockOnTarget: true },
+  { id: 1, row: null, col: null, roomId: 'main', mode: 'normal', lockOnTarget: true },
+  { id: 2, row: null, col: null, roomId: 'main', mode: 'normal', lockOnTarget: true },
 ];
 
 export function useEditorState(editId: number | null, firestoreIdParam: string | null) {
@@ -32,8 +31,32 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const [difficulty, setDifficulty] = useState<1 | 2 | 3 | 4>(2);
   const [savedRequestId, setSavedRequestId] = useState<string | null>(null);
   const savedIdForSubmitRef = useRef<number | null>(null);
-  const [edges, setEdges] = useState<Record<'top' | 'bottom' | 'left' | 'right', EdgeBehavior>>({ top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' });
+  const [edges, setEdges] = useState<Record<'top' | 'bottom' | 'left' | 'right', EdgeConfig>>({
+    top: { type: 'wall' },
+    bottom: { type: 'wall' },
+    left: { type: 'wall' },
+    right: { type: 'wall' },
+  });
   const [grid, setGrid] = useState<CellType[][]>(() => makeGrid(5, 5));
+  const [rooms, setRooms] = useState<any[]>(() => [
+    {
+      id: 'main',
+      name: 'Main Room',
+      width: 5,
+      height: 5,
+      x: 0,
+      y: 0,
+      edges: {
+        top: { type: 'wall' },
+        bottom: { type: 'wall' },
+        left: { type: 'wall' },
+        right: { type: 'wall' },
+      },
+      grid: makeGrid(5, 5),
+    }
+  ]);
+  const [activeRoomId, setActiveRoomId] = useState<string>('main');
+  const [controlMode, setControlMode] = useState<ControlMode>('all_rooms');
   const [lockedCells, setLockedCells] = useState<Record<string, boolean>>({});
   const [optimalSolutionTrajectory, setOptimalSolutionTrajectory] = useState<{ player1: Position[]; player2: Position[] } | null>(null);
   const [objects, setObjects] = useState<ObjConfig[]>(DEFAULT_OBJS);
@@ -143,26 +166,78 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setLevelName(stored.name);
     setOptimalSolution(null);
     setOptimalSolutionMoves(0);
-    setWidth(stored.width); setHeight(stored.height);
-    setPendingW(stored.width); setPendingH(stored.height);
-    setEdges(stored.edges as typeof edges);
-    setGrid(stored.grid as CellType[][]);
-    setLockedCells((stored as any).lockedCells ?? {});
     setTrailCollision(!!stored.trailCollision);
     setDifficulty((stored.difficulty != undefined ? stored.difficulty : 2) as 1 | 2 | 3 | 4);
     setSavedRequestId(stored.requestId ?? null);
+
+    // Multi-room support loading
+    const parsedControlMode = stored.controlMode ?? 'all_rooms';
+    setControlMode(parsedControlMode);
+
+    if (stored.rooms && stored.rooms.length > 0) {
+      const parsedRooms = stored.rooms.map((r) => ({
+        id: r.id,
+        name: r.name,
+        width: r.width,
+        height: r.height,
+        x: r.x ?? 0,
+        y: r.y ?? 0,
+        edges: {
+          top: typeof r.edges.top === 'string' ? { type: r.edges.top } : r.edges.top,
+          bottom: typeof r.edges.bottom === 'string' ? { type: r.edges.bottom } : r.edges.bottom,
+          left: typeof r.edges.left === 'string' ? { type: r.edges.left } : r.edges.left,
+          right: typeof r.edges.right === 'string' ? { type: r.edges.right } : r.edges.right,
+        },
+        grid: typeof r.grid === 'string' ? JSON.parse(r.grid) : r.grid,
+      }));
+      setRooms(parsedRooms);
+
+      const firstRoom = parsedRooms[0];
+      setActiveRoomId(firstRoom.id);
+      setWidth(firstRoom.width); setHeight(firstRoom.height);
+      setPendingW(firstRoom.width); setPendingH(firstRoom.height);
+      setEdges(firstRoom.edges);
+      setGrid(firstRoom.grid);
+    } else {
+      // Legacy single-room fallback
+      const legacyEdges = {
+        top: typeof stored.edges.top === 'string' ? { type: stored.edges.top } : stored.edges.top,
+        bottom: typeof stored.edges.bottom === 'string' ? { type: stored.edges.bottom } : stored.edges.bottom,
+        left: typeof stored.edges.left === 'string' ? { type: stored.edges.left } : stored.edges.left,
+        right: typeof stored.edges.right === 'string' ? { type: stored.edges.right } : stored.edges.right,
+      } as any;
+      const mainRoom = {
+        id: 'main',
+        name: stored.name,
+        width: stored.width,
+        height: stored.height,
+        x: 0,
+        y: 0,
+        edges: legacyEdges,
+        grid: typeof stored.grid === 'string' ? JSON.parse(stored.grid) : stored.grid as CellType[][],
+      };
+      setRooms([mainRoom]);
+      setActiveRoomId('main');
+      setWidth(stored.width); setHeight(stored.height);
+      setPendingW(stored.width); setPendingH(stored.height);
+      setEdges(legacyEdges);
+      setGrid(mainRoom.grid);
+    }
+
+    setLockedCells((stored as any).lockedCells ?? {});
     const objs: ObjConfig[] = (stored.initialObjects ?? []).map((obj) => ({
       id: obj.id,
       row: obj.position.row,
       col: obj.position.col,
+      roomId: obj.position.roomId ?? 'main',
       mode: obj.mode,
       lockOnTarget: obj.lockOnTarget,
     }));
     if (objs.length === 0) {
-      objs.push({ id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true });
+      objs.push({ id: 1, row: null, col: null, roomId: 'main', mode: 'normal', lockOnTarget: true });
     }
     setObjects(objs);
-    setBoxes((stored.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
+    setBoxes((stored.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, roomId: b.position.roomId ?? 'main', requiresPower: b.requiresPower ?? false })));
     setConveyorPowerRequired(stored.conveyorPowerRequired ?? []);
     setConveyorConfig(stored.conveyorConfig ?? []);
     setTrampolineConfig(stored.trampolineConfig ?? []);
@@ -183,11 +258,17 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     const newH = Math.max(3, Math.min(16, pendingH));
     setWidth(newW); setHeight(newH);
     setGrid((g) => resizeGrid(g, newW, newH));
-    setObjects((os) => os.map((o) => ({ ...o, row: o.row !== null && o.row < newH ? o.row : null, col: o.col !== null && o.col < newW ? o.col : null })));
-    setBoxes((bs) => bs.map((b) => ({ ...b, row: b.row !== null && b.row < newH ? b.row : null, col: b.col !== null && b.col < newW ? b.col : null })));
-    setConveyorPowerRequired((cpr) => cpr.filter((p) => p.row < newH && p.col < newW));
-    setConveyorConfig((cc) => cc.filter((c) => c.position.row < newH && c.position.col < newW));
-    setTrampolineConfig((tc) => tc.filter((c) => c.position.row < newH && c.position.col < newW));
+    setObjects((os) => os.map((o) => {
+      if ((o.roomId ?? 'main') !== activeRoomId) return o;
+      return { ...o, row: o.row !== null && o.row < newH ? o.row : null, col: o.col !== null && o.col < newW ? o.col : null };
+    }));
+    setBoxes((bs) => bs.map((b) => {
+      if ((b.roomId ?? 'main') !== activeRoomId) return b;
+      return { ...b, row: b.row !== null && b.row < newH ? b.row : null, col: b.col !== null && b.col < newW ? b.col : null };
+    }));
+    setConveyorPowerRequired((cpr) => cpr.filter((p) => (p.roomId ?? 'main') !== activeRoomId || (p.row < newH && p.col < newW)));
+    setConveyorConfig((cc) => cc.filter((c) => (c.position.roomId ?? 'main') !== activeRoomId || (c.position.row < newH && c.position.col < newW)));
+    setTrampolineConfig((tc) => tc.filter((c) => (c.position.roomId ?? 'main') !== activeRoomId || (c.position.row < newH && c.position.col < newW)));
 
     setSelection(null);
     setLockedCells((prev) => {
@@ -203,7 +284,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       return filtered;
     });
     setActiveCandidateIndex(null);
-  }, [pendingW, pendingH]);
+  }, [pendingW, pendingH, activeRoomId]);
 
   const paintCell = useCallback((r: number, c: number, isDrag: boolean) => {
     setActiveCandidateIndex(null);
@@ -211,12 +292,12 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     if (activeTool.startsWith('place_obj')) {
       const id = parseInt(activeTool.substring(9), 10);
       if (!isNaN(id)) {
-        setObjects((os) => os.map((o) => o.id === id ? { ...o, row: r, col: c } : o));
+        setObjects((os) => os.map((o) => o.id === id ? { ...o, row: r, col: c, roomId: activeRoomId } : o));
         return;
       }
     }
     if (activeTool === 'place_box' && activePlacingBoxId !== null) {
-      setBoxes((bs) => bs.map((b) => b.id === activePlacingBoxId ? { ...b, row: r, col: c } : b));
+      setBoxes((bs) => bs.map((b) => b.id === activePlacingBoxId ? { ...b, row: r, col: c, roomId: activeRoomId } : b));
       setActivePlacingBoxId(null);
       setActiveTool(prevToolRef.current);
       return;
@@ -265,19 +346,169 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       next[r][c] = cellType;
       return next;
     });
-  }, [activeTool, activePlacingBoxId, setActiveTool]);
+  }, [activeTool, activePlacingBoxId, setActiveTool, activeRoomId]);
+  const switchActiveRoom = useCallback((newId: string) => {
+    setRooms((prevRooms) => {
+      const updated = prevRooms.map((r) => {
+        if (r.id === activeRoomId) {
+          return { ...r, width, height, edges, grid };
+        }
+        return r;
+      });
+
+      const targetRoom = updated.find((r) => r.id === newId);
+      if (targetRoom) {
+        setActiveRoomId(newId);
+        setWidth(targetRoom.width);
+        setHeight(targetRoom.height);
+        setPendingW(targetRoom.width);
+        setPendingH(targetRoom.height);
+        setEdges(targetRoom.edges);
+        setGrid(targetRoom.grid);
+      }
+      return updated;
+    });
+  }, [activeRoomId, width, height, edges, grid]);
+
+  const addRoom = useCallback(() => {
+    // Find first unoccupied layout slot in the 6x6 grid [0..5]
+    let newX = 0;
+    let newY = 0;
+    let found = false;
+    for (let y = 0; y <= 5; y++) {
+      for (let x = 0; x <= 5; x++) {
+        if (!rooms.some((r) => r.x === x && r.y === y)) {
+          newX = x;
+          newY = y;
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+
+    const newId = `room_${Date.now()}`;
+    const newRoom = {
+      id: newId,
+      name: `Room ${rooms.length + 1}`,
+      width: 5,
+      height: 5,
+      x: newX,
+      y: newY,
+      edges: {
+        top: { type: 'wall' },
+        bottom: { type: 'wall' },
+        left: { type: 'wall' },
+        right: { type: 'wall' },
+      },
+      grid: makeGrid(5, 5),
+    };
+
+    setRooms((prevRooms) => {
+      const updated = prevRooms.map((r) => {
+        if (r.id === activeRoomId) {
+          return { ...r, width, height, edges, grid };
+        }
+        return r;
+      });
+      return [...updated, newRoom];
+    });
+
+    setActiveRoomId(newId);
+    setWidth(5);
+    setHeight(5);
+    setPendingW(5);
+    setPendingH(5);
+    setEdges({
+      top: { type: 'wall' },
+      bottom: { type: 'wall' },
+      left: { type: 'wall' },
+      right: { type: 'wall' },
+    });
+    setGrid(makeGrid(5, 5));
+  }, [rooms, activeRoomId, width, height, edges, grid]);
+
+  const deleteRoom = useCallback((idToDelete: string) => {
+    if (rooms.length <= 1) return;
+
+    setRooms((prevRooms) => {
+      const remaining = prevRooms.filter((r) => r.id !== idToDelete);
+
+      if (activeRoomId === idToDelete) {
+        const fallbackRoom = remaining[0];
+        setActiveRoomId(fallbackRoom.id);
+        setWidth(fallbackRoom.width);
+        setHeight(fallbackRoom.height);
+        setPendingW(fallbackRoom.width);
+        setPendingH(fallbackRoom.height);
+        setEdges(fallbackRoom.edges);
+        setGrid(fallbackRoom.grid);
+      }
+      return remaining;
+    });
+
+    setObjects((os) => os.filter((o) => (o.roomId ?? 'main') !== idToDelete));
+    setBoxes((bs) => bs.filter((b) => (b.roomId ?? 'main') !== idToDelete));
+    setConveyorPowerRequired((cpr) => cpr.filter((pos) => (pos.roomId ?? 'main') !== idToDelete));
+    setConveyorConfig((cc) => cc.filter((c) => (c.position.roomId ?? 'main') !== idToDelete));
+    setTrampolineConfig((tc) => tc.filter((c) => (c.position.roomId ?? 'main') !== idToDelete));
+  }, [rooms.length, activeRoomId]);
+
+  const updateRoomName = useCallback((id: string, newName: string) => {
+    setRooms((prev) => prev.map((r) => r.id === id ? { ...r, name: newName } : r));
+  }, []);
+
+  const updateRoomLayoutPosition = useCallback((id: string, x: number, y: number) => {
+    const clampedX = Math.max(0, Math.min(5, Math.floor(x)));
+    const clampedY = Math.max(0, Math.min(5, Math.floor(y)));
+
+    setRooms((prev) => {
+      const duplicateRoom = prev.find((r) => r.id !== id && r.x === clampedX && r.y === clampedY);
+
+      if (duplicateRoom) {
+        const currentRoom = prev.find((r) => r.id === id);
+        if (currentRoom) {
+          const originalX = currentRoom.x;
+          const originalY = currentRoom.y;
+
+          return prev.map((r) => {
+            if (r.id === id) {
+              return { ...r, x: clampedX, y: clampedY };
+            }
+            if (r.id === duplicateRoom.id) {
+              return { ...r, x: originalX, y: originalY };
+            }
+            return r;
+          });
+        }
+      }
+
+      return prev.map((r) => r.id === id ? { ...r, x: clampedX, y: clampedY } : r);
+    });
+  }, []);
+
   const generateLevelData = useCallback((): { level: LevelData | null; error: string | null } => {
+    const currentRooms = rooms.map((r) => {
+      if (r.id === activeRoomId) {
+        return { ...r, width, height, edges, grid };
+      }
+      return r;
+    });
+
     const validObjs = objects.filter((o) => o.row !== null && o.col !== null);
     if (validObjs.length < 1) return { level: null, error: 'Place at least one player on the grid first.' };
     if (validObjs.length !== objects.length) return { level: null, error: 'All defined players must be placed on the grid.' };
 
-    const targets: { objectId: number; position: { row: number; col: number } }[] = [];
-    for (let r = 0; r < height; r++) {
-      for (let c = 0; c < width; c++) {
-        if (grid[r][c].startsWith('target_')) {
-          const id = parseInt(grid[r][c].substring(7), 10);
-          if (!isNaN(id)) {
-            targets.push({ objectId: id, position: { row: r, col: c } });
+    const targets: { objectId: number; position: { roomId: string; row: number; col: number } }[] = [];
+    for (const room of currentRooms) {
+      for (let r = 0; r < room.height; r++) {
+        for (let c = 0; c < room.width; c++) {
+          const cell = room.grid[r][c];
+          if (cell.startsWith('target_')) {
+            const id = parseInt(cell.substring(7), 10);
+            if (!isNaN(id)) {
+              targets.push({ objectId: id, position: { roomId: room.id, row: r, col: c } });
+            }
           }
         }
       }
@@ -287,13 +518,14 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       return { level: null, error: `Number of targets (${targets.length}) must match number of players (${validObjs.length}).` };
     }
 
-    // Validate teleporters: check each group has at least 2 portals
     const telGroupCounts: Record<string, number> = {};
-    for (const row of grid) {
-      for (const cell of row) {
-        if (cell.startsWith('teleporter_in_') || cell.startsWith('teleporter_out_')) {
-          const group = cell.substring(cell.lastIndexOf('_') + 1);
-          telGroupCounts[group] = (telGroupCounts[group] ?? 0) + 1;
+    for (const room of currentRooms) {
+      for (const row of room.grid) {
+        for (const cell of row) {
+          if (cell.startsWith('teleporter_in_') || cell.startsWith('teleporter_out_')) {
+            const group = cell.substring(cell.lastIndexOf('_') + 1);
+            telGroupCounts[group] = (telGroupCounts[group] ?? 0) + 1;
+          }
         }
       }
     }
@@ -304,21 +536,53 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     }
 
     const validBoxes = boxes.filter((b) => b.row !== null && b.col !== null);
+    const initialControlledRooms = controlMode === 'all_rooms' ? currentRooms.map(r => r.id) : [currentRooms[0].id];
+
     return {
       level: {
-        id: editId ?? 0, name: levelName || 'Unnamed Level', width, height, edges, grid, difficulty, creatorName,
-        initialObjects: validObjs.map((o) => ({ id: o.id, position: { row: o.row!, col: o.col! }, mode: o.mode, lockOnTarget: o.lockOnTarget })),
-        targets,
+        id: editId ?? 0,
+        name: levelName || 'Unnamed Level',
+        width,
+        height,
+        edges: edges as any,
+        grid,
+        difficulty,
+        creatorName,
+        rooms: currentRooms.map((r) => ({
+          id: r.id,
+          name: r.name,
+          width: r.width,
+          height: r.height,
+          x: r.x,
+          y: r.y,
+          edges: r.edges,
+          grid: r.grid,
+        })),
+        controlMode,
+        initialControlledRooms,
+        initialObjects: validObjs.map((o) => ({
+          id: o.id,
+          position: { roomId: o.roomId ?? 'main', row: o.row!, col: o.col! },
+          mode: o.mode,
+          lockOnTarget: o.lockOnTarget
+        })),
+        targets: targets as any,
         ...(trailCollision ? { trailCollision: true } : {}),
-        ...(validBoxes.length > 0 ? { initialBoxes: validBoxes.map((b) => ({ id: b.id, position: { row: b.row!, col: b.col! }, ...(b.requiresPower ? { requiresPower: true } : {}) })) } : {}),
+        ...(validBoxes.length > 0 ? {
+          initialBoxes: validBoxes.map((b) => ({
+            id: b.id,
+            position: { roomId: b.roomId ?? 'main', row: b.row!, col: b.col! },
+            ...(b.requiresPower ? { requiresPower: true } : {})
+          }))
+        } : {}),
         ...(conveyorPowerRequired.length > 0 ? { conveyorPowerRequired } : {}),
         ...(conveyorConfig.length > 0 ? { conveyorConfig } : {}),
         ...(trampolineConfig.length > 0 ? { trampolineConfig } : {}),
         ...(Object.keys(lockedCells).length > 0 ? { lockedCells } : {}),
-      },
+      } as any,
       error: null,
     };
-  }, [editId, levelName, width, height, edges, grid, objects, trailCollision, boxes, conveyorPowerRequired, conveyorConfig, trampolineConfig, lockedCells]);
+  }, [editId, levelName, width, height, edges, grid, objects, trailCollision, boxes, conveyorPowerRequired, conveyorConfig, trampolineConfig, lockedCells, rooms, controlMode, activeRoomId, difficulty, creatorName]);
 
   // Live Path Solver effect (debounced)
   useEffect(() => {
@@ -332,7 +596,6 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       }
       try {
         const { solvePuzzle, getSolutionTrajectories } = await import('@/app/src/games/logic/solver');
-        // Limit search depth to 26 to keep it fast while resolving Hard/Expert levels
         const result = solvePuzzle(level, 26, 2000);
         if (result.solvable && result.solution) {
           setOptimalSolution(result.solution);
@@ -350,9 +613,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [grid, width, height, objects, boxes, edges, trailCollision, conveyorPowerRequired, conveyorConfig, trampolineConfig, generateLevelData]);
+  }, [grid, width, height, objects, boxes, edges, trailCollision, conveyorPowerRequired, conveyorConfig, trampolineConfig, generateLevelData, rooms]);
 
-  const buildPayload = useCallback((level: LevelData): Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt'> => ({
+  const buildPayload = useCallback((level: any): Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt'> => ({
     name: level.name, width: level.width, height: level.height, edges: level.edges,
     grid: level.grid, initialObjects: level.initialObjects, targets: level.targets,
     trailCollision: level.trailCollision, initialBoxes: level.initialBoxes,
@@ -361,6 +624,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     trampolineConfig: level.trampolineConfig,
     difficulty,
     lockedCells: level.lockedCells,
+    rooms: level.rooms,
+    controlMode: level.controlMode,
+    initialControlledRooms: level.initialControlledRooms,
     ...(savedRequestId ? { requestId: savedRequestId } : {}),
     position: savedLevels.length
   }), [difficulty, savedRequestId, savedLevels.length]);
@@ -456,29 +722,83 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     const raw = localStorage.getItem('editorClipboard');
     if (!raw) return 'Pano boş.';
     try {
-      const parsed = JSON.parse(raw) as Partial<LevelData>;
-      if (!parsed.grid || !parsed.width || !parsed.height) return 'Geçersiz format.';
+      const parsed = JSON.parse(raw) as any;
+
       setLevelName(parsed.name ?? 'Pasted Level');
-      setWidth(parsed.width); setHeight(parsed.height);
-      setPendingW(parsed.width); setPendingH(parsed.height);
-      if (parsed.edges) setEdges(parsed.edges as typeof edges);
-      setGrid(parsed.grid as CellType[][]);
-      setLockedCells((parsed as any).lockedCells ?? {});
       setTrailCollision(!!parsed.trailCollision);
-      setBoxes((parsed.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
+      setLockedCells(parsed.lockedCells ?? {});
+
+      // Multi-room support loading
+      const parsedControlMode = parsed.controlMode ?? 'all_rooms';
+      setControlMode(parsedControlMode);
+
+      if (parsed.rooms && parsed.rooms.length > 0) {
+        const parsedRooms = parsed.rooms.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          width: r.width,
+          height: r.height,
+          x: r.x ?? 0,
+          y: r.y ?? 0,
+          edges: {
+            top: typeof r.edges.top === 'string' ? { type: r.edges.top } : r.edges.top,
+            bottom: typeof r.edges.bottom === 'string' ? { type: r.edges.bottom } : r.edges.bottom,
+            left: typeof r.edges.left === 'string' ? { type: r.edges.left } : r.edges.left,
+            right: typeof r.edges.right === 'string' ? { type: r.edges.right } : r.edges.right,
+          },
+          grid: typeof r.grid === 'string' ? JSON.parse(r.grid) : r.grid,
+        }));
+        setRooms(parsedRooms);
+
+        const firstRoom = parsedRooms[0];
+        setActiveRoomId(firstRoom.id);
+        setWidth(firstRoom.width); setHeight(firstRoom.height);
+        setPendingW(firstRoom.width); setPendingH(firstRoom.height);
+        setEdges(firstRoom.edges);
+        setGrid(firstRoom.grid);
+      } else {
+        if (!parsed.grid || !parsed.width || !parsed.height) return 'Geçersiz format.';
+        // Legacy single-room fallback
+        const legacyEdges = {
+          top: typeof parsed.edges.top === 'string' ? { type: parsed.edges.top } : parsed.edges.top,
+          bottom: typeof parsed.edges.bottom === 'string' ? { type: parsed.edges.bottom } : parsed.edges.bottom,
+          left: typeof parsed.edges.left === 'string' ? { type: parsed.edges.left } : parsed.edges.left,
+          right: typeof parsed.edges.right === 'string' ? { type: parsed.edges.right } : parsed.edges.right,
+        } as any;
+        const mainRoom = {
+          id: 'main',
+          name: parsed.name ?? 'Pasted Level',
+          width: parsed.width,
+          height: parsed.height,
+          x: 0,
+          y: 0,
+          edges: legacyEdges,
+          grid: typeof parsed.grid === 'string' ? JSON.parse(parsed.grid) : parsed.grid as CellType[][],
+        };
+        setRooms([mainRoom]);
+        setActiveRoomId('main');
+        setWidth(parsed.width); setHeight(parsed.height);
+        setPendingW(parsed.width); setPendingH(parsed.height);
+        setEdges(legacyEdges);
+        setGrid(mainRoom.grid);
+      }
+
+      setBoxes((parsed.initialBoxes ?? []).map((b: any) => ({ id: b.id, row: b.position.row, col: b.position.col, roomId: b.position.roomId ?? 'main', requiresPower: b.requiresPower ?? false })));
       setConveyorPowerRequired(parsed.conveyorPowerRequired ?? []);
       setConveyorConfig(parsed.conveyorConfig ?? []);
       setTrampolineConfig(parsed.trampolineConfig ?? []);
       setActivePlacingBoxId(null);
-      const objs: ObjConfig[] = (parsed.initialObjects ?? []).map((obj) => ({
+
+      const objs: ObjConfig[] = (parsed.initialObjects ?? []).map((obj: any) => ({
         id: obj.id,
         row: obj.position.row,
         col: obj.position.col,
+        roomId: obj.position.roomId ?? 'main',
         mode: obj.mode,
         lockOnTarget: obj.lockOnTarget,
       }));
       if (objs.length === 0) {
-        objs.push({ id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true });
+        objs.push({ id: 1, row: null, col: null, roomId: 'main', mode: 'normal', lockOnTarget: true });
       }
       setObjects(objs);
       return null;
@@ -492,23 +812,76 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setLevelName(fl.name);
     setOptimalSolution(null);
     setOptimalSolutionMoves(0);
-    setWidth(fl.width); setHeight(fl.height);
-    setPendingW(fl.width); setPendingH(fl.height);
-    setEdges(fl.edges as typeof edges);
-    setGrid(typeof fl.grid == 'string' ? JSON.parse(fl.grid) : fl.grid as CellType[][]);
     setTrailCollision(!!fl.trailCollision);
+    setDifficulty((fl.difficulty != undefined ? fl.difficulty : 2) as 1 | 2 | 3 | 4);
+
+    // Multi-room support loading
+    const parsedControlMode = fl.controlMode ?? 'all_rooms';
+    setControlMode(parsedControlMode);
+
+    if (fl.rooms && fl.rooms.length > 0) {
+      const parsedRooms = fl.rooms.map((r) => ({
+        id: r.id,
+        name: r.name,
+        width: r.width,
+        height: r.height,
+        x: r.x ?? 0,
+        y: r.y ?? 0,
+        edges: {
+          top: typeof r.edges.top === 'string' ? { type: r.edges.top } : r.edges.top,
+          bottom: typeof r.edges.bottom === 'string' ? { type: r.edges.bottom } : r.edges.bottom,
+          left: typeof r.edges.left === 'string' ? { type: r.edges.left } : r.edges.left,
+          right: typeof r.edges.right === 'string' ? { type: r.edges.right } : r.edges.right,
+        },
+        grid: typeof r.grid === 'string' ? JSON.parse(r.grid) : r.grid,
+      }));
+      setRooms(parsedRooms);
+
+      const firstRoom = parsedRooms[0];
+      setActiveRoomId(firstRoom.id);
+      setWidth(firstRoom.width); setHeight(firstRoom.height);
+      setPendingW(firstRoom.width); setPendingH(firstRoom.height);
+      setEdges(firstRoom.edges);
+      setGrid(firstRoom.grid);
+    } else {
+      // Legacy single-room fallback
+      const legacyEdges = {
+        top: typeof fl.edges.top === 'string' ? { type: fl.edges.top } : fl.edges.top,
+        bottom: typeof fl.edges.bottom === 'string' ? { type: fl.edges.bottom } : fl.edges.bottom,
+        left: typeof fl.edges.left === 'string' ? { type: fl.edges.left } : fl.edges.left,
+        right: typeof fl.edges.right === 'string' ? { type: fl.edges.right } : fl.edges.right,
+      } as any;
+      const mainRoom = {
+        id: 'main',
+        name: fl.name,
+        width: fl.width,
+        height: fl.height,
+        x: 0,
+        y: 0,
+        edges: legacyEdges,
+        grid: typeof fl.grid === 'string' ? JSON.parse(fl.grid) : fl.grid as CellType[][],
+      };
+      setRooms([mainRoom]);
+      setActiveRoomId('main');
+      setWidth(fl.width); setHeight(fl.height);
+      setPendingW(fl.width); setPendingH(fl.height);
+      setEdges(legacyEdges);
+      setGrid(mainRoom.grid);
+    }
+
     const objs: ObjConfig[] = (fl.initialObjects ?? []).map((obj) => ({
       id: obj.id,
       row: obj.position.row,
       col: obj.position.col,
+      roomId: obj.position.roomId ?? 'main',
       mode: obj.mode,
       lockOnTarget: obj.lockOnTarget,
     }));
     if (objs.length === 0) {
-      objs.push({ id: 1, row: null, col: null, mode: 'normal', lockOnTarget: true });
+      objs.push({ id: 1, row: null, col: null, roomId: 'main', mode: 'normal', lockOnTarget: true });
     }
     setObjects(objs);
-    setBoxes((fl.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
+    setBoxes((fl.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, roomId: b.position.roomId ?? 'main', requiresPower: b.requiresPower ?? false })));
     setConveyorPowerRequired(fl.conveyorPowerRequired ?? []);
     setConveyorConfig(fl.conveyorConfig ?? []);
     setTrampolineConfig(fl.trampolineConfig ?? []);
@@ -561,10 +934,31 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setOptimalSolution(null);
     setOptimalSolutionMoves(0);
     setWidth(5); setHeight(5); setPendingW(5); setPendingH(5);
-    setEdges({ top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' });
+    setEdges({ top: { type: 'wall' }, bottom: { type: 'wall' }, left: { type: 'wall' }, right: { type: 'wall' } });
     setGrid(makeGrid(5, 5)); setTrailCollision(false); setDifficulty(2);
     setSavedRequestId(null); savedIdForSubmitRef.current = null;
-    setObjects([...DEFAULT_OBJS.map((o) => ({ ...o }))]);
+
+    setRooms([
+      {
+        id: 'main',
+        name: 'Main Room',
+        width: 5,
+        height: 5,
+        x: 0,
+        y: 0,
+        edges: {
+          top: { type: 'wall' },
+          bottom: { type: 'wall' },
+          left: { type: 'wall' },
+          right: { type: 'wall' },
+        },
+        grid: makeGrid(5, 5),
+      }
+    ]);
+    setActiveRoomId('main');
+    setControlMode('all_rooms');
+
+    setObjects([...DEFAULT_OBJS.map((o) => ({ ...o, roomId: 'main' }))]);
     setBoxes([]); setLockedCells({}); setConveyorPowerRequired([]); setConveyorConfig([]); setTrampolineConfig([]); setActivePlacingBoxId(null); setFirestoreEditId(null);
 
     setSelection(null);
@@ -587,7 +981,12 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setOptimalSolutionMoves(moveCount);
     setWidth(level.width); setHeight(level.height);
     setPendingW(level.width); setPendingH(level.height);
-    setEdges(level.edges);
+    setEdges({
+      top: typeof level.edges.top === 'string' ? { type: level.edges.top } : level.edges.top,
+      bottom: typeof level.edges.bottom === 'string' ? { type: level.edges.bottom } : level.edges.bottom,
+      left: typeof level.edges.left === 'string' ? { type: level.edges.left } : level.edges.left,
+      right: typeof level.edges.right === 'string' ? { type: level.edges.right } : level.edges.right,
+    } as any);
     setGrid(level.grid as CellType[][]);
     setTrailCollision(!!level.trailCollision);
     setDifficulty((level.difficulty != undefined ? level.difficulty : 2) as 1 | 2 | 3 | 4);
@@ -653,6 +1052,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     conveyorPowerRequired, setConveyorPowerRequired,
     conveyorConfig, setConveyorConfig,
     trampolineConfig, setTrampolineConfig,
+    // Multi-room
+    rooms, setRooms, activeRoomId, setActiveRoomId, controlMode, setControlMode,
+    switchActiveRoom, addRoom, deleteRoom, updateRoomName, updateRoomLayoutPosition,
     // Tool
     activeTool, setActiveTool, router,
     // Saved levels

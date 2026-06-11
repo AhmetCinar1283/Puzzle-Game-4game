@@ -1,8 +1,10 @@
 'use client';
 
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LostReason } from '../types';
 import { useT } from '@/app/src/contexts/LanguageContext';
+import { useGamepad } from '@/app/src/hooks/useGamepad';
 
 interface LostOverlayProps {
   onRestart: () => void;
@@ -19,6 +21,24 @@ const REASON_KEYS: Record<LostReason, { icon: string; titleKey: string; msgKey: 
 export default function LostOverlay({ onRestart, reason }: LostOverlayProps) {
   const t = useT();
   const cfg = REASON_KEYS[reason ?? 'forbidden'];
+
+  // Handle keyboard Enter key
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        onRestart();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onRestart]);
+
+  // Handle Gamepad Confirm / Restart buttons
+  useGamepad({
+    onConfirm: onRestart,
+    onRestart: onRestart,
+  });
 
   return (
     <AnimatePresence>

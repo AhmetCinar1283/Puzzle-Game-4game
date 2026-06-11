@@ -222,6 +222,8 @@ const en: Record<string, string> = {
   'win.solved_in': 'Solved in {n} moves',
   'win.restart': 'RESTART',
   'win.next_level': 'NEXT LEVEL →',
+  'win.end_test': 'End Test',
+  'win.test_success': 'Test Successful!',
 
   // Lost overlay
   'lost.forbidden_title': 'Forbidden Zone',

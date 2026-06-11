@@ -364,6 +364,7 @@ export default function ProfileClient() {
     setDisplayNameSuccess(false);
 
     try {
+      if (!viewUid) throw new Error('No user ID found');
       // 1. Update Firestore user doc
       await updateDoc(doc(db, 'users', viewUid), { displayName: newName });
 

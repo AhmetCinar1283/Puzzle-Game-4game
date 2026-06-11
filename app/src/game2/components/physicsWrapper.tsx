@@ -1,9 +1,5 @@
 // components/PhysicsWrapper.tsx
 // KOZMETİK SARMALAYICI — fiziksel konum ve Z yüksekliğini CSS'e çevirir.
-// İçindeki grafik bileşen (PlayerGraphic, BoxGraphic) bunu bilmez.
-//
-// SORUMLULUK: position → translate, z → scale+yOffset, animasyon geçişi.
-// KURAL: Oyun mantığı yok. Sadece veriyi CSS'e çevirir.
 
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Entity } from '../logic/entityTypes';
@@ -17,22 +13,33 @@ interface PhysicsWrapperProps {
     prevEntity: Entity | null;
     currentCellType: CellTypes;
     frameMs: number;
+    roomOffsets: Record<string, { left: number; top: number }>;
     children: ReactNode;
 }
 
-export const PhysicsWrapper = ({ entity, prevEntity, currentCellType, frameMs, children }: PhysicsWrapperProps) => {
+export const PhysicsWrapper = ({ entity, prevEntity, currentCellType, frameMs, roomOffsets, children }: PhysicsWrapperProps) => {
     const { z, force, direction } = entity.physics;
     const { row, col } = entity.position;
+    const roomId = entity.position.roomId ?? 'main';
 
-    const x = col * CELL_SIZE;
-    const y = row * CELL_SIZE;
+    const roomOffset = roomOffsets[roomId] ?? { left: 0, top: 0 };
+    const x = roomOffset.left + col * CELL_SIZE;
+    const y = roomOffset.top + row * CELL_SIZE;
 
     // 1. Işınlanma (Teleport) Tespiti (Render-time, pure!)
     const prevRow = prevEntity ? prevEntity.position.row : row;
     const prevCol = prevEntity ? prevEntity.position.col : col;
-    const rowDiff = Math.abs(row - prevRow);
-    const colDiff = Math.abs(col - prevCol);
-    const isTeleporting = rowDiff > 1 || colDiff > 1;
+    const prevRoomId = prevEntity ? (prevEntity.position.roomId ?? 'main') : roomId;
+    const prevRoomOffset = roomOffsets[prevRoomId] ?? { left: 0, top: 0 };
+    
+    const prevX = prevRoomOffset.left + prevCol * CELL_SIZE;
+    const prevY = prevRoomOffset.top + prevRow * CELL_SIZE;
+
+    const xDiff = Math.abs(x - prevX);
+    const yDiff = Math.abs(y - prevY);
+    
+    // Eğer bir hücreden fazla atlama varsa ışınlanma efekti uygula
+    const isTeleporting = xDiff > CELL_SIZE || yDiff > CELL_SIZE || prevRoomId !== roomId;
 
     // 2. Yere İniş Anında Ezilme (Landing Squash) Tespiti
     const prevZRef = useRef(z);
@@ -47,7 +54,6 @@ export const PhysicsWrapper = ({ entity, prevEntity, currentCellType, frameMs, c
         prevZRef.current = z;
     }, [z]);
 
-    // Z değerine göre dikey esneme ve zOffset yüksekliği (Trampolin/Düşüş)
     const zOffset = -(z * 14); // Zıplama yüksekliği Y ekseninde yukarı kaydırma
 
     // Havada zıplarken dikeyde esneme (Stretch)
@@ -130,8 +136,6 @@ export const PhysicsWrapper = ({ entity, prevEntity, currentCellType, frameMs, c
                     animation: customAnimation,
                 }}
             >
-
-
                 {/* Buzda Kayma Parçacıkları (Trail) */}
                 {isSliding && (
                     <div style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}>

@@ -15,6 +15,7 @@ export const boxBehavior: EntityBehavior = {
                 entityId: self.id,
                 type: 'move' as const,
                 targetPos: {
+                    roomId: self.position.roomId,
                     row: self.position.row + delta.row,
                     col: self.position.col + delta.col,
                 },
@@ -59,6 +60,7 @@ export const boxBehavior: EntityBehavior = {
                 entityId: self.id,
                 type: 'move' as const,
                 targetPos: {
+                    roomId: self.position.roomId,
                     row: self.position.row + dr,
                     col: self.position.col + dc,
                 },

@@ -29,6 +29,7 @@ export const conveyorBehavior: CellBehavior = {
     // Üzerinde duruyorsa (force=0) yeniden itmek için
     onTick: (cell, entities) => {
         const entityOnCell = entities.find(e =>
+            (e.position.roomId ?? 'main') === (cell.position.roomId ?? 'main') &&
             e.position.row === cell.position.row &&
             e.position.col === cell.position.col &&
             e.physics.force === 0 &&

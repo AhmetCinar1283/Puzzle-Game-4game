@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import GameCell from '@/app/src/games/components/GameCell';
+import type { EdgeBehavior } from '@/app/src/games/types';
 import { EDGE_COLOR } from '../editorConfig';
 import { useEditorContext } from '../EditorContext';
 import { getPlayerColor } from '@/app/src/game2/components/playerColors';
@@ -44,17 +45,17 @@ function BoxDot({ size, requiresPower }: { size: number; requiresPower: boolean 
 }
 
 export default function GridCore() {
-  const { grid, objects, boxes, cellSize, edges, paintCell, lockedCells, optimalSolutionTrajectory } = useEditorContext();
+  const { grid, objects, boxes, cellSize, edges, paintCell, lockedCells, optimalSolutionTrajectory, activeRoomId } = useEditorContext();
   const isPainting = useRef(false);
 
   return (
     <div
       style={{
         border: '3px solid transparent',
-        borderTopColor: EDGE_COLOR[edges.top],
-        borderBottomColor: EDGE_COLOR[edges.bottom],
-        borderLeftColor: EDGE_COLOR[edges.left],
-        borderRightColor: EDGE_COLOR[edges.right],
+        borderTopColor: EDGE_COLOR[edges.top.type as EdgeBehavior],
+        borderBottomColor: EDGE_COLOR[edges.bottom.type as EdgeBehavior],
+        borderLeftColor: EDGE_COLOR[edges.left.type as EdgeBehavior],
+        borderRightColor: EDGE_COLOR[edges.right.type as EdgeBehavior],
         borderRadius: 6, overflow: 'hidden', background: '#060d1a',
         cursor: 'crosshair', userSelect: 'none',
         boxShadow: '0 0 40px rgba(0,0,0,0.7)', touchAction: 'none',
@@ -236,7 +237,7 @@ export default function GridCore() {
       {grid.map((row, r) => (
         <div key={r} style={{ display: 'flex' }}>
           {row.map((cell, c) => {
-            const cellObjects = objects.filter((o) => o.row === r && o.col === c);
+            const cellObjects = objects.filter((o) => (o.roomId ?? 'main') === activeRoomId && o.row === r && o.col === c);
             const isLocked = !!lockedCells[`${r},${c}`];
             return (
               <div
@@ -256,7 +257,7 @@ export default function GridCore() {
                     label={String(obj.id)} 
                   />
                 ))}
-                {boxes.map((b) => b.row === r && b.col === c ? (
+                {boxes.map((b) => (b.roomId ?? 'main') === activeRoomId && b.row === r && b.col === c ? (
                   <BoxDot key={b.id} size={cellSize} requiresPower={b.requiresPower} />
                 ) : null)}
                 {isLocked && (

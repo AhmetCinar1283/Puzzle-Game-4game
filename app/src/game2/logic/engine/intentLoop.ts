@@ -2,8 +2,9 @@ import { Cell } from '../cellTypes';
 import { CELL_BEHAVIORS, CELL_DEFS } from '../cells/registry';
 import { ENTITY_BEHAVIORS } from '../entities/registry';
 import { Entity } from '../entityTypes';
-import { ActionIntent, Direction, UIEvent } from '../types';
+import { ActionIntent, Direction, UIEvent, RoomState, Position } from '../types';
 import { LevelBounds, getNextTopologyPosition } from './getNextTopologyPosition';
+import { getCellAt, mapCrossEdgeIndex } from './rooms';
 
 // ============================================================
 // SIFIR MANTIK MOTORU — ALTIN KURAL
@@ -18,10 +19,31 @@ import { LevelBounds, getNextTopologyPosition } from './getNextTopologyPosition'
 
 export function processSingleTick(
     entities: Entity[],
-    grid: Cell[][],
+    grid: Record<string, RoomState> | Cell[][],
     startingIntents: ActionIntent[],
     levelBounds?: LevelBounds,
 ): { vfxEvents: string[]; pendingNextTick: ActionIntent[]; uiEvents: UIEvent[] } {
+
+    // Uyum katmanı: tekil 2D grid'i oda formatına sar
+    let rooms: Record<string, RoomState> = {};
+    if (Array.isArray(grid)) {
+        rooms['main'] = {
+            id: 'main',
+            name: 'Main',
+            width: grid[0]?.length ?? 0,
+            height: grid.length,
+            x: 0, y: 0,
+            edges: {
+                top: { type: 'wall' },
+                bottom: { type: 'wall' },
+                left: { type: 'wall' },
+                right: { type: 'wall' }
+            },
+            grid: grid,
+        };
+    } else {
+        rooms = grid;
+    }
 
     const collectedVfx: string[] = [];
     const collectedUi:  UIEvent[] = [];
@@ -54,7 +76,7 @@ export function processSingleTick(
             }
         } else if (intent.type === 'mutate_cell') {
             if (intent.targetCellPos && intent.newCellType) {
-                const targetCell = grid[intent.targetCellPos.row]?.[intent.targetCellPos.col];
+                const targetCell = getCellAt(rooms, intent.targetCellPos);
                 if (targetCell) {
                     targetCell.type = intent.newCellType;
                     targetCell.def  = CELL_DEFS[intent.newCellType];
@@ -70,11 +92,13 @@ export function processSingleTick(
     // ======================================================================
     let intents: ActionIntent[] = [...gameplayStartIntents];
 
-    for (const row of grid) {
-        for (const cell of row) {
-            const behavior = CELL_BEHAVIORS[cell.type];
-            if (behavior?.onTick) {
-                intents.push(...behavior.onTick(cell, entities));
+    for (const room of Object.values(rooms)) {
+        for (const row of room.grid) {
+            for (const cell of row) {
+                const behavior = CELL_BEHAVIORS[cell.type];
+                if (behavior?.onTick) {
+                    intents.push(...behavior.onTick(cell, entities));
+                }
             }
         }
     }
@@ -91,7 +115,6 @@ export function processSingleTick(
     }
 
     // Her entity için yalnızca ilk move intent geçerlidir.
-    // startingIntents'ten gelen teleport/diğer hareketer onTick hareketine göre önceliklidir.
     const seenMoveIds = new Set<number>();
     intents = intents.filter(intent => {
         if (intent.type !== 'move') return true;
@@ -109,20 +132,16 @@ export function processSingleTick(
     // ======================================================================
     // 3. FAZ: ZİNCİRLEME BAĞIMLILIKLARI ÇÖZ
     // ======================================================================
-    const approvedIntents = resolveDependencyChains(intents, entities, grid, levelBounds, unfilteredIntents);
+    const approvedIntents = resolveDependencyChains(intents, entities, rooms, levelBounds, unfilteredIntents);
 
     // ======================================================================
     // 4. FAZ: ONAYLANAN NİYETLERİ UYGULA
     // ======================================================================
-    // Fall intent'leri en sona bırak: triggerLanded ezme kontrolü
-    // entity konumunu kullandığından, tüm move'lar önce uygulanmalıdır.
     const sortedApproved = [
         ...approvedIntents.filter(i => i.type !== 'fall'),
         ...approvedIntents.filter(i => i.type === 'fall'),
     ];
 
-    // Bir entity aynı tick'te yalnızca bir kez hareket edebilir.
-    // (Teleport + onTick move gibi çift-move durumlarını önler.)
     const movedEntityIds = new Set<number>();
 
     for (const intent of sortedApproved) {
@@ -138,7 +157,7 @@ export function processSingleTick(
                 if (!intent.targetPos) break;
                 if (movedEntityIds.has(entity.id)) break; // bu tick'te zaten hareket etti
 
-                const oldCell = grid[entity.position.row]?.[entity.position.col];
+                const oldCell = getCellAt(rooms, entity.position);
                 if (oldCell) {
                     const leaveBehavior = CELL_BEHAVIORS[oldCell.type];
                     if (leaveBehavior?.onLeave) {
@@ -151,8 +170,6 @@ export function processSingleTick(
                 movedEntityIds.add(entity.id);
 
                 // Trail collision logic:
-                // If trailCollision is enabled and the entity is a player leaving a cell,
-                // leave a trail on the old cell if it's not one of the excluded cell types.
                 if (levelBounds?.trailCollision && entity.type === 'player' && oldCell) {
                     const playerIndex = (entity.customData.playerIndex as number) ?? 0;
                     const EXCLUDED_TRAIL_CELL_TYPES = ['teleport', 'trampoline', 'conveyor', 'toggle', 'power'];
@@ -161,12 +178,11 @@ export function processSingleTick(
                     }
                 }
 
-                // Havadayken (z > 0) hücre efektleri uygulanmaz — onEnter kendi kontrol eder
-                const newCell = grid[intent.targetPos.row]?.[intent.targetPos.col];
+                const newCell = getCellAt(rooms, intent.targetPos);
                 if (newCell) {
                     const enterBehavior = CELL_BEHAVIORS[newCell.type];
                     if (enterBehavior?.onEnter) {
-                        collectToNextTick(enterBehavior.onEnter(newCell, entity, grid, entities, prevPos, levelBounds));
+                        collectToNextTick(enterBehavior.onEnter(newCell, entity, rooms, entities, prevPos, levelBounds));
                     }
                 }
                 break;
@@ -177,7 +193,7 @@ export function processSingleTick(
                 entity.physics.z = intent.newZ;
 
                 if (intent.triggerImpact) {
-                    const cell = grid[entity.position.row]?.[entity.position.col];
+                    const cell = getCellAt(rooms, entity.position);
                     if (cell) {
                         const impactBehavior = CELL_BEHAVIORS[cell.type];
                         if (impactBehavior?.onImpact) {
@@ -187,17 +203,18 @@ export function processSingleTick(
                 }
 
                 if (intent.triggerLanded) {
-                    // İniş anında sürüklenmeyi önlemek için force değerini sıfırla
                     entity.physics.force = 0;
 
-                    const landCell = grid[entity.position.row]?.[entity.position.col];
+                    const landCell = getCellAt(rooms, entity.position);
 
-                    // İniş anında aynı konumdaki entity'leri ez (flying entity hayatta kalır)
+                    // İniş anında aynı konumdaki entity'leri ez
                     for (const other of entities) {
                         if (other.id === entity.id) continue;
                         if (other.customData._destroyed) continue;
+                        if ((other.position.roomId ?? 'main') !== (entity.position.roomId ?? 'main')) continue;
                         if (other.position.row !== entity.position.row) continue;
                         if (other.position.col !== entity.position.col) continue;
+                        
                         other.customData._destroyed = true;
                         if (other.type === 'player') {
                             other.customData.deathReason = 'crushed';
@@ -208,14 +225,13 @@ export function processSingleTick(
                         }
                     }
 
-                    // Engel hücresine iniliyorsa hücreyi parçala
                     if (landCell?.type === 'obstacle') {
                         landCell.type = 'normal';
                         landCell.def  = CELL_DEFS['normal'];
                     } else if (landCell) {
                         const landCellBehavior = CELL_BEHAVIORS[landCell.type];
                         if (landCellBehavior?.onEnter) {
-                            collectToNextTick(landCellBehavior.onEnter(landCell, entity, grid, entities, undefined, levelBounds));
+                            collectToNextTick(landCellBehavior.onEnter(landCell, entity, rooms, entities, undefined, levelBounds));
                         }
                     }
 
@@ -239,7 +255,7 @@ export function processSingleTick(
 
             case 'mutate_cell': {
                 if (!intent.targetCellPos || !intent.newCellType) break;
-                const targetCell = grid[intent.targetCellPos.row]?.[intent.targetCellPos.col];
+                const targetCell = getCellAt(rooms, intent.targetCellPos);
                 if (!targetCell) break;
                 targetCell.type = intent.newCellType;
                 targetCell.def  = CELL_DEFS[intent.newCellType];
@@ -257,7 +273,7 @@ export function processSingleTick(
     if (levelBounds?.trailCollision) {
         for (const entity of entities) {
             if (entity.type === 'player' && !entity.customData._destroyed) {
-                const currentCell = grid[entity.position.row]?.[entity.position.col];
+                const currentCell = getCellAt(rooms, entity.position);
                 if (currentCell && currentCell.customData.trailPlayerIndex !== undefined) {
                     const trailPlayerIndex = currentCell.customData.trailPlayerIndex as number;
                     const currentPlayerIndex = (entity.customData.playerIndex as number) ?? 0;
@@ -285,13 +301,15 @@ export function processSingleTick(
 // YARDIMCI FONKSİYONLAR
 // ============================================================
 
-// Tek adımlık harekette yönü pozisyon farkından çıkar.
-// Teleport gibi çok adımlı hareketlerde null döner.
 function inferMoveDirection(
-    from: { row: number; col: number },
-    to: { row: number; col: number },
+    from: Position,
+    to: Position,
     levelBounds?: LevelBounds
 ): Direction | null {
+    const fromRoom = from.roomId ?? 'main';
+    const toRoom = to.roomId ?? 'main';
+    if (fromRoom !== toRoom) return null; // Odalar arası sıçramalarda yön çıkarımı yok
+
     const dr = to.row - from.row;
     const dc = to.col - from.col;
     if (dr === -1 && dc ===  0) return 'up';
@@ -300,11 +318,20 @@ function inferMoveDirection(
     if (dr ===  0 && dc ===  1) return 'right';
 
     // Portal sarmalaması yön çıkarımı
-    if (levelBounds) {
-        if (to.row === levelBounds.rows - 1 && from.row === 0 && dc === 0) return 'up';
-        if (to.row === 0 && from.row === levelBounds.rows - 1 && dc === 0) return 'down';
-        if (to.col === levelBounds.cols - 1 && from.col === 0 && dr === 0) return 'left';
-        if (to.col === 0 && from.col === levelBounds.cols - 1 && dr === 0) return 'right';
+    if (levelBounds && levelBounds.rooms && levelBounds.rooms[fromRoom]) {
+        const room = levelBounds.rooms[fromRoom];
+        if (to.row === room.rows - 1 && from.row === 0 && dc === 0) return 'up';
+        if (to.row === 0 && from.row === room.rows - 1 && dc === 0) return 'down';
+        if (to.col === room.cols - 1 && from.col === 0 && dr === 0) return 'left';
+        if (to.col === 0 && from.col === room.cols - 1 && dr === 0) return 'right';
+    } else if (levelBounds) {
+        // Eski format fallback
+        const r = levelBounds.rows ?? 0;
+        const c = levelBounds.cols ?? 0;
+        if (to.row === r - 1 && from.row === 0 && dc === 0) return 'up';
+        if (to.row === 0 && from.row === r - 1 && dc === 0) return 'down';
+        if (to.col === c - 1 && from.col === 0 && dr === 0) return 'left';
+        if (to.col === 0 && from.col === c - 1 && dr === 0) return 'right';
     }
 
     return null;
@@ -329,10 +356,11 @@ function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): Ac
         if (!intent.targetPos) continue;
         const entity = entities.find(e => e.id === intent.entityId);
         if (!entity?.def.isSolid) continue;
-        // Havadaki veya uçuş aşamasındaki entity zemin engeline tabi değil
         const destZ = getDestinationZ(entity.id, entity.physics.z, intents);
         if (intent.type === 'move' && (destZ > 0 || entity.physics.z > 0)) continue;
-        const key = `${intent.targetPos.row},${intent.targetPos.col}`;
+        
+        const rId = intent.targetPos.roomId ?? 'main';
+        const key = `${rId},${intent.targetPos.row},${intent.targetPos.col}`;
         solidTargetCounts.set(key, (solidTargetCounts.get(key) ?? 0) + 1);
     }
 
@@ -341,15 +369,16 @@ function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): Ac
         const me = entities.find(e => e.id === intent.entityId);
         if (!me) return true;
         if (!me.def.isSolid) return true;
-        // Havadaki veya uçuş aşamasındaki entity her şeyin üzerinden geçer
         const destZ = getDestinationZ(me.id, me.physics.z, intents);
         if (intent.type === 'move' && (destZ > 0 || me.physics.z > 0)) return true;
 
-        const key = `${intent.targetPos.row},${intent.targetPos.col}`;
+        const rId = intent.targetPos.roomId ?? 'main';
+        const key = `${rId},${intent.targetPos.row},${intent.targetPos.col}`;
 
         if ((solidTargetCounts.get(key) ?? 0) > 1) return false;
 
         const targetEntity = entities.find(e =>
+            (e.position.roomId ?? 'main') === rId &&
             e.position.row === intent.targetPos!.row &&
             e.position.col === intent.targetPos!.col &&
             e.def.isSolid &&
@@ -358,6 +387,7 @@ function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): Ac
         if (targetEntity) {
             const isSwapping = intents.some(i =>
                 i.entityId === targetEntity.id &&
+                (i.targetPos?.roomId ?? 'main') === (me.position.roomId ?? 'main') &&
                 i.targetPos?.row === me.position.row &&
                 i.targetPos?.col === me.position.col
             );
@@ -371,7 +401,7 @@ function filterMutualCollisions(intents: ActionIntent[], entities: Entity[]): Ac
 function resolveDependencyChains(
     intents: ActionIntent[],
     entities: Entity[],
-    grid: Cell[][],
+    rooms: Record<string, RoomState>,
     levelBounds?: LevelBounds,
     unfilteredIntents: ActionIntent[] = intents,
 ): ActionIntent[] {
@@ -388,7 +418,7 @@ function resolveDependencyChains(
             if (!me) continue;
 
             let targetPos = intent.targetPos ?? me.position;
-            let targetCell = grid[targetPos.row]?.[targetPos.col];
+            let targetCell = getCellAt(rooms, targetPos);
 
             // ---- Harita dışı → kenar kuralına bak ----
             if (!targetCell) {
@@ -398,11 +428,9 @@ function resolveDependencyChains(
                         const edgeResult = getNextTopologyPosition(me.position, dir, levelBounds);
 
                         if (edgeResult === 'wall') {
-                            // Duvara çarptı — dur
                             changedThisPass = true;
                             continue;
                         } else if (edgeResult === 'lava') {
-                            // Lav — entity yok edilir
                             if (me.type === 'player') {
                                 approved.push(
                                     { entityId: me.id, type: 'mutate_entity', customDataPatch: { deathReason: 'lava_edge' } },
@@ -418,16 +446,14 @@ function resolveDependencyChains(
                             // Portal — hedefe sar
                             intent.targetPos = edgeResult;
                             targetPos = edgeResult;
-                            targetCell = grid[edgeResult.row]?.[edgeResult.col];
+                            targetCell = getCellAt(rooms, edgeResult);
                             if (!targetCell) { changedThisPass = true; continue; }
                         }
                     } else {
-                        // Tek adımlı olmayan hareket (teleport çıkışı vb.) — durdur
                         changedThisPass = true;
                         continue;
                     }
                 } else {
-                    // Kenar bilgisi yok → varsayılan duvar davranışı
                     changedThisPass = true;
                     continue;
                 }
@@ -440,17 +466,13 @@ function resolveDependencyChains(
 
             if (!isFlyingAtDestination) {
                 // ── Konveyörden Ters Yönde Çıkış Engeli ──────────────────────────────────
-                // Eğer entity bir konveyör hücresindeyse ve yerdeyse, konveyör akışına ters yönde çıkmaya çalışıyorsa engelle
-                const currentCell = grid[me.position.row]?.[me.position.col];
+                const currentCell = getCellAt(rooms, me.position);
                 if (currentCell && currentCell.type === 'conveyor' && me.physics.z === 0 && intent.type === 'move' && intent.targetPos) {
                     const convDir = currentCell.customData.direction as Direction;
                     if (convDir) {
                         const moveDir = inferMoveDirection(me.position, intent.targetPos, levelBounds);
                         const opposite: Record<Direction, Direction> = {
-                            up: 'down',
-                            down: 'up',
-                            left: 'right',
-                            right: 'left'
+                            up: 'down', down: 'up', left: 'right', right: 'left'
                         };
                         if (moveDir === opposite[convDir]) {
                             cellAllows = false;
@@ -476,8 +498,9 @@ function resolveDependencyChains(
             // ---- Yerinden oynamayan niyetler (fall, mutate_*, destroy) ----
             const isMovingToNewCell =
                 intent.targetPos !== undefined &&
-                (intent.targetPos.row !== me.position.row ||
-                    intent.targetPos.col !== me.position.col);
+                ((intent.targetPos.roomId ?? 'main') !== (me.position.roomId ?? 'main') ||
+                 intent.targetPos.row !== me.position.row ||
+                 intent.targetPos.col !== me.position.col);
 
             if (!isMovingToNewCell) {
                 approved.push(intent);
@@ -486,10 +509,10 @@ function resolveDependencyChains(
             }
 
             // ---- Zincir bağımlılığı — havadayken katı entity'leri yoksay ----
-            // me.physics.z > 0 ise yani havadaysa veya iniyorsa, yerdeki engeller onu durduramaz (onları ezer)
             const blocker = (!isFlyingAtDestination && me.physics.z === 0)
                 ? entities.find(e =>
                     e.id !== me.id &&
+                    (e.position.roomId ?? 'main') === (targetPos.roomId ?? 'main') &&
                     e.position.row === targetPos.row &&
                     e.position.col === targetPos.col &&
                     e.def.isSolid &&
@@ -501,8 +524,9 @@ function resolveDependencyChains(
                 ? approved.some(a =>
                     a.entityId === blocker.id &&
                     a.targetPos &&
-                    (a.targetPos.row !== blocker.position.row ||
-                        a.targetPos.col !== blocker.position.col)
+                    ((a.targetPos.roomId ?? 'main') !== (blocker.position.roomId ?? 'main') ||
+                     a.targetPos.row !== blocker.position.row ||
+                     a.targetPos.col !== blocker.position.col)
                 )
                 : false;
 
@@ -518,13 +542,12 @@ function resolveDependencyChains(
         if (pending.length === 0) break;
 
         if (!changedThisPass) {
-            const pushOccurred = attemptPushing(pending, intents, entities, grid, levelBounds);
+            const pushOccurred = attemptPushing(pending, intents, entities, rooms, levelBounds);
             if (!pushOccurred) break;
         }
     }
 
-    // Hareketi engellenen, takas edilen veya çarpışan tüm entity'lerin force'unu sıfırla.
-    // Aksi hâelde onTick her tick yeni bir move intent üretir ve döngü kilitlenir.
+    // Sıfırlama
     const approvedMoveIds = new Set(
         approved.filter(a => a.type === 'move').map(a => a.entityId)
     );
@@ -548,8 +571,7 @@ function resolveDependencyChains(
         if (mutualFilteredIds.has(me.id)) {
             bumpReason = 'collision';
         } else {
-            // Konveyör ters akış engeli mi?
-            const currentCell = grid[me.position.row]?.[me.position.col];
+            const currentCell = getCellAt(rooms, me.position);
             let conveyorBlock = false;
             if (currentCell && currentCell.type === 'conveyor' && me.physics.z === 0 && intent.targetPos) {
                 const convDir = currentCell.customData.direction as Direction;
@@ -567,7 +589,7 @@ function resolveDependencyChains(
             if (conveyorBlock) {
                 bumpReason = 'conveyor';
             } else if (intent.targetPos) {
-                const targetCell = grid[intent.targetPos.row]?.[intent.targetPos.col];
+                const targetCell = getCellAt(rooms, intent.targetPos);
                 if (!targetCell) {
                     bumpReason = 'wall';
                 } else if (!targetCell.def.isWalkable) {
@@ -575,6 +597,7 @@ function resolveDependencyChains(
                 } else {
                     const blocker = entities.find(e =>
                         e.id !== me.id &&
+                        (e.position.roomId ?? 'main') === (intent.targetPos!.roomId ?? 'main') &&
                         e.position.row === intent.targetPos!.row &&
                         e.position.col === intent.targetPos!.col &&
                         e.def.isSolid &&
@@ -610,7 +633,7 @@ function attemptPushing(
     pending: ActionIntent[],
     allIntents: ActionIntent[],
     entities: Entity[],
-    grid: Cell[][],
+    rooms: Record<string, RoomState>,
     levelBounds?: LevelBounds
 ): boolean {
     let pushedSomeone = false;
@@ -621,15 +644,15 @@ function attemptPushing(
         const me = entities.find(e => e.id === intent.entityId);
         if (!me) continue;
 
-        // Havada uçan nesneler alttakileri itmez
         const pusherDestZ = getDestinationZ(me.id, me.physics.z, allIntents);
         if (pusherDestZ > 0) continue;
 
-        // Teleportlar veya komşu olmayan (non-adjacent) hareketler itme tetikleyemez
         const moveDir = inferMoveDirection(me.position, intent.targetPos, levelBounds);
         if (!moveDir) continue;
 
+        const targetRoomId = intent.targetPos.roomId ?? 'main';
         const blocker = entities.find(e =>
+            (e.position.roomId ?? 'main') === targetRoomId &&
             e.position.row === intent.targetPos!.row &&
             e.position.col === intent.targetPos!.col &&
             getDestinationZ(e.id, e.physics.z, allIntents) === 0
@@ -643,18 +666,15 @@ function attemptPushing(
         if (!intentEntity) continue;
 
         // ── Konveyör Üzerinde Ters Yönde İttirme Engeli ─────────────────────────────
-        const blockerCell = grid[blocker.position.row]?.[blocker.position.col];
+        const blockerCell = getCellAt(rooms, blocker.position);
         if (blockerCell && blockerCell.type === 'conveyor') {
             const convDir = blockerCell.customData.direction as Direction;
             if (convDir) {
                 const opposite: Record<Direction, Direction> = {
-                    up: 'down',
-                    down: 'up',
-                    left: 'right',
-                    right: 'left'
+                    up: 'down', down: 'up', left: 'right', right: 'left'
                 };
                 if (moveDir === opposite[convDir]) {
-                    continue; // Konveyör akışının tersi yönündeki ittirmeyi engelle
+                    continue;
                 }
             }
         }
@@ -665,30 +685,26 @@ function attemptPushing(
         const response = blockerBehavior.onPushed(blocker, intentEntity, intent.force ?? 0, moveDir);
 
         if (response.status === 'accept') {
-            // Kutunun gideceği hedef hücrenin geçerli olup olmadığını kontrol et
             let boxTarget = response.resultingIntent.targetPos;
             if (boxTarget) {
                 const boxDir = inferMoveDirection(blocker.position, boxTarget, levelBounds);
                 if (boxDir && levelBounds) {
                     const edgeResult = getNextTopologyPosition(blocker.position, boxDir, levelBounds);
                     if (edgeResult === 'wall') {
-                        continue; // Duvar ittirmeyi engeller
+                        continue;
                     } else if (edgeResult === 'lava') {
-                        // Lav ittirmeyi kabul eder, kutu yok edilir
                         boxTarget = undefined;
                     } else {
-                        // Portal sarmalama (portal wrap)
                         boxTarget = edgeResult;
                     }
                 }
             }
 
             if (boxTarget) {
-                const boxTargetCell = grid[boxTarget.row]?.[boxTarget.col];
+                const boxTargetCell = getCellAt(rooms, boxTarget);
                 if (!boxTargetCell || !boxTargetCell.def.isWalkable) continue;
             }
 
-            // Portal üzerinden ışınlanan pozisyonu güncelle
             if (boxTarget) {
                 response.resultingIntent.targetPos = boxTarget;
             }

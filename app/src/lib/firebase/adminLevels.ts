@@ -28,6 +28,13 @@ export async function publishLevel(
   partId: string,
   publishedBy: string,
 ): Promise<string> {
+  const cleanData = JSON.parse(JSON.stringify(data));
+  if (cleanData.rooms && Array.isArray(cleanData.rooms)) {
+    cleanData.rooms = cleanData.rooms.map((r: any) => ({
+      ...r,
+      grid: typeof r.grid === 'string' ? r.grid : JSON.stringify(r.grid)
+    }));
+  }
   const batch = writeBatch(db);
 
   // 1. Create the level document ref (set after computing prevLevelId below)
@@ -52,8 +59,8 @@ export async function publishLevel(
 
   // 1a. Set prevLevelId on the new level document
   batch.set(levelRef, {
-    ...data,
-    grid: JSON.stringify(data.grid),
+    ...cleanData,
+    grid: JSON.stringify(cleanData.grid),
     publishedBy,
     prevLevelId,
     createdAt: serverTimestamp(),
@@ -63,12 +70,12 @@ export async function publishLevel(
   // 3. Build the order entry
   const entry: Omit<LevelOrderEntry, 'updatedAt'> & { updatedAt: ReturnType<typeof serverTimestamp> } = {
     id: levelRef.id,
-    name: data.name,
-    width: data.width,
-    height: data.height,
+    name: cleanData.name,
+    width: cleanData.width,
+    height: cleanData.height,
     position: maxPos + 1,
-    ...(data.difficulty != undefined && { difficulty: data.difficulty }),
-    ...(data.creatorName && { creatorName: data.creatorName }),
+    ...(cleanData.difficulty != undefined && { difficulty: cleanData.difficulty }),
+    ...(cleanData.creatorName && { creatorName: cleanData.creatorName }),
     updatedAt: serverTimestamp(),
   };
 
@@ -104,26 +111,33 @@ export async function updateFirestoreLevel(
   publishedBy: string,
   partId: string,
 ): Promise<void> {
+  const cleanData = JSON.parse(JSON.stringify(data));
+  if (cleanData.rooms && Array.isArray(cleanData.rooms)) {
+    cleanData.rooms = cleanData.rooms.map((r: any) => ({
+      ...r,
+      grid: typeof r.grid === 'string' ? r.grid : JSON.stringify(r.grid)
+    }));
+  }
   const batch = writeBatch(db);
 
   // 1. Update the level document
   batch.update(doc(db, 'levels', firestoreId), {
-    ...data,
-    grid: JSON.stringify(data.grid),
+    ...cleanData,
+    grid: JSON.stringify(cleanData.grid),
     publishedBy,
     updatedAt: serverTimestamp(),
   });
 
   // 2. Update only the metadata fields in the order entry (field-path, concurrent-safe)
   const entryUpdate: Record<string, unknown> = {
-    [`order.${firestoreId}.name`]: data.name,
-    [`order.${firestoreId}.width`]: data.width,
-    [`order.${firestoreId}.height`]: data.height,
+    [`order.${firestoreId}.name`]: cleanData.name,
+    [`order.${firestoreId}.width`]: cleanData.width,
+    [`order.${firestoreId}.height`]: cleanData.height,
     [`order.${firestoreId}.updatedAt`]: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  if (data.difficulty) entryUpdate[`order.${firestoreId}.difficulty`] = data.difficulty;
-  if (data.creatorName) entryUpdate[`order.${firestoreId}.creatorName`] = data.creatorName;
+  if (cleanData.difficulty) entryUpdate[`order.${firestoreId}.difficulty`] = cleanData.difficulty;
+  if (cleanData.creatorName) entryUpdate[`order.${firestoreId}.creatorName`] = cleanData.creatorName;
 
   batch.update(doc(db, 'levelParts', partId), entryUpdate);
 

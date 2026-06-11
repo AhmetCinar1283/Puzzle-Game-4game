@@ -1,5 +1,5 @@
 // app/src/game2/logic/converter.ts
-// StoredLevel (eski format) → game2 Entity[] + Cell[][] dönüşümü.
+// StoredLevel (eski/yeni format) → game2 Entity[] + rooms: Record<string, RoomState> dönüşümü.
 // Paylaşılan mantık (Shared logic) katmanındadır. Hem istemci (frontend) hem worker kullanır.
 
 import type { StoredLevel } from '../../lib/db';
@@ -7,7 +7,7 @@ import type { CellType }    from '../../games/types';
 import type { Cell, CellTypes } from './cellTypes';
 import type { Entity }          from './entityTypes';
 import { CELL_DEFS }            from './cells/registry';
-import type { Direction }       from './types';
+import type { Direction, RoomState } from './types';
 
 // ============================================================
 // ESKİ → YENİ HÜCRE TİPİ HARİTASI
@@ -60,41 +60,118 @@ function mapCellType(old: string): CellMapping {
 
 export interface Game2State {
     entities: Entity[];
-    grid:     Cell[][];
+    rooms: Record<string, RoomState>;
+    controlMode: 'all_rooms' | 'selected_room';
+    initialControlledRooms: string[];
 }
 
 export function convertToGame2State(stored: StoredLevel & { id: number }): Game2State {
-    const rawGrid: any[][] =
-        typeof stored.grid === 'string' ? JSON.parse(stored.grid) : stored.grid;
+    const controlMode = stored.controlMode ?? 'all_rooms';
+    const rooms: Record<string, RoomState> = {};
 
-    // ── 1. ADIM: Hücre grid'ini oluştur ─────────────────────
-    const grid: Cell[][] = rawGrid.map((row, rowIdx) =>
-        row.map((oldType, colIdx) => {
-            const { type, customData = {} } = mapCellType(oldType);
+    // ── 1. ADIM: Odaları oluştur ─────────────────────────
+    if (stored.rooms && stored.rooms.length > 0) {
+        // Yeni format: Çoklu oda desteği var
+        for (const rDef of stored.rooms) {
+            const rawGrid: any[][] =
+                typeof rDef.grid === 'string' ? JSON.parse(rDef.grid) : rDef.grid;
 
-            // Özel trambolin adımlarını customData.force'a eşle
-            if (type === 'trampoline') {
+            const grid: Cell[][] = rawGrid.map((row, rowIdx) =>
+                row.map((oldType, colIdx) => {
+                    const { type, customData = {} } = mapCellType(oldType);
+
+                    // Özel trambolin adımlarını customData.force'a eşle
+                    const trampCfg = stored.trampolineConfig?.find(
+                        cfg => cfg.position.roomId === rDef.id && cfg.position.row === rowIdx && cfg.position.col === colIdx
+                    );
+                    if (trampCfg) {
+                        customData.force = trampCfg.steps;
+                    }
+
+                    // control_switch custom data eşleşmesi
+                    if (type === 'control_switch' && oldType.startsWith('control_switch_')) {
+                        // format: control_switch_[action]_[targetRoomsCsv]
+                        // örn: control_switch_toggle_room_1,room_2
+                        const parts = oldType.split('_');
+                        if (parts.length >= 4) {
+                            customData.action = parts[2];
+                            customData.targetRooms = parts[3].split(',');
+                        }
+                    }
+
+                    return {
+                        id:           `${rDef.id}-${rowIdx}-${colIdx}`,
+                        type,
+                        position:     { roomId: rDef.id, row: rowIdx, col: colIdx },
+                        def:          { ...CELL_DEFS[type] },
+                        isElectrified: false,
+                        customData,
+                    };
+                })
+            );
+
+            rooms[rDef.id] = {
+                id: rDef.id,
+                name: rDef.name,
+                width: rDef.width,
+                height: rDef.height,
+                x: rDef.x ?? 0,
+                y: rDef.y ?? 0,
+                edges: rDef.edges,
+                grid,
+            };
+        }
+    } else {
+        // Eski format: Tek oda fallback
+        const roomId = 'main';
+        const rawGrid: any[][] =
+            typeof stored.grid === 'string' ? JSON.parse(stored.grid) : stored.grid;
+
+        const grid: Cell[][] = rawGrid.map((row, rowIdx) =>
+            row.map((oldType, colIdx) => {
+                const { type, customData = {} } = mapCellType(oldType);
+
                 const trampCfg = stored.trampolineConfig?.find(
-                    cfg => cfg.position.row === rowIdx && cfg.position.col === colIdx
+                    cfg => (!cfg.position.roomId || cfg.position.roomId === roomId) && cfg.position.row === rowIdx && cfg.position.col === colIdx
                 );
                 if (trampCfg) {
                     customData.force = trampCfg.steps;
                 }
-            }
 
-            return {
-                id:           `${rowIdx}-${colIdx}`,
-                type,
-                position:     { row: rowIdx, col: colIdx },
-                def:          { ...CELL_DEFS[type] },
-                isElectrified: false,
-                customData,
-            };
-        })
-    );
+                return {
+                    id:           `${roomId}-${rowIdx}-${colIdx}`,
+                    type,
+                    position:     { roomId, row: rowIdx, col: colIdx },
+                    def:          { ...CELL_DEFS[type] },
+                    isElectrified: false,
+                    customData,
+                };
+            })
+        );
 
-    // ── 2. ADIM: Teleporter çiftlerini bağla ─────────────────
-    const teleporters = grid.flat().filter(c => c.type === 'teleport');
+        // Eski kenarları dönüştür
+        const edges = {
+            top:    typeof stored.edges.top === 'string' ? { type: stored.edges.top } : stored.edges.top,
+            bottom: typeof stored.edges.bottom === 'string' ? { type: stored.edges.bottom } : stored.edges.bottom,
+            left:   typeof stored.edges.left === 'string' ? { type: stored.edges.left } : stored.edges.left,
+            right:  typeof stored.edges.right === 'string' ? { type: stored.edges.right } : stored.edges.right,
+        } as RoomState['edges'];
+
+        rooms[roomId] = {
+            id: roomId,
+            name: stored.name,
+            width: stored.width,
+            height: stored.height,
+            x: 0,
+            y: 0,
+            edges,
+            grid,
+        };
+    }
+
+    // ── 2. ADIM: Teleporter çiftlerini tüm odalarda bağla ───
+    const allCells = Object.values(rooms).flatMap(r => r.grid.flat());
+    const teleporters = allCells.filter(c => c.type === 'teleport');
     const teleportersByGroup: Record<string, Cell[]> = {};
     for (const tel of teleporters) {
         const group = tel.customData.group as string;
@@ -108,7 +185,7 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
             const [t1, t2] = list;
             t1.customData.targetPos = { ...t2.position };
             t2.customData.targetPos = { ...t1.position };
-            // Geriye dönük uyumluluk (backward compatibility) için:
+            // Geriye dönük uyumluluk:
             t1.customData.exitPos = { ...t2.position };
             t1.customData.entrancePos = { ...t1.position };
             t2.customData.exitPos = { ...t1.position };
@@ -119,7 +196,6 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
                 const current = list[i];
                 const next = list[(i + 1) % list.length];
                 current.customData.targetPos = { ...next.position };
-                // Fallback geriye dönük uyumluluk:
                 current.customData.exitPos = { ...next.position };
                 current.customData.entrancePos = { ...current.position };
             }
@@ -133,13 +209,15 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
     // Oyuncular
     for (let i = 0; i < stored.initialObjects.length; i++) {
         const obj = stored.initialObjects[i];
+        const rId = obj.position.roomId ?? 'main';
         const isLocked = !!obj.lockOnTarget &&
-            grid[obj.position.row]?.[obj.position.col]?.type === 'target' &&
-            (grid[obj.position.row]?.[obj.position.col]?.customData.playerIndex as number) === i;
+            rooms[rId]?.grid[obj.position.row]?.[obj.position.col]?.type === 'target' &&
+            (rooms[rId]?.grid[obj.position.row]?.[obj.position.col]?.customData.playerIndex as number) === i;
+
         entities.push({
             id:       nextId++,
             type:     'player',
-            position: { ...obj.position },
+            position: { roomId: rId, row: obj.position.row, col: obj.position.col },
             physics:  { direction: 'right', force: 0, z: 0 },
             def:      { mass: 1, resistance: 0, isSolid: true },
             traits:   new Set(['player_controlled', 'destructible']),
@@ -155,10 +233,11 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
 
     // Kutular
     for (const box of stored.initialBoxes ?? []) {
+        const rId = box.position.roomId ?? 'main';
         entities.push({
             id:       nextId++,
             type:     'box',
-            position: { ...box.position },
+            position: { roomId: rId, row: box.position.row, col: box.position.col },
             physics:  { direction: 'right', force: 0, z: 0 },
             def:      { mass: 2, resistance: 1, isSolid: true },
             traits:   new Set(['pushable', 'destructible']),
@@ -169,5 +248,7 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
         });
     }
 
-    return { entities, grid };
+    const initialControlledRooms = stored.initialControlledRooms ?? Object.keys(rooms);
+
+    return { entities, rooms, controlMode, initialControlledRooms };
 }

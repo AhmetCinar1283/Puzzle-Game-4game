@@ -54,7 +54,7 @@ function PlayContent() {
     // ── Seviye yükleme state'leri ────────────────────────────
     const [levelName, setLevelName] = useState<string>('');
     const [firestoreId, setFirestoreId] = useState<string | undefined>();
-    const [game2State, setGame2State] = useState<{ entities: Entity[]; grid: Cell[][] } | null>(null);
+    const [game2State, setGame2State] = useState<any | null>(null);
     const [levelEdges, setLevelEdges] = useState<LevelEdges | undefined>();
     const [nextLevelId, setNextLevelId] = useState<number | null>(null);
     const [trailCollision, setTrailCollision] = useState<boolean>(false);
@@ -296,7 +296,9 @@ function PlayContent() {
                 key={`${levelId}-${restartKey}`}
                 levelName={levelName}
                 initialEntities={game2State.entities}
-                initialGrid={game2State.grid}
+                initialRooms={game2State.rooms}
+                controlMode={game2State.controlMode}
+                initialControlledRooms={game2State.initialControlledRooms}
                 levelEdges={levelEdges}
                 trailCollision={trailCollision}
                 onMoveExecuted={handleMoveExecuted}
