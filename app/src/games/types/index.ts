@@ -6,6 +6,7 @@ export type CellType =
   | 'target_2'
   | 'direction_toggle'
   | 'control_switch'
+  | 'direction_deflector'
   | 'ice'
   | 'power_node'
   | 'conveyor_up'
@@ -94,6 +95,11 @@ export interface ConveyorCellConfig {
   uses?: number;
 }
 
+export interface DeflectorCellConfig {
+  position: Position;
+  mapping: Record<Direction, Direction>;
+}
+
 export interface BoxState {
   id: number;
   position: Position;
@@ -122,6 +128,8 @@ export interface LevelData {
   conveyorConfig?: ConveyorCellConfig[];
   /** Per-cell trampoline configuration (steps). Cells not listed use default (3 steps). */
   trampolineConfig?: TrampolineCellConfig[];
+  /** Per-cell direction deflector configuration (mappings). */
+  deflectorConfig?: DeflectorCellConfig[];
 
   difficulty?: 1 | 2 | 3 | 4;
   creatorName?: string;

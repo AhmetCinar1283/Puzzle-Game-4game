@@ -61,21 +61,52 @@ function EdgeStrip({ side, behavior, onCycle }: StripProps) {
 }
 
 export default function GridEdgeStrip() {
-  const { edges, setEdges } = useEditorContext();
+  const { edges, setEdges, activeRoomId, setRooms } = useEditorContext();
 
   const cycleEdge = (side: 'top' | 'bottom' | 'left' | 'right') => {
-    setEdges((e) => {
-      const current = e[side]?.type ?? 'wall';
+    setEdges((prevEdges) => {
+      const current = prevEdges[side]?.type ?? 'wall';
       const idx = EDGE_OPTIONS.indexOf(current);
       const nextType = EDGE_OPTIONS[(idx + 1) % EDGE_OPTIONS.length] as any;
-      return {
-        ...e,
+      const updatedEdges = {
+        ...prevEdges,
         [side]: {
-          ...e[side],
+          ...prevEdges[side],
           type: nextType,
           ...(nextType !== 'portal' ? { targetRoomId: undefined, targetEdge: undefined } : {})
         }
       };
+
+      // Scan all rooms and disconnect any other room's edge that was pointing to this edge!
+      setRooms((prevRooms) => {
+        return prevRooms.map((r) => {
+          let rChanged = false;
+          const nextRoomEdges = { ...r.edges };
+          for (const s of ['top', 'bottom', 'left', 'right'] as const) {
+            const edge = nextRoomEdges[s];
+            if (edge && edge.type === 'portal') {
+              if (
+                edge.targetRoomId === activeRoomId &&
+                edge.targetEdge === side &&
+                nextType !== 'portal'
+              ) {
+                nextRoomEdges[s] = {
+                  ...edge,
+                  targetRoomId: undefined,
+                  targetEdge: undefined,
+                };
+                rChanged = true;
+              }
+            }
+          }
+          if (rChanged) {
+            return { ...r, edges: nextRoomEdges };
+          }
+          return r;
+        });
+      });
+
+      return updatedEdges;
     });
   };
 

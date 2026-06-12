@@ -42,6 +42,7 @@ function mapCellType(old: string): CellMapping {
         case 'ice':              return { type: 'ice' };
         case 'power_node':       return { type: 'power' };
         case 'direction_toggle': return { type: 'toggle' };
+        case 'direction_deflector': return { type: 'direction_deflector' };
         case 'conveyor_up':      return { type: 'conveyor',  customData: { direction: 'up'    as Direction } };
         case 'conveyor_down':    return { type: 'conveyor',  customData: { direction: 'down'  as Direction } };
         case 'conveyor_left':    return { type: 'conveyor',  customData: { direction: 'left'  as Direction } };
@@ -99,6 +100,14 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
                         }
                     }
 
+                    // direction_deflector custom data eşleşmesi
+                    const defCfg = stored.deflectorConfig?.find(
+                        cfg => cfg.position.roomId === rDef.id && cfg.position.row === rowIdx && cfg.position.col === colIdx
+                    );
+                    if (type === 'direction_deflector') {
+                        customData.mapping = defCfg?.mapping ?? { up: 'right', right: 'down', down: 'left', left: 'up' };
+                    }
+
                     return {
                         id:           `${rDef.id}-${rowIdx}-${colIdx}`,
                         type,
@@ -119,6 +128,9 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
                 y: rDef.y ?? 0,
                 edges: rDef.edges,
                 grid,
+                fogOfWar: rDef.fogOfWar ?? false,
+                fogVisibilityDistance: rDef.fogVisibilityDistance ?? 1.5,
+                fogKeepRevealed: rDef.fogKeepRevealed ?? true,
             };
         }
     } else {
@@ -136,6 +148,14 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
                 );
                 if (trampCfg) {
                     customData.force = trampCfg.steps;
+                }
+
+                // direction_deflector custom data eşleşmesi
+                const defCfg = stored.deflectorConfig?.find(
+                    cfg => (!cfg.position.roomId || cfg.position.roomId === roomId) && cfg.position.row === rowIdx && cfg.position.col === colIdx
+                );
+                if (type === 'direction_deflector') {
+                    customData.mapping = defCfg?.mapping ?? { up: 'right', right: 'down', down: 'left', left: 'up' };
                 }
 
                 return {
@@ -166,6 +186,9 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
             y: 0,
             edges,
             grid,
+            fogOfWar: false,
+            fogVisibilityDistance: 1.5,
+            fogKeepRevealed: true,
         };
     }
 
@@ -213,6 +236,7 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
         const isLocked = !!obj.lockOnTarget &&
             rooms[rId]?.grid[obj.position.row]?.[obj.position.col]?.type === 'target' &&
             (rooms[rId]?.grid[obj.position.row]?.[obj.position.col]?.customData.playerIndex as number) === i;
+        const isOnPowerCell = rooms[rId]?.grid[obj.position.row]?.[obj.position.col]?.type === 'power';
 
         entities.push({
             id:       nextId++,
@@ -221,7 +245,7 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
             physics:  { direction: 'right', force: 0, z: 0 },
             def:      { mass: 1, resistance: 0, isSolid: true },
             traits:   new Set(['player_controlled', 'destructible']),
-            isElectrified: false,
+            isElectrified: isOnPowerCell,
             customData: {
                 playerIndex:  i,
                 mode:         obj.mode ?? 'normal',
@@ -234,6 +258,7 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
     // Kutular
     for (const box of stored.initialBoxes ?? []) {
         const rId = box.position.roomId ?? 'main';
+        const isOnPowerCell = rooms[rId]?.grid[box.position.row]?.[box.position.col]?.type === 'power';
         entities.push({
             id:       nextId++,
             type:     'box',
@@ -241,9 +266,13 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
             physics:  { direction: 'right', force: 0, z: 0 },
             def:      { mass: 2, resistance: 1, isSolid: true },
             traits:   new Set(['pushable', 'destructible']),
-            isElectrified: false,
+            isElectrified: isOnPowerCell,
             customData: {
                 requiresPower: box.requiresPower ?? false,
+                durabilityEnabled: box.durabilityEnabled ?? false,
+                durability: box.durability ?? 3,
+                colorFilterEnabled: box.colorFilterEnabled ?? false,
+                colorFilterIndex: box.colorFilterIndex ?? 0,
             },
         });
     }

@@ -468,7 +468,7 @@ export function generateProceduralLevel(filters: GeneratorFilters): {
     const solveResult = solvePuzzle(candidate, maxSearchDepth, 4000);
 
     if (solveResult.solvable && solveResult.solution) {
-      const moves = solveResult.solution.length;
+      const moves = solveResult.moveCount;
 
       // Check if moves fit inside the desired range
       if (moves >= range.min && moves <= range.max) {
@@ -527,6 +527,6 @@ export function generateProceduralLevel(filters: GeneratorFilters): {
       difficulty: filters.difficulty,
     },
     solution: fallbackSolve.solution,
-    moveCount: fallbackSolve.solution?.length ?? 0,
+    moveCount: fallbackSolve.moveCount,
   };
 }

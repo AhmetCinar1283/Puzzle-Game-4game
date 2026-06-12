@@ -33,6 +33,9 @@ export interface RoomState {
         right: EdgeConfig;
     };
     grid: Cell[][];
+    fogOfWar?: boolean;
+    fogVisibilityDistance?: number;
+    fogKeepRevealed?: boolean;
 }
 
 // Yön → Izgara adımı (hücreler bu sabitten hareket hesaplar)

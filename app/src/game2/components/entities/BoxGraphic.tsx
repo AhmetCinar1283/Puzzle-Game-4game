@@ -2,6 +2,7 @@
 // APTAL GRAFİK — kutu görünümü. Fizik → PhysicsWrapper'da.
 
 import { Entity } from '../../logic/entityTypes';
+import { getPlayerColor } from '../playerColors';
 
 export const BoxGraphic = ({ entity }: { entity: Entity }) => {
     // requiresPower: customData'da varsa ve isPowered değilse soluk göster
@@ -9,9 +10,20 @@ export const BoxGraphic = ({ entity }: { entity: Entity }) => {
     const isPowered = entity.isElectrified;
     const dimmed = requiresPower && !isPowered;
 
-    // Renkleri daha kolay yönetmek için sabitler
-    const hex = '#f97316';
-    const rgb = '249,115,22';
+    const durabilityEnabled = (entity.customData.durabilityEnabled as boolean) ?? false;
+    const durability = (entity.customData.durability as number) ?? 3;
+
+    const colorFilterEnabled = (entity.customData.colorFilterEnabled as boolean) ?? false;
+    const colorFilterIndex = (entity.customData.colorFilterIndex as number) ?? 0;
+
+    // Renkleri dinamik olarak belirle
+    let hex = '#f97316';
+    let rgb = '249,115,22';
+    if (colorFilterEnabled) {
+        const colorSchema = getPlayerColor(colorFilterIndex);
+        hex = colorSchema.hex;
+        rgb = colorSchema.rgb;
+    }
 
     return (
         <div style={{
@@ -41,6 +53,7 @@ export const BoxGraphic = ({ entity }: { entity: Entity }) => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     transition: 'all 200ms ease-in-out',
+                    position: 'relative',
                 }}
             >
                 {/* Merkez İkon - Görseldeki iç içe geçmiş kareler */}
@@ -57,6 +70,71 @@ export const BoxGraphic = ({ entity }: { entity: Entity }) => {
                         fill={dimmed ? `rgba(${rgb},0.4)` : isPowered ? '#fbbf24' : hex} 
                     />
                 </svg>
+
+                {/* Top-Left Color Filter Dot Badge */}
+                {colorFilterEnabled && (
+                    <div style={{
+                        position: 'absolute',
+                        top: -5,
+                        left: -5,
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        background: '#030712',
+                        border: `2.5px solid ${hex}`,
+                        boxShadow: `0 0 8px ${hex}`,
+                        zIndex: 2,
+                    }} />
+                )}
+
+                {/* Top-Right Power Required Indicator */}
+                {requiresPower && (
+                    <div style={{
+                        position: 'absolute',
+                        top: -7,
+                        right: -7,
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        background: '#030712',
+                        border: `1.5px solid ${isPowered ? '#fbbf24' : '#475569'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 8,
+                        color: isPowered ? '#fbbf24' : '#475569',
+                        boxShadow: isPowered ? '0 0 8px #fbbf24' : 'none',
+                        zIndex: 2,
+                        fontWeight: 'bold',
+                    }}>
+                        ⚡
+                    </div>
+                )}
+
+                {/* Bottom-Right Durability Indicator */}
+                {durabilityEnabled && (
+                    <div style={{
+                        position: 'absolute',
+                        bottom: -7,
+                        right: -7,
+                        width: 15,
+                        height: 15,
+                        borderRadius: '50%',
+                        background: '#030712',
+                        border: `1.5px solid ${hex}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 9,
+                        fontWeight: 'bold',
+                        color: hex,
+                        boxShadow: `0 0 8px ${hex}`,
+                        zIndex: 2,
+                        fontFamily: 'monospace',
+                    }}>
+                        {durability}
+                    </div>
+                )}
             </div>
         </div>
     );

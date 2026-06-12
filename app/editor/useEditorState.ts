@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import type { CellType, EdgeBehavior, LevelData, Position, ConveyorCellConfig, TrampolineCellConfig } from '@/app/src/games/types';
+import type { CellType, EdgeBehavior, LevelData, Position, ConveyorCellConfig, TrampolineCellConfig, DeflectorCellConfig } from '@/app/src/games/types';
 import type { EdgeConfig, ControlMode } from '@/app/src/game2/logic/types';
 import type { StoredLevel } from '@/app/src/lib/db';
 import type { FirestoreLevel, LevelPart } from '@/app/src/lib/firebase/admin';
@@ -65,6 +65,10 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const [conveyorPowerRequired, setConveyorPowerRequired] = useState<Position[]>([]);
   const [conveyorConfig, setConveyorConfig] = useState<ConveyorCellConfig[]>([]);
   const [trampolineConfig, setTrampolineConfig] = useState<TrampolineCellConfig[]>([]);
+  const [deflectorConfig, setDeflectorConfig] = useState<DeflectorCellConfig[]>([]);
+  const [fogOfWar, setFogOfWar] = useState(false);
+  const [fogVisibilityDistance, setFogVisibilityDistance] = useState(1.5);
+  const [fogKeepRevealed, setFogKeepRevealed] = useState(true);
 
   // Selection & Generated Candidates
   const [selection, setSelection] = useState<SelectionRect | null>(null);
@@ -189,6 +193,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
           right: typeof r.edges.right === 'string' ? { type: r.edges.right } : r.edges.right,
         },
         grid: typeof r.grid === 'string' ? JSON.parse(r.grid) : r.grid,
+        fogOfWar: r.fogOfWar ?? false,
+        fogVisibilityDistance: r.fogVisibilityDistance ?? 1.5,
+        fogKeepRevealed: r.fogKeepRevealed ?? true,
       }));
       setRooms(parsedRooms);
 
@@ -198,6 +205,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       setPendingW(firstRoom.width); setPendingH(firstRoom.height);
       setEdges(firstRoom.edges);
       setGrid(firstRoom.grid);
+      setFogOfWar(firstRoom.fogOfWar ?? false);
+      setFogVisibilityDistance(firstRoom.fogVisibilityDistance ?? 1.5);
+      setFogKeepRevealed(firstRoom.fogKeepRevealed ?? true);
     } else {
       // Legacy single-room fallback
       const legacyEdges = {
@@ -215,6 +225,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         y: 0,
         edges: legacyEdges,
         grid: typeof stored.grid === 'string' ? JSON.parse(stored.grid) : stored.grid as CellType[][],
+        fogOfWar: false,
+        fogVisibilityDistance: 1.5,
+        fogKeepRevealed: true,
       };
       setRooms([mainRoom]);
       setActiveRoomId('main');
@@ -222,6 +235,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       setPendingW(stored.width); setPendingH(stored.height);
       setEdges(legacyEdges);
       setGrid(mainRoom.grid);
+      setFogOfWar(false);
+      setFogVisibilityDistance(1.5);
+      setFogKeepRevealed(true);
     }
 
     setLockedCells((stored as any).lockedCells ?? {});
@@ -237,10 +253,21 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       objs.push({ id: 1, row: null, col: null, roomId: 'main', mode: 'normal', lockOnTarget: true });
     }
     setObjects(objs);
-    setBoxes((stored.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, roomId: b.position.roomId ?? 'main', requiresPower: b.requiresPower ?? false })));
+    setBoxes((stored.initialBoxes ?? []).map((b) => ({
+      id: b.id,
+      row: b.position.row,
+      col: b.position.col,
+      roomId: b.position.roomId ?? 'main',
+      requiresPower: b.requiresPower ?? false,
+      durabilityEnabled: b.durabilityEnabled ?? false,
+      durability: b.durability ?? 3,
+      colorFilterEnabled: b.colorFilterEnabled ?? false,
+      colorFilterIndex: b.colorFilterIndex ?? 0,
+    })));
     setConveyorPowerRequired(stored.conveyorPowerRequired ?? []);
     setConveyorConfig(stored.conveyorConfig ?? []);
     setTrampolineConfig(stored.trampolineConfig ?? []);
+    setDeflectorConfig(stored.deflectorConfig ?? []);
     setActivePlacingBoxId(null);
 
     setSelection(null);
@@ -269,6 +296,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setConveyorPowerRequired((cpr) => cpr.filter((p) => (p.roomId ?? 'main') !== activeRoomId || (p.row < newH && p.col < newW)));
     setConveyorConfig((cc) => cc.filter((c) => (c.position.roomId ?? 'main') !== activeRoomId || (c.position.row < newH && c.position.col < newW)));
     setTrampolineConfig((tc) => tc.filter((c) => (c.position.roomId ?? 'main') !== activeRoomId || (c.position.row < newH && c.position.col < newW)));
+    setDeflectorConfig((dc) => dc.filter((c) => (c.position.roomId ?? 'main') !== activeRoomId || (c.position.row < newH && c.position.col < newW)));
 
     setSelection(null);
     setLockedCells((prev) => {
@@ -351,7 +379,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setRooms((prevRooms) => {
       const updated = prevRooms.map((r) => {
         if (r.id === activeRoomId) {
-          return { ...r, width, height, edges, grid };
+          return { ...r, width, height, edges, grid, fogOfWar, fogVisibilityDistance, fogKeepRevealed };
         }
         return r;
       });
@@ -365,10 +393,13 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         setPendingH(targetRoom.height);
         setEdges(targetRoom.edges);
         setGrid(targetRoom.grid);
+        setFogOfWar(targetRoom.fogOfWar ?? false);
+        setFogVisibilityDistance(targetRoom.fogVisibilityDistance ?? 1.5);
+        setFogKeepRevealed(targetRoom.fogKeepRevealed ?? true);
       }
       return updated;
     });
-  }, [activeRoomId, width, height, edges, grid]);
+  }, [activeRoomId, width, height, edges, grid, fogOfWar, fogVisibilityDistance, fogKeepRevealed]);
 
   const addRoom = useCallback(() => {
     // Find first unoccupied layout slot in the 6x6 grid [0..5]
@@ -402,12 +433,15 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         right: { type: 'wall' },
       },
       grid: makeGrid(5, 5),
+      fogOfWar: false,
+      fogVisibilityDistance: 1.5,
+      fogKeepRevealed: true,
     };
 
     setRooms((prevRooms) => {
       const updated = prevRooms.map((r) => {
         if (r.id === activeRoomId) {
-          return { ...r, width, height, edges, grid };
+          return { ...r, width, height, edges, grid, fogOfWar, fogVisibilityDistance, fogKeepRevealed };
         }
         return r;
       });
@@ -426,13 +460,34 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       right: { type: 'wall' },
     });
     setGrid(makeGrid(5, 5));
-  }, [rooms, activeRoomId, width, height, edges, grid]);
+    setFogOfWar(false);
+    setFogVisibilityDistance(1.5);
+    setFogKeepRevealed(true);
+  }, [rooms, activeRoomId, width, height, edges, grid, fogOfWar, fogVisibilityDistance, fogKeepRevealed]);
 
   const deleteRoom = useCallback((idToDelete: string) => {
     if (rooms.length <= 1) return;
 
     setRooms((prevRooms) => {
-      const remaining = prevRooms.filter((r) => r.id !== idToDelete);
+      const remaining = prevRooms.filter((r) => r.id !== idToDelete).map((r) => {
+        let rChanged = false;
+        const nextRoomEdges = { ...r.edges };
+        for (const s of ['top', 'bottom', 'left', 'right'] as const) {
+          const edge = nextRoomEdges[s];
+          if (edge && edge.type === 'portal' && edge.targetRoomId === idToDelete) {
+            nextRoomEdges[s] = {
+              ...edge,
+              targetRoomId: undefined,
+              targetEdge: undefined,
+            };
+            rChanged = true;
+          }
+        }
+        if (rChanged) {
+          return { ...r, edges: nextRoomEdges };
+        }
+        return r;
+      });
 
       if (activeRoomId === idToDelete) {
         const fallbackRoom = remaining[0];
@@ -443,6 +498,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         setPendingH(fallbackRoom.height);
         setEdges(fallbackRoom.edges);
         setGrid(fallbackRoom.grid);
+        setFogOfWar(fallbackRoom.fogOfWar ?? false);
+        setFogVisibilityDistance(fallbackRoom.fogVisibilityDistance ?? 1.5);
+        setFogKeepRevealed(fallbackRoom.fogKeepRevealed ?? true);
       }
       return remaining;
     });
@@ -452,6 +510,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setConveyorPowerRequired((cpr) => cpr.filter((pos) => (pos.roomId ?? 'main') !== idToDelete));
     setConveyorConfig((cc) => cc.filter((c) => (c.position.roomId ?? 'main') !== idToDelete));
     setTrampolineConfig((tc) => tc.filter((c) => (c.position.roomId ?? 'main') !== idToDelete));
+    setDeflectorConfig((dc) => dc.filter((c) => (c.position.roomId ?? 'main') !== idToDelete));
   }, [rooms.length, activeRoomId]);
 
   const updateRoomName = useCallback((id: string, newName: string) => {
@@ -490,7 +549,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
   const generateLevelData = useCallback((): { level: LevelData | null; error: string | null } => {
     const currentRooms = rooms.map((r) => {
       if (r.id === activeRoomId) {
-        return { ...r, width, height, edges, grid };
+        return { ...r, width, height, edges, grid, fogOfWar, fogVisibilityDistance, fogKeepRevealed };
       }
       return r;
     });
@@ -557,6 +616,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
           y: r.y,
           edges: r.edges,
           grid: r.grid,
+          fogOfWar: r.fogOfWar ?? false,
+          fogVisibilityDistance: r.fogVisibilityDistance ?? 1.5,
+          fogKeepRevealed: r.fogKeepRevealed ?? true,
         })),
         controlMode,
         initialControlledRooms,
@@ -572,17 +634,20 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
           initialBoxes: validBoxes.map((b) => ({
             id: b.id,
             position: { roomId: b.roomId ?? 'main', row: b.row!, col: b.col! },
-            ...(b.requiresPower ? { requiresPower: true } : {})
+            ...(b.requiresPower ? { requiresPower: true } : {}),
+            ...(b.durabilityEnabled ? { durabilityEnabled: true, durability: b.durability } : {}),
+            ...(b.colorFilterEnabled ? { colorFilterEnabled: true, colorFilterIndex: b.colorFilterIndex } : {}),
           }))
         } : {}),
         ...(conveyorPowerRequired.length > 0 ? { conveyorPowerRequired } : {}),
         ...(conveyorConfig.length > 0 ? { conveyorConfig } : {}),
         ...(trampolineConfig.length > 0 ? { trampolineConfig } : {}),
+        ...(deflectorConfig.length > 0 ? { deflectorConfig } : {}),
         ...(Object.keys(lockedCells).length > 0 ? { lockedCells } : {}),
       } as any,
       error: null,
     };
-  }, [editId, levelName, width, height, edges, grid, objects, trailCollision, boxes, conveyorPowerRequired, conveyorConfig, trampolineConfig, lockedCells, rooms, controlMode, activeRoomId, difficulty, creatorName]);
+  }, [editId, levelName, width, height, edges, grid, objects, trailCollision, boxes, conveyorPowerRequired, conveyorConfig, trampolineConfig, deflectorConfig, lockedCells, rooms, controlMode, activeRoomId, difficulty, creatorName, fogOfWar, fogVisibilityDistance, fogKeepRevealed]);
 
   // Live Path Solver effect (debounced)
   useEffect(() => {
@@ -613,7 +678,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [grid, width, height, objects, boxes, edges, trailCollision, conveyorPowerRequired, conveyorConfig, trampolineConfig, generateLevelData, rooms]);
+  }, [grid, width, height, objects, boxes, edges, trailCollision, conveyorPowerRequired, conveyorConfig, trampolineConfig, deflectorConfig, generateLevelData, rooms]);
 
   const buildPayload = useCallback((level: any): Omit<StoredLevel, 'id' | 'createdAt' | 'updatedAt'> => ({
     name: level.name, width: level.width, height: level.height, edges: level.edges,
@@ -622,6 +687,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     conveyorPowerRequired: level.conveyorPowerRequired,
     conveyorConfig: level.conveyorConfig,
     trampolineConfig: level.trampolineConfig,
+    deflectorConfig: level.deflectorConfig,
     difficulty,
     lockedCells: level.lockedCells,
     rooms: level.rooms,
@@ -747,6 +813,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
             right: typeof r.edges.right === 'string' ? { type: r.edges.right } : r.edges.right,
           },
           grid: typeof r.grid === 'string' ? JSON.parse(r.grid) : r.grid,
+          fogOfWar: r.fogOfWar ?? false,
+          fogVisibilityDistance: r.fogVisibilityDistance ?? 1.5,
         }));
         setRooms(parsedRooms);
 
@@ -756,6 +824,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         setPendingW(firstRoom.width); setPendingH(firstRoom.height);
         setEdges(firstRoom.edges);
         setGrid(firstRoom.grid);
+        setFogOfWar(firstRoom.fogOfWar ?? false);
+        setFogVisibilityDistance(firstRoom.fogVisibilityDistance ?? 1.5);
       } else {
         if (!parsed.grid || !parsed.width || !parsed.height) return 'Geçersiz format.';
         // Legacy single-room fallback
@@ -774,6 +844,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
           y: 0,
           edges: legacyEdges,
           grid: typeof parsed.grid === 'string' ? JSON.parse(parsed.grid) : parsed.grid as CellType[][],
+          fogOfWar: false,
+          fogVisibilityDistance: 1.5,
         };
         setRooms([mainRoom]);
         setActiveRoomId('main');
@@ -781,12 +853,25 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         setPendingW(parsed.width); setPendingH(parsed.height);
         setEdges(legacyEdges);
         setGrid(mainRoom.grid);
+        setFogOfWar(false);
+        setFogVisibilityDistance(1.5);
       }
 
-      setBoxes((parsed.initialBoxes ?? []).map((b: any) => ({ id: b.id, row: b.position.row, col: b.position.col, roomId: b.position.roomId ?? 'main', requiresPower: b.requiresPower ?? false })));
+      setBoxes((parsed.initialBoxes ?? []).map((b: any) => ({
+        id: b.id,
+        row: b.position.row,
+        col: b.position.col,
+        roomId: b.position.roomId ?? 'main',
+        requiresPower: b.requiresPower ?? false,
+        durabilityEnabled: b.durabilityEnabled ?? false,
+        durability: b.durability ?? 3,
+        colorFilterEnabled: b.colorFilterEnabled ?? false,
+        colorFilterIndex: b.colorFilterIndex ?? 0,
+      })));
       setConveyorPowerRequired(parsed.conveyorPowerRequired ?? []);
       setConveyorConfig(parsed.conveyorConfig ?? []);
       setTrampolineConfig(parsed.trampolineConfig ?? []);
+      setDeflectorConfig(parsed.deflectorConfig ?? []);
       setActivePlacingBoxId(null);
 
       const objs: ObjConfig[] = (parsed.initialObjects ?? []).map((obj: any) => ({
@@ -834,6 +919,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
           right: typeof r.edges.right === 'string' ? { type: r.edges.right } : r.edges.right,
         },
         grid: typeof r.grid === 'string' ? JSON.parse(r.grid) : r.grid,
+        fogOfWar: r.fogOfWar ?? false,
+        fogVisibilityDistance: r.fogVisibilityDistance ?? 1.5,
       }));
       setRooms(parsedRooms);
 
@@ -843,6 +930,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       setPendingW(firstRoom.width); setPendingH(firstRoom.height);
       setEdges(firstRoom.edges);
       setGrid(firstRoom.grid);
+      setFogOfWar(firstRoom.fogOfWar ?? false);
+      setFogVisibilityDistance(firstRoom.fogVisibilityDistance ?? 1.5);
     } else {
       // Legacy single-room fallback
       const legacyEdges = {
@@ -860,6 +949,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         y: 0,
         edges: legacyEdges,
         grid: typeof fl.grid === 'string' ? JSON.parse(fl.grid) : fl.grid as CellType[][],
+        fogOfWar: false,
+        fogVisibilityDistance: 1.5,
       };
       setRooms([mainRoom]);
       setActiveRoomId('main');
@@ -867,6 +958,8 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       setPendingW(fl.width); setPendingH(fl.height);
       setEdges(legacyEdges);
       setGrid(mainRoom.grid);
+      setFogOfWar(false);
+      setFogVisibilityDistance(1.5);
     }
 
     const objs: ObjConfig[] = (fl.initialObjects ?? []).map((obj) => ({
@@ -881,10 +974,21 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
       objs.push({ id: 1, row: null, col: null, roomId: 'main', mode: 'normal', lockOnTarget: true });
     }
     setObjects(objs);
-    setBoxes((fl.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, roomId: b.position.roomId ?? 'main', requiresPower: b.requiresPower ?? false })));
+    setBoxes((fl.initialBoxes ?? []).map((b) => ({
+      id: b.id,
+      row: b.position.row,
+      col: b.position.col,
+      roomId: b.position.roomId ?? 'main',
+      requiresPower: b.requiresPower ?? false,
+      durabilityEnabled: b.durabilityEnabled ?? false,
+      durability: b.durability ?? 3,
+      colorFilterEnabled: b.colorFilterEnabled ?? false,
+      colorFilterIndex: b.colorFilterIndex ?? 0,
+    })));
     setConveyorPowerRequired(fl.conveyorPowerRequired ?? []);
     setConveyorConfig(fl.conveyorConfig ?? []);
     setTrampolineConfig(fl.trampolineConfig ?? []);
+    setDeflectorConfig(fl.deflectorConfig ?? []);
     setActivePlacingBoxId(null);
 
     setSelection(null);
@@ -953,13 +1057,17 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
           right: { type: 'wall' },
         },
         grid: makeGrid(5, 5),
+        fogOfWar: false,
+        fogVisibilityDistance: 1.5,
       }
     ]);
     setActiveRoomId('main');
     setControlMode('all_rooms');
+    setFogOfWar(false);
+    setFogVisibilityDistance(1.5);
 
     setObjects([...DEFAULT_OBJS.map((o) => ({ ...o, roomId: 'main' }))]);
-    setBoxes([]); setLockedCells({}); setConveyorPowerRequired([]); setConveyorConfig([]); setTrampolineConfig([]); setActivePlacingBoxId(null); setFirestoreEditId(null);
+    setBoxes([]); setLockedCells({}); setConveyorPowerRequired([]); setConveyorConfig([]); setTrampolineConfig([]); setDeflectorConfig([]); setActivePlacingBoxId(null); setFirestoreEditId(null);
 
     setSelection(null);
     setGeneratedCandidates([]);
@@ -992,6 +1100,9 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setDifficulty((level.difficulty != undefined ? level.difficulty : 2) as 1 | 2 | 3 | 4);
     setSavedRequestId(null);
     setFirestoreEditId(null);
+    setFogOfWar(level.rooms?.[0]?.fogOfWar ?? false);
+    setFogVisibilityDistance(level.rooms?.[0]?.fogVisibilityDistance ?? 1.5);
+    setFogKeepRevealed(level.rooms?.[0]?.fogKeepRevealed ?? true);
     
     const objs: ObjConfig[] = (level.initialObjects ?? []).map((obj) => ({
       id: obj.id,
@@ -1005,10 +1116,20 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     }
     setObjects(objs);
 
-    setBoxes((level.initialBoxes ?? []).map((b) => ({ id: b.id, row: b.position.row, col: b.position.col, requiresPower: b.requiresPower ?? false })));
+    setBoxes((level.initialBoxes ?? []).map((b) => ({
+      id: b.id,
+      row: b.position.row,
+      col: b.position.col,
+      requiresPower: b.requiresPower ?? false,
+      durabilityEnabled: b.durabilityEnabled ?? false,
+      durability: b.durability ?? 3,
+      colorFilterEnabled: b.colorFilterEnabled ?? false,
+      colorFilterIndex: b.colorFilterIndex ?? 0,
+    })));
     setConveyorPowerRequired(level.conveyorPowerRequired ?? []);
     setConveyorConfig(level.conveyorConfig ?? []);
     setTrampolineConfig(level.trampolineConfig ?? []);
+    setDeflectorConfig(level.deflectorConfig ?? []);
     setActivePlacingBoxId(null);
     setGeneratorDialogOpen(false);
 
@@ -1052,9 +1173,12 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     conveyorPowerRequired, setConveyorPowerRequired,
     conveyorConfig, setConveyorConfig,
     trampolineConfig, setTrampolineConfig,
+    deflectorConfig, setDeflectorConfig,
     // Multi-room
     rooms, setRooms, activeRoomId, setActiveRoomId, controlMode, setControlMode,
     switchActiveRoom, addRoom, deleteRoom, updateRoomName, updateRoomLayoutPosition,
+    fogOfWar, setFogOfWar, fogVisibilityDistance, setFogVisibilityDistance,
+    fogKeepRevealed, setFogKeepRevealed,
     // Tool
     activeTool, setActiveTool, router,
     // Saved levels

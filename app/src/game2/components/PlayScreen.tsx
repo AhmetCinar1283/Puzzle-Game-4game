@@ -169,9 +169,15 @@ export function PlayScreen({
             })
             .map(ent => {
                 const mode = (ent.customData.mode as string) ?? 'normal';
-                const direction = mode === 'reversed'
+                let direction = mode === 'reversed'
                     ? OPPOSITE_DIRECTION[rawDirection]
                     : rawDirection;
+
+                if (ent.customData.controlMapping) {
+                    const mapping = ent.customData.controlMapping as Record<Direction, Direction>;
+                    direction = mapping[direction] ?? direction;
+                }
+
                 return {
                     entityId:     ent.id,
                     type:         'mutate_entity' as const,

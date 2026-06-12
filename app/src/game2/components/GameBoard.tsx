@@ -13,7 +13,7 @@ import { PhysicsWrapper } from './physicsWrapper';
 import { LevelEdges } from '../logic/engine/getNextTopologyPosition';
 import { GAME_ANIMATION_KEYFRAMES } from './effects/animationStyles';
 import { getPlayerColor } from './playerColors';
-import { calculateRoomLayoutOffsets } from '../logic/engine/rooms';
+import { calculateRoomLayoutOffsets, routePortalPath } from '../logic/engine/rooms';
 
 const CELL_SIZE = 64;
 
@@ -260,75 +260,68 @@ const GameBoard = ({ snapshots, controlledRoomIds, levelEdges, onAnimationEnd }:
     const frameIndex = Math.min(currentFrame, snapshots.length - 1);
     const snapshot = snapshots[frameIndex];
     if (!snapshot) return null;
+    const prevSnapshot = frameIndex > 0 ? snapshots[frameIndex - 1] : null;
 
     // Odaların yerleşim ofsetlerini ve toplam boyutları hesapla
     const { roomPositions, totalWidth, totalHeight } = calculateRoomLayoutOffsets(snapshot.rooms, CELL_SIZE, 40);
 
     // Bağlantılı portal çizgilerini oluştur
-    const drawnConnections = new Set<string>();
-    const connectionPaths: ReactNode[] = [];
-
+    const connections: { fromRoomId: string; fromSide: 'top' | 'bottom' | 'left' | 'right'; toRoomId: string; toSide: 'top' | 'bottom' | 'left' | 'right' }[] = [];
+    const seen = new Set<string>();
     for (const [rId, room] of Object.entries(snapshot.rooms)) {
         for (const side of ['top', 'bottom', 'left', 'right'] as const) {
             const edge = room.edges[side];
-            if (edge && edge.type === 'portal' && edge.targetRoomId) {
+            if (edge && edge.type === 'portal' && edge.targetRoomId && edge.targetEdge) {
                 const targetRoomId = edge.targetRoomId;
-                const targetEdge = edge.targetEdge ?? 'left';
+                const targetEdge = edge.targetEdge;
 
-                const connectionKey = [rId, side, targetRoomId, targetEdge].sort().join('-');
-                if (drawnConnections.has(connectionKey)) continue;
-                drawnConnections.add(connectionKey);
-
-                const offsetA = roomPositions[rId];
-                const offsetB = roomPositions[targetRoomId];
-                if (offsetA && offsetB) {
-                    const pA = getEdgePoint(offsetA, side);
-                    const pB = getEdgePoint(offsetB, targetEdge);
-
-                    const controlOffset = 60;
-                    let cp1x = pA.x;
-                    let cp1y = pA.y;
-                    if (side === 'left') cp1x -= controlOffset;
-                    else if (side === 'right') cp1x += controlOffset;
-                    else if (side === 'top') cp1y -= controlOffset;
-                    else if (side === 'bottom') cp1y += controlOffset;
-
-                    let cp2x = pB.x;
-                    let cp2y = pB.y;
-                    if (targetEdge === 'left') cp2x -= controlOffset;
-                    else if (targetEdge === 'right') cp2x += controlOffset;
-                    else if (targetEdge === 'top') cp2y -= controlOffset;
-                    else if (targetEdge === 'bottom') cp2y += controlOffset;
-
-                    const pathD = `M ${pA.x} ${pA.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${pB.x} ${pB.y}`;
-
-                    connectionPaths.push(
-                        <g key={connectionKey}>
-                            <path
-                                d={pathD}
-                                fill="none"
-                                stroke="rgba(168, 85, 247, 0.4)"
-                                strokeWidth={6}
-                                strokeLinecap="round"
-                                filter="blur(4px)"
-                            />
-                            <path
-                                d={pathD}
-                                fill="none"
-                                stroke="#c084fc"
-                                strokeWidth={2.5}
-                                strokeLinecap="round"
-                                strokeDasharray="6, 6"
-                                style={{
-                                    animation: 'crawlPath 1.2s linear infinite',
-                                }}
-                            />
-                        </g>
-                    );
-                }
+                const connectionKey = [`${rId}:${side}`, `${targetRoomId}:${targetEdge}`].sort().join('--');
+                if (seen.has(connectionKey)) continue;
+                seen.add(connectionKey);
+                connections.push({ fromRoomId: rId, fromSide: side, toRoomId: targetRoomId, toSide: targetEdge });
             }
         }
     }
+
+    const connectionPaths: ReactNode[] = [];
+    connections.forEach((conn, connIdx) => {
+        const pathD = routePortalPath(
+            conn.fromRoomId,
+            conn.fromSide,
+            conn.toRoomId,
+            conn.toSide,
+            roomPositions,
+            snapshot.rooms,
+            CELL_SIZE,
+            40, // gap for gameplay
+            connIdx,
+            connections.length
+        );
+
+        connectionPaths.push(
+            <g key={`${conn.fromRoomId}-${conn.fromSide}-${conn.toRoomId}-${conn.toSide}`}>
+                <path
+                    d={pathD}
+                    fill="none"
+                    stroke="rgba(168, 85, 247, 0.4)"
+                    strokeWidth={6}
+                    strokeLinecap="round"
+                    filter="blur(4px)"
+                />
+                <path
+                    d={pathD}
+                    fill="none"
+                    stroke="#c084fc"
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeDasharray="6, 6"
+                    style={{
+                        animation: 'crawlPath 1.2s linear infinite',
+                    }}
+                />
+            </g>
+        );
+    });
 
     const combinedStyles = edgeStyles + GAME_ANIMATION_KEYFRAMES;
 
@@ -408,28 +401,38 @@ const GameBoard = ({ snapshots, controlledRoomIds, levelEdges, onAnimationEnd }:
                         }}>
                             {room.grid.map((row: Cell[]) =>
                                 row.map((cell: Cell) => {
+                                    const entityOnCell = snapshot.entities.find(
+                                        (e: Entity) => (e.position.roomId ?? 'main') === room.id && e.position.row === cell.position.row && e.position.col === cell.position.col
+                                    );
+                                    const prevEntityOnCell = prevSnapshot?.entities.find(
+                                        (e: Entity) => (e.position.roomId ?? 'main') === room.id && e.position.row === cell.position.row && e.position.col === cell.position.col
+                                    );
                                     const Renderer = CELL_RENDERERS[cell.type];
-                                    const prevSnapshot = frameIndex > 0 ? snapshots[frameIndex - 1] : null;
-                                    const entityOnCell = snapshot.entities.find(e =>
-                                        (e.position.roomId ?? 'main') === room.id &&
-                                        e.position.row === cell.position.row &&
-                                        e.position.col === cell.position.col
-                                    ) ?? null;
-                                    const prevEntityOnCell = prevSnapshot?.entities.find(e =>
-                                        (e.position.roomId ?? 'main') === room.id &&
-                                        e.position.row === cell.position.row &&
-                                        e.position.col === cell.position.col
-                                    ) ?? null;
-                                    
+                                    const playersInThisRoom = snapshot.entities.filter((e: Entity) => e.type === 'player' && (e.position.roomId ?? 'main') === room.id && !e.customData._destroyed);
+                                    const isCurrentlyVisible = !room.fogOfWar || playersInThisRoom.some(p => Math.sqrt(Math.pow(cell.position.row - p.position.row, 2) + Math.pow(cell.position.col - p.position.col, 2)) <= (room.fogVisibilityDistance ?? 1.5));
+                                    const isExplored = !room.fogOfWar || (room.fogKeepRevealed !== false ? !!cell.customData.explored : isCurrentlyVisible);
+
+                                    if (!isExplored) {
+                                        return (
+                                            <div key={cell.id} style={{ width: CELL_SIZE, height: CELL_SIZE, backgroundColor: '#020617', border: '1px solid rgba(30, 58, 138, 0.05)', boxSizing: 'border-box' }} />
+                                        );
+                                    }
+
+                                    const visibleEntityOnCell = isCurrentlyVisible ? entityOnCell : (entityOnCell?.type === 'player' ? entityOnCell : null);
+                                    const visiblePrevEntityOnCell = isCurrentlyVisible ? prevEntityOnCell : (prevEntityOnCell?.type === 'player' ? prevEntityOnCell : null);
+
                                     // Custom renderer fallback
                                     const ActiveRenderer = Renderer || CELL_RENDERERS['normal'];
                                     return (
-                                        <ActiveRenderer 
-                                            key={cell.id} 
-                                            cell={cell} 
-                                            entityOnCell={entityOnCell}
-                                            prevEntityOnCell={prevEntityOnCell}
-                                        />
+                                        <div key={cell.id} style={{ position: 'relative', width: CELL_SIZE, height: CELL_SIZE, backgroundColor: '#020617' }}>
+                                            <div style={{ width: '100%', height: '100%', filter: isCurrentlyVisible ? 'none' : 'brightness(0.3) contrast(0.8)', transition: 'filter 0.3s ease' }}>
+                                                <ActiveRenderer 
+                                                    cell={cell} 
+                                                    entityOnCell={visibleEntityOnCell}
+                                                    prevEntityOnCell={visiblePrevEntityOnCell}
+                                                />
+                                            </div>
+                                        </div>
                                     );
                                 })
                             )}
@@ -449,6 +452,12 @@ const GameBoard = ({ snapshots, controlledRoomIds, levelEdges, onAnimationEnd }:
                             const trailPlayerIndex = cell.customData.trailPlayerIndex as number | undefined;
                             if (trailPlayerIndex === undefined) return null;
 
+                            const playersInThisRoom = snapshot.entities.filter((e: Entity) => e.type === 'player' && (e.position.roomId ?? 'main') === room.id && !e.customData._destroyed);
+                            const isCurrentlyVisible = !room.fogOfWar || playersInThisRoom.some(p => Math.sqrt(Math.pow(cell.position.row - p.position.row, 2) + Math.pow(cell.position.col - p.position.col, 2)) <= (room.fogVisibilityDistance ?? 1.5));
+                            const isExplored = !room.fogOfWar || (room.fogKeepRevealed !== false ? !!cell.customData.explored : isCurrentlyVisible);
+
+                            if (!isExplored) return null;
+
                             const { hex: color, glow } = getPlayerColor(trailPlayerIndex);
                             const r = cell.position.row;
                             const c = cell.position.col;
@@ -458,11 +467,10 @@ const GameBoard = ({ snapshots, controlledRoomIds, levelEdges, onAnimationEnd }:
                             const hasUp    = room.grid[r - 1]?.[c]?.customData.trailPlayerIndex === trailPlayerIndex;
                             const hasDown  = room.grid[r + 1]?.[c]?.customData.trailPlayerIndex === trailPlayerIndex;
 
-                            const player = snapshot.entities.find(e => 
+                            const player = snapshot.entities.find((e: Entity) => 
                                 e.type === 'player' && 
                                 !e.customData._destroyed && 
-                                (e.position.roomId ?? 'main') === room.id &&
-                                ((e.customData.playerIndex as number) ?? 0) === trailPlayerIndex
+                                (e.customData.playerIndex as number) === trailPlayerIndex
                             );
                             
                             const isPlayerLeft  = player && player.position.row === r && player.position.col === c - 1;
@@ -481,6 +489,8 @@ const GameBoard = ({ snapshots, controlledRoomIds, levelEdges, onAnimationEnd }:
                                         height: CELL_SIZE,
                                         pointerEvents: 'none',
                                         zIndex: 5,
+                                        opacity: isCurrentlyVisible ? 1.0 : 0.2,
+                                        transition: 'opacity 0.3s ease',
                                     }}
                                 >
                                     {(hasLeft || isPlayerLeft) && (
@@ -528,6 +538,17 @@ const GameBoard = ({ snapshots, controlledRoomIds, levelEdges, onAnimationEnd }:
                     const prevSnapshot = frameIndex > 0 ? snapshots[frameIndex - 1] : null;
                     const prevEntity = prevSnapshot?.entities.find(e => e.id === entity.id) ?? null;
                     
+                    const room = snapshot.rooms[rId];
+                    const playersInRoom = snapshot.entities.filter(e => e.type === 'player' && (e.position.roomId ?? 'main') === rId && !e.customData._destroyed);
+                    const isEntityVisible = !room?.fogOfWar || entity.type === 'player' || (
+                        playersInRoom.some(p => 
+                            Math.sqrt(Math.pow(entity.position.row - p.position.row, 2) + Math.pow(entity.position.col - p.position.col, 2)) <= (room.fogVisibilityDistance ?? 1.5)
+                        )
+                    );
+                    const isEntityExplored = !room?.fogOfWar || (room.fogKeepRevealed !== false ? !!currentCell?.customData.explored : isEntityVisible);
+
+                    const opacity = (isEntityExplored && isEntityVisible) ? 1.0 : 0.0;
+
                     return (
                         <PhysicsWrapper
                             key={entity.id}
@@ -537,7 +558,9 @@ const GameBoard = ({ snapshots, controlledRoomIds, levelEdges, onAnimationEnd }:
                             frameMs={frameMs}
                             roomOffsets={roomPositions}
                         >
-                            <Renderer entity={entity} />
+                            <div style={{ opacity, transition: 'opacity 0.3s ease', width: '100%', height: '100%' }}>
+                                <Renderer entity={entity} />
+                            </div>
                         </PhysicsWrapper>
                     );
                 })}

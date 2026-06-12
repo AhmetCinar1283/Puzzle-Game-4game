@@ -13,7 +13,8 @@ export type CellTypes =
     | 'power' | 'toggle'
     | 'conveyor' | 'trampoline' | 'teleport'
     | 'target'
-    | 'control_switch'; // Yeni hücre tipi: oda kontrolünü değiştirir
+    | 'control_switch'
+    | 'direction_deflector';
 
 // SAF VERİ — JSON'a çevrilebilir, behavior içermez.
 // Motor, davranışları her zaman CELL_BEHAVIORS[cell.type] registry'sinden okur.

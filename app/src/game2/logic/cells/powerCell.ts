@@ -18,4 +18,11 @@ export const powerBehavior: CellBehavior = {
             newElectrifiedState: true,
         }];
     },
+    onLeave: (_cell, entity) => {
+        return [{
+            entityId: entity.id,
+            type: 'mutate_entity',
+            newElectrifiedState: false,
+        }];
+    },
 };

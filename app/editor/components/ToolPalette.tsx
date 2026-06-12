@@ -99,6 +99,8 @@ export default function ToolPalette({ isMobile }: { isMobile: boolean }) {
     'empty', 'obstacle', 'forbidden',
     ...objects.map((o) => `target_${o.id}`),
     'direction_toggle',
+    'direction_deflector',
+    'control_switch',
   ];
 
   const dynamicTeleporterTypes = telGroups.flatMap((g) => [`teleporter_in_${g}`, `teleporter_out_${g}`]);
@@ -295,7 +297,16 @@ export default function ToolPalette({ isMobile }: { isMobile: boolean }) {
         title="Add Box"
         onClick={() => {
           const newId = Date.now();
-          setBoxes((bs) => [...bs, { id: newId, row: null, col: null, requiresPower: false }]);
+          setBoxes((bs) => [...bs, {
+            id: newId,
+            row: null,
+            col: null,
+            requiresPower: false,
+            durabilityEnabled: false,
+            durability: 3,
+            colorFilterEnabled: false,
+            colorFilterIndex: 0,
+          }]);
           setActivePlacingBoxId(newId);
           setActiveTool('place_box');
         }}

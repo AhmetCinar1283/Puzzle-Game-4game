@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { processSingleTick } from '../logic/engine/intentLoop';
+import { processSingleTick, updateRoomVisibility } from '../logic/engine/intentLoop';
 import { checkWinCondition } from '../logic/winCondition';
 import { Entity } from '../logic/entityTypes';
 import { Cell } from '../logic/cellTypes';
@@ -93,6 +93,8 @@ export function useGameEngine({
             }
         };
     })();
+
+    updateRoomVisibility(initialEntities, normalizedInitialRooms);
 
     const entitiesRef = useRef<Entity[]>(initialEntities);
     const roomsRef = useRef<Record<string, RoomState>>(normalizedInitialRooms);
@@ -330,6 +332,8 @@ export function useGameEngine({
         } else {
             normalizedRooms = cloneRooms(newRooms);
         }
+
+        updateRoomVisibility(newEntities, normalizedRooms);
 
         entitiesRef.current = newEntities;
         roomsRef.current = normalizedRooms;

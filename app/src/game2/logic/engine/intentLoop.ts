@@ -17,6 +17,30 @@ import { getCellAt, mapCrossEdgeIndex } from './rooms';
 //   4. Onaylanan niyetleri uygular; hook dönüşlerini ve UI/VFX olaylarını iletir
 // ============================================================
 
+export function updateRoomVisibility(entities: Entity[], rooms: Record<string, RoomState>) {
+    for (const room of Object.values(rooms)) {
+        if (!room.fogOfWar) continue;
+        const visibilityDist = room.fogVisibilityDistance ?? 1.5;
+        const players = entities.filter(e => e.type === 'player' && (e.position.roomId ?? 'main') === room.id && !e.customData._destroyed);
+        
+        for (const row of room.grid) {
+            for (const cell of row) {
+                if (cell.customData.explored) continue;
+                
+                const isClose = players.some(player => {
+                    const dr = cell.position.row - player.position.row;
+                    const dc = cell.position.col - player.position.col;
+                    return Math.sqrt(dr * dr + dc * dc) <= visibilityDist;
+                });
+                
+                if (isClose) {
+                    cell.customData.explored = true;
+                }
+            }
+        }
+    }
+}
+
 export function processSingleTick(
     entities: Entity[],
     grid: Record<string, RoomState> | Cell[][],
@@ -289,6 +313,24 @@ export function processSingleTick(
             }
         }
     }
+
+    // ── DURABILITY DECREMENT FOR FRAGILE BOXES ──
+    for (const intent of intents) {
+        if (intent.type === 'move' && intent.isPush) {
+            const entity = entities.find(e => e.id === intent.entityId);
+            if (entity && entity.type === 'box' && entity.customData.durabilityEnabled && !entity.customData._destroyed) {
+                const currentDurability = (entity.customData.durability as number) ?? 0;
+                const nextDurability = Math.max(0, currentDurability - 1);
+                entity.customData.durability = nextDurability;
+                if (nextDurability === 0) {
+                    entity.customData._destroyed = true;
+                    collectedVfx.push('sound_boing');
+                }
+            }
+        }
+    }
+
+    updateRoomVisibility(entities, rooms);
 
     return {
         vfxEvents:      collectedVfx,

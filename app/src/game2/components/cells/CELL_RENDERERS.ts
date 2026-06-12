@@ -12,6 +12,8 @@ import { TrampolineCellRenderer} from "./trampolineCellRenderer";
 import { TeleportCellRenderer  } from "./teleportCellRenderer";
 import { TargetCellRenderer    } from "./targetCellRenderer";
 import { ControlSwitchCellRenderer } from "./controlSwitchCellRenderer";
+import { DirectionDeflectorCellRenderer } from "./directionDeflectorCellRenderer";
+
 
 export const CELL_RENDERERS: Record<CellTypes, (props: any) => JSX.Element> = {
     'normal':     NormalCellRenderer,
@@ -25,4 +27,5 @@ export const CELL_RENDERERS: Record<CellTypes, (props: any) => JSX.Element> = {
     'teleport':   TeleportCellRenderer,
     'target':     TargetCellRenderer,
     'control_switch': ControlSwitchCellRenderer,
+    'direction_deflector': DirectionDeflectorCellRenderer,
 };

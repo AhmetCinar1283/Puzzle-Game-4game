@@ -40,7 +40,7 @@ export const boxBehavior: EntityBehavior = {
     onPushed: (self, pusher, appliedForce, direction?: Direction, pusherPlayerIndex?: number) => {
         if (self.traits.has('heavy'))                           return { status: 'reject' };
         if (appliedForce <= 0)                                  return { status: 'reject' };
-        if (self.customData.requiresPower && !self.customData.isPowered) return { status: 'reject' };
+        if (self.customData.requiresPower && !self.isElectrified) return { status: 'reject' };
 
         // Color Filter check
         if (self.customData.colorFilterEnabled) {

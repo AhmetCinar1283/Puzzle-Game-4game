@@ -21,13 +21,13 @@ Aşağıdaki özellikler yapım kolaylığına göre gruplandırılmıştır:
 ### 1. Zemin ve Çevre Etkileşimleri (CELL_BEHAVIORS)
 Mevcut CELL_BEHAVIORS registry sistemine eklenebilecek yeni hücre tipleri:
 
-- **🟢 Kırılgan Zeminler veya dönüşen hücreler:** 
+- [ ] **🟢 Kırılgan Zeminler veya dönüşen hücreler:** 
   - Üzerinden bir kez geçildiğinde normal davranan, ancak nesne ayrıldıktan sonra yok olup lava veya geçilemez obstacle hücresine veya boşluğa dönüşen zeminler.
   - Oyuncuyu rotasını geri dönüşsüz planlamaya iter. 
 - **🟡 Baskı Plakaları ve Kilitli Kapılar (Pressure Plates):** 
   - Bir nesne veya kutu plakanın üzerindeyken haritanın başka bir yerindeki engeller kapılar açılabilir, playerlerin yönleri değişebilir, belli renge özel etkileşimli nesnelerin rengini değiştirebilir.
   - Basıldığında direkt olabilir ya da basılı tutulmak zorunda kalabilir.
-- **🟢 Yön Saptırıcılar (Rotators):** 
+- [ ] **🟢 Yön Saptırıcılar (Rotators):** 
   - toggle sisteminden farklı olarak nesnenin hareketini değil, içsel yön algısını değiştiren zeminler. Örneğin bu zemin türüne giren bir nesne için "Yukarı" ok tuşu artık "Sağ" yönünde tepki verir.
   - Biraz sinir bozucu olabilir
 - [x] **🟡 Multi-Conveyor:** 
@@ -46,7 +46,7 @@ Mevcut CELL_BEHAVIORS registry sistemine eklenebilecek yeni hücre tipleri:
   - Buzun tersi. Buraya basan nesne bir sonraki hamlesini 2 tick'te yapar. İki oyuncunun senkronizasyon adımlarını (faz farkını) bilerek kaydırmak için kullanılır.
 - [ ] **🔴 Manyetik Kutuplar ve Uzaktan Çekim (Magnetism):**
   - "+" ve "-" kutuplu nesneler/zeminler. Oyuncu elektrik yüklenirse (Power) metal kutuları uzaktan çekebilir veya itebilir.
-- [ ] **🟢 Faz Kapıları ve Renk Filtreleri (Color/Phase Gates):**
+- [x] **🟢 Faz Kapıları ve Renk Filtreleri (Color/Phase Gates):**
   - Sadece kendi rengindeki player karakterinin geçebileceği veya etkileşebileceği renkli lazerler/engeller. (box)
 - [ ] **🔴 Işık Yansıtma ve Aynalar (Light & Reflectors):**
   - Oyuncuların ayna kutularını iterek lazer ışınlarını yönlendirip alıcılara ulaştırarak kapıları açtığı Sokoban + Optik bulmacaları.
@@ -63,7 +63,7 @@ Basit grid mantığına derinlik ve karar verme mekanizmaları katan eklentiler:
 ### 3. Harita Varyasyonları ve Atmosfer
 Seviye tasarımını (Level Design) görsel ve mantıksal olarak değiştiren konseptler:
 
-- **🟢 Karanlık / Savaş Sisi (Fog of War):** 
+- [ ] **🟢 Karanlık / Savaş Sisi (Fog of War):** 
   - Kozmik korku ve gerilim hissiyatına uygun, tüm haritanın görünmediği bölümler. 
   - Sadece nesnelerin etrafındaki dar bir alan aydınlıktır; doğru yol, engeller ve hedefler ancak keşfedilerek bulunur.
 - [x] **🔴 Ayrık Dünyalar (Dual Maps):** 
@@ -81,7 +81,7 @@ tick döngüsü içinde hareket eden yeni aktörler:
 - [ ] **🟡 Devriye Gezen Düşmanlar (Patrols):** 
   - Oyuncunun her hamlesinde (her tick'te) haritada bir adım atan, belirli bir rotaya sahip hareketli tehditler.
   - Bulmacaya doğru yolu bulmanın yanı sıra, oradan "doğru zamanda geçme" zorunluluğunu ekler.
-- [ ] **🟢 Kırılgan Kutular (Fragile Boxes):** 
+- [x] **🟢 Kırılgan Kutular (Fragile Boxes):** 
   - BoxState içerisine eklenecek bir dayanıklılık (durability) verisiyle çalışan mekanik. Belli bir sayıda kez itilebilen, daha fazla ittirilmeye çalışıldığında kırılan kutular.
 
 ### 5. Oynanış

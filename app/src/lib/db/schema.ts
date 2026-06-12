@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { LevelEdges, CellType, LevelObjectDef, LevelTargetDef, BoxDef, Position, ConveyorCellConfig, TrampolineCellConfig } from '../../games/types';
+import type { LevelEdges, CellType, LevelObjectDef, LevelTargetDef, BoxDef, Position, ConveyorCellConfig, TrampolineCellConfig, DeflectorCellConfig } from '../../games/types';
 export type LauncherCellConfig = any;
 
 // ─── Stored Types ─────────────────────────────────────────────────────────────
@@ -21,6 +21,7 @@ export interface StoredLevel {
   conveyorConfig?: ConveyorCellConfig[];
   launcherConfig?: LauncherCellConfig[];
   trampolineConfig?: TrampolineCellConfig[];
+  deflectorConfig?: DeflectorCellConfig[];
   creatorName?: string;  // Attribution for community-submitted levels
   difficulty?: 1 | 2 | 3 | 4;  // 1=Kolay, 2=Orta, 3=Zor, 4=Çok Zor
   part?: string;          // Firestore part id (preset levels only)

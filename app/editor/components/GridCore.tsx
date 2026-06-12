@@ -25,27 +25,68 @@ function ObjDot({ color, size, label }: { color: string; size: number; label: st
   );
 }
 
-function BoxDot({ size, requiresPower }: { size: number; requiresPower: boolean }) {
+interface BoxDotProps {
+  size: number;
+  requiresPower: boolean;
+  durabilityEnabled?: boolean;
+  durability?: number;
+  colorFilterEnabled?: boolean;
+  colorFilterIndex?: number;
+}
+
+function BoxDot({
+  size,
+  requiresPower,
+  durabilityEnabled,
+  durability,
+  colorFilterEnabled,
+  colorFilterIndex,
+}: BoxDotProps) {
   const pad = Math.round(size * 0.1);
   const s = size - pad * 2;
+
+  let themeColor = '#f97316';
+  if (colorFilterEnabled) {
+    themeColor = getPlayerColor(colorFilterIndex ?? 0).hex;
+  }
+
   return (
     <div style={{
       position: 'absolute', top: pad, left: pad, width: s, height: s,
-      borderRadius: 6, background: 'rgba(15,23,35,0.9)', border: '2px solid #f97316',
-      boxShadow: '0 0 8px rgba(249,115,22,0.5)',
+      borderRadius: 6,
+      background: 'rgba(15,23,35,0.9)',
+      border: `2px solid ${themeColor}`,
+      boxShadow: `0 0 8px ${themeColor}80`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       pointerEvents: 'none', zIndex: 10,
     }}>
-      <span style={{ fontSize: s * 0.28, color: '#f97316', lineHeight: 1, fontWeight: 'bold', userSelect: 'none' }}>▣</span>
+      <span style={{ fontSize: s * 0.28, color: themeColor, lineHeight: 1, fontWeight: 'bold', userSelect: 'none' }}>▣</span>
       {requiresPower && (
         <span style={{ position: 'absolute', top: 1, right: 2, fontSize: s * 0.2, color: '#fbbf24', lineHeight: 1, userSelect: 'none' }}>⚡</span>
+      )}
+      {durabilityEnabled && (
+        <div style={{
+          position: 'absolute', bottom: 1, right: 2,
+          fontSize: s * 0.24, fontWeight: 'bold', color: themeColor,
+          lineHeight: 1, userSelect: 'none', fontFamily: 'monospace'
+        }}>
+          {durability}
+        </div>
+      )}
+      {colorFilterEnabled && (
+        <div style={{
+          position: 'absolute', top: 2, left: 2,
+          width: 5, height: 5, borderRadius: '50%',
+          backgroundColor: themeColor,
+          boxShadow: `0 0 4px ${themeColor}`,
+        }} />
       )}
     </div>
   );
 }
 
 export default function GridCore() {
-  const { grid, objects, boxes, cellSize, edges, paintCell, lockedCells, optimalSolutionTrajectory, activeRoomId } = useEditorContext();
+  const { grid, objects, boxes, cellSize, edges, paintCell, lockedCells, activeRoomId } = useEditorContext();
   const isPainting = useRef(false);
 
   return (
@@ -82,158 +123,6 @@ export default function GridCore() {
       }}
       onTouchEnd={() => { isPainting.current = false; }}
     >
-      {optimalSolutionTrajectory && (() => {
-        const getOffsetPoints = (points: { row: number; col: number }[], isPlayer2: boolean) => {
-          const visitMap: Record<string, number> = {};
-          return points.map((p, idx) => {
-            const key = `${p.row},${p.col}`;
-            const visitIndex = visitMap[key] || 0;
-            visitMap[key] = visitIndex + 1;
-
-            const baseX = p.col * cellSize + cellSize / 2;
-            const baseY = p.row * cellSize + cellSize / 2;
-
-            let dx = 0;
-            let dy = 0;
-            if (visitIndex > 0) {
-              // Symmetrically offset visits. Shift Player 2 by an extra 22.5 degrees (PI/8) to prevent overlaps between player paths.
-              const baseAngle = ((visitIndex - 1) * Math.PI / 2) + Math.PI / 4;
-              const angle = isPlayer2 ? baseAngle + Math.PI / 8 : baseAngle;
-              const dist = cellSize * 0.22;
-              dx = Math.cos(angle) * dist;
-              dy = Math.sin(angle) * dist;
-            }
-
-            return {
-              x: baseX + dx,
-              y: baseY + dy,
-              row: p.row,
-              col: p.col,
-              step: idx,
-            };
-          });
-        };
-
-        const p1Offsets = optimalSolutionTrajectory.player1 ? getOffsetPoints(optimalSolutionTrajectory.player1, false) : [];
-        const p2Offsets = optimalSolutionTrajectory.player2 ? getOffsetPoints(optimalSolutionTrajectory.player2, true) : [];
-
-        const getSvgPathFromOffsets = (offsets: { x: number; y: number }[]) => {
-          if (offsets.length < 2) return '';
-          return offsets.reduce((acc, pt, idx) => {
-            return idx === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
-          }, '');
-        };
-
-        const gridW = grid[0]?.length ?? 0;
-        const gridH = grid.length;
-        const circleRadius = cellSize * 0.16;
-        const fontSize = Math.max(7, Math.round(cellSize * 0.18));
-
-        return (
-          <svg
-            style={{
-              position: 'absolute', top: 0, left: 0,
-              width: gridW * cellSize, height: gridH * cellSize,
-              pointerEvents: 'none', zIndex: 11
-            }}
-          >
-            <defs>
-              <filter id="pathGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="3" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            <style dangerouslySetInnerHTML={{ __html: `
-              @keyframes crawlPath {
-                to { stroke-dashoffset: -20; }
-              }
-            `}} />
-            {p1Offsets.length > 1 && (
-              <path
-                d={getSvgPathFromOffsets(p1Offsets)}
-                fill="none"
-                stroke="#00ff88"
-                strokeWidth={3}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeDasharray="6, 6"
-                filter="url(#pathGlow)"
-                style={{ animation: 'crawlPath 1.2s linear infinite' }}
-                opacity={0.8}
-              />
-            )}
-            {p2Offsets.length > 1 && (
-              <path
-                d={getSvgPathFromOffsets(p2Offsets)}
-                fill="none"
-                stroke="#00c4ff"
-                strokeWidth={3}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeDasharray="6, 6"
-                filter="url(#pathGlow)"
-                style={{ animation: 'crawlPath 1.2s linear infinite' }}
-                opacity={0.8}
-              />
-            )}
-
-            {/* Player 1 Waypoint Markers */}
-            {p1Offsets.map((pt) => (
-              <g key={`p1-${pt.step}`}>
-                <circle
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={circleRadius}
-                  fill="#060d1a"
-                  stroke="#00ff88"
-                  strokeWidth={1.5}
-                />
-                <text
-                  x={pt.x}
-                  y={pt.y}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill="#00ff88"
-                  fontSize={`${fontSize}px`}
-                  fontWeight="bold"
-                  style={{ userSelect: 'none', pointerEvents: 'none' }}
-                >
-                  {pt.step}
-                </text>
-              </g>
-            ))}
-
-            {/* Player 2 Waypoint Markers */}
-            {p2Offsets.map((pt) => (
-              <g key={`p2-${pt.step}`}>
-                <circle
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={circleRadius}
-                  fill="#060d1a"
-                  stroke="#00c4ff"
-                  strokeWidth={1.5}
-                />
-                <text
-                  x={pt.x}
-                  y={pt.y}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill="#00c4ff"
-                  fontSize={`${fontSize}px`}
-                  fontWeight="bold"
-                  style={{ userSelect: 'none', pointerEvents: 'none' }}
-                >
-                  {pt.step}
-                </text>
-              </g>
-            ))}
-          </svg>
-        );
-      })()}
       {grid.map((row, r) => (
         <div key={r} style={{ display: 'flex' }}>
           {row.map((cell, c) => {
@@ -258,7 +147,15 @@ export default function GridCore() {
                   />
                 ))}
                 {boxes.map((b) => (b.roomId ?? 'main') === activeRoomId && b.row === r && b.col === c ? (
-                  <BoxDot key={b.id} size={cellSize} requiresPower={b.requiresPower} />
+                  <BoxDot
+                    key={b.id}
+                    size={cellSize}
+                    requiresPower={b.requiresPower}
+                    durabilityEnabled={b.durabilityEnabled}
+                    durability={b.durability}
+                    colorFilterEnabled={b.colorFilterEnabled}
+                    colorFilterIndex={b.colorFilterIndex}
+                  />
                 ) : null)}
                 {isLocked && (
                   <div style={{

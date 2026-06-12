@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext } from 'react';
-import type { CellType, EdgeBehavior, LevelData, Position, ConveyorCellConfig, TrampolineCellConfig } from '@/app/src/games/types';
+import type { CellType, EdgeBehavior, LevelData, Position, ConveyorCellConfig, TrampolineCellConfig, DeflectorCellConfig } from '@/app/src/games/types';
 import type { StoredLevel } from '@/app/src/lib/db';
 import type { FirestoreLevel, LevelPart } from '@/app/src/lib/firebase/admin';
 import type { User } from 'firebase/auth';
@@ -39,6 +39,9 @@ export interface EditorContextValue {
   deleteRoom: (id: string) => void;
   updateRoomName: (id: string, name: string) => void;
   updateRoomLayoutPosition: (id: string, x: number, y: number) => void;
+  fogOfWar: boolean; setFogOfWar: (v: boolean) => void;
+  fogVisibilityDistance: number; setFogVisibilityDistance: (v: number) => void;
+  fogKeepRevealed: boolean; setFogKeepRevealed: (v: boolean) => void;
 
   edges: Record<'top' | 'bottom' | 'left' | 'right', any>;
   setEdges: React.Dispatch<React.SetStateAction<Record<'top' | 'bottom' | 'left' | 'right', any>>>;
@@ -53,6 +56,7 @@ export interface EditorContextValue {
   conveyorPowerRequired: Position[]; setConveyorPowerRequired: React.Dispatch<React.SetStateAction<Position[]>>;
   conveyorConfig: ConveyorCellConfig[]; setConveyorConfig: React.Dispatch<React.SetStateAction<ConveyorCellConfig[]>>;
   trampolineConfig: TrampolineCellConfig[]; setTrampolineConfig: React.Dispatch<React.SetStateAction<TrampolineCellConfig[]>>;
+  deflectorConfig: DeflectorCellConfig[]; setDeflectorConfig: React.Dispatch<React.SetStateAction<DeflectorCellConfig[]>>;
   // Tool
   activeTool: ToolType; setActiveTool: (t: ToolType) => void;
   router: AppRouterInstance;

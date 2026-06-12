@@ -58,6 +58,11 @@ const CELL_STYLE: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(255, 215, 0, 0.45)',
     boxShadow: 'inset 0 0 14px rgba(255, 215, 0, 0.18)',
   },
+  direction_deflector: {
+    background: 'rgba(236, 72, 153, 0.12)',
+    border: '2px solid rgba(236, 72, 153, 0.6)',
+    boxShadow: 'inset 0 0 14px rgba(236, 72, 153, 0.2), 0 0 8px rgba(236, 72, 153, 0.15)',
+  },
   ice: {
     background: 'rgba(147, 210, 255, 0.12)',
     border: '1px solid rgba(165, 243, 252, 0.45)',
@@ -267,6 +272,22 @@ export default function GameCell({ cellType, cellSize, isPowered }: GameCellProp
           }}
         >
           ⇄
+        </span>
+      )}
+
+      {/* Direction deflector */}
+      {cellType === 'direction_deflector' && (
+        <span
+          style={{
+            fontSize: cellSize * 0.32,
+            lineHeight: 1,
+            color: '#ec4899',
+            textShadow: '0 0 8px rgba(236,72,153,0.7)',
+            userSelect: 'none',
+            fontWeight: 'bold',
+          }}
+        >
+          ⤭
         </span>
       )}
 
