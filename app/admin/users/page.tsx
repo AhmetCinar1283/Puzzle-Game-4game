@@ -386,7 +386,7 @@ export default function AdminUsersDashboard() {
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.2, delay: idx * 0.02 }}
-                        onClick={() => router.push(`/admin/users/detail?uid=${u.uid}`)}
+                        onClick={() => router.push(`/admin/users/detail/?uid=${u.uid}`)}
                         style={{
                           background: 'rgba(255, 255, 255, 0.02)',
                           border: '1px solid rgba(147, 51, 234, 0.15)',

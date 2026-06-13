@@ -1,4 +1,5 @@
-import { Direction, Position, ActionIntent, EntityTrait } from "./types";
+import { Direction, Position, ActionIntent, EntityTrait, RoomState } from "./types";
+import { GameActionButton } from "./actions/types";
 
 export interface PhysicsState {
   direction: Direction;
@@ -47,4 +48,9 @@ export interface EntityBehavior {
   onCrushed?: (self: Entity, crusher: Entity) => ActionIntent[] | null;
   onTick?: (self: Entity) => ActionIntent[];
   onLanded?: (self: Entity, entities: Entity[]) => ActionIntent[] | null;
+  getAvailableActions?: (
+    self: Entity,
+    entities: Entity[],
+    rooms: Record<string, RoomState>
+  ) => GameActionButton[];
 }

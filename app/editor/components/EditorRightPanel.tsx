@@ -20,9 +20,68 @@ export default function EditorRightPanel({ isMobile, visible }: { isMobile: bool
     generateLevelData, setGeneratorDialogOpen,
     optimalSolution, optimalSolutionMoves,
     rooms, edges, setEdges,
+    setRooms, activeRoomId,
   } = useEditorContext();
 
   const [pasteError, setPasteError] = useState('');
+
+  // Dynamic Actions Panel State
+  const [newBtnLabel, setNewBtnLabel] = useState('');
+  const [newBtnType, setNewBtnType] = useState('toggle_lights');
+  const [newBtnIcon, setNewBtnIcon] = useState('💡');
+  const [newBtnTargetType, setNewBtnTargetType] = useState<'room' | 'entity'>('room');
+  const [newBtnTargetId, setNewBtnTargetId] = useState('');
+
+  const activeRoom = rooms.find(r => r.id === activeRoomId);
+
+  const handleAddRoomAction = () => {
+    if (!newBtnLabel.trim()) return;
+    
+    setRooms(prevRooms => prevRooms.map(r => {
+      if (r.id === activeRoomId) {
+        const customData = r.customData || {};
+        const staticButtons = customData.staticButtons || [];
+        const newBtn = {
+          id: `static:${r.id}:${Date.now()}`,
+          actionType: newBtnType,
+          label: newBtnLabel,
+          icon: newBtnIcon,
+          target: {
+            type: newBtnTargetType,
+            id: newBtnTargetType === 'entity' ? Number(newBtnTargetId || 1) : (newBtnTargetId || r.id)
+          }
+        };
+        return {
+          ...r,
+          customData: {
+            ...customData,
+            staticButtons: [...staticButtons, newBtn]
+          }
+        };
+      }
+      return r;
+    }));
+    
+    setNewBtnLabel('');
+    setNewBtnTargetId('');
+  };
+
+  const handleDeleteRoomAction = (btnId: string) => {
+    setRooms(prevRooms => prevRooms.map(r => {
+      if (r.id === activeRoomId) {
+        const customData = r.customData || {};
+        const staticButtons = customData.staticButtons || [];
+        return {
+          ...r,
+          customData: {
+            ...customData,
+            staticButtons: staticButtons.filter((b: any) => b.id !== btnId)
+          }
+        };
+      }
+      return r;
+    }));
+  };
 
   const onPasteBoard = () => {
     const err = handlePasteBoard();
@@ -74,6 +133,61 @@ export default function EditorRightPanel({ isMobile, visible }: { isMobile: bool
           <input type="checkbox" checked={trailCollision} onChange={(e) => setTrailCollision(e.target.checked)} style={{ accentColor: '#00c4ff', width: 13, height: 13 }} />
           <span style={{ fontSize: 12, color: trailCollision ? '#00c4ff' : '#475569' }}>{t('editor.trail_collision')}</span>
         </label>
+      </Sec>
+
+      <Sec title="Room Actions">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+          {activeRoom?.customData?.staticButtons?.map((btn: any) => (
+            <div key={btn.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(30,58,95,0.3)', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}>
+              <span style={{ color: '#00c4ff' }}>{btn.icon} {btn.label}</span>
+              <button
+                onClick={() => handleDeleteRoomAction(btn.id)}
+                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11 }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {(!activeRoom?.customData?.staticButtons || activeRoom.customData.staticButtons.length === 0) && (
+            <div style={{ fontSize: 10, color: '#475569', fontStyle: 'italic' }}>No actions configured</div>
+          )}
+        </div>
+
+        <div style={{ background: 'rgba(6,13,26,0.5)', border: '1px solid rgba(30,58,95,0.4)', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div>
+            <Lbl style={{ marginBottom: 2 }}>Label</Lbl>
+            <input placeholder="e.g. Lock Player 1" value={newBtnLabel} onChange={(e) => setNewBtnLabel(e.target.value)} style={{ ...iStyle, width: '100%', padding: '3px 6px', fontSize: 11 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ flex: 1 }}>
+              <Lbl style={{ marginBottom: 2 }}>Action Type</Lbl>
+              <select value={newBtnType} onChange={(e) => setNewBtnType(e.target.value)} style={{ ...iStyle, width: '100%', padding: '3px 6px', fontSize: 11 }}>
+                <option value="toggle_lights">Toggle Lights</option>
+                <option value="lock_player">Lock/Unlock Player</option>
+              </select>
+            </div>
+            <div style={{ width: 45 }}>
+              <Lbl style={{ marginBottom: 2 }}>Icon</Lbl>
+              <input value={newBtnIcon} onChange={(e) => setNewBtnIcon(e.target.value)} style={{ ...iStyle, width: '100%', padding: '3px 4px', fontSize: 11, textAlign: 'center' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ flex: 1 }}>
+              <Lbl style={{ marginBottom: 2 }}>Target Type</Lbl>
+              <select value={newBtnTargetType} onChange={(e) => setNewBtnTargetType(e.target.value as any)} style={{ ...iStyle, width: '100%', padding: '3px 6px', fontSize: 11 }}>
+                <option value="room">Room</option>
+                <option value="entity">Entity (Player)</option>
+              </select>
+            </div>
+            <div style={{ width: 55 }}>
+              <Lbl style={{ marginBottom: 2 }}>Target ID</Lbl>
+              <input placeholder={newBtnTargetType === 'room' ? activeRoomId : '1'} value={newBtnTargetId} onChange={(e) => setNewBtnTargetId(e.target.value)} style={{ ...iStyle, width: '100%', padding: '3px 6px', fontSize: 11 }} />
+            </div>
+          </div>
+          <NBtn onClick={handleAddRoomAction} color="#00c4ff" style={{ width: '100%', padding: '4px 0', fontSize: 10 }}>
+            + Add Action
+          </NBtn>
+        </div>
       </Sec>
 
       {/* Room boundary portals targets are configured interactively on the canvas */}

@@ -2,6 +2,7 @@
 
 import { EntityBehavior } from '../entityTypes';
 import { DIRECTION_DELTA } from '../types';
+import { GameActionButton } from '../actions/types';
 
 export const playerBehavior: EntityBehavior = {
 
@@ -48,4 +49,36 @@ export const playerBehavior: EntityBehavior = {
 
     // İniş mantığı (ezme, obstacle kırma) motorda (intentLoop) işlenir.
     onLanded: () => [],
+
+    getAvailableActions: (self, entities, rooms) => {
+        const actions: GameActionButton[] = [];
+        const roomId = self.position.roomId ?? 'main';
+        const room = rooms[roomId];
+        if (!room) return [];
+        
+        const cell = room.grid[self.position.row]?.[self.position.col];
+        const playerLabel = `P${(self.customData.playerIndex as number) + 1}`;
+        
+        if (cell && cell.type === 'power' && !self.customData.holdingCable) {
+            actions.push({
+                id: `hold_cable:${self.id}`,
+                actionType: 'hold_cable',
+                label: `Hold Cable (${playerLabel})`,
+                icon: '🔌',
+                target: { type: 'entity', id: self.id },
+            });
+        }
+        
+        if (self.customData.holdingCable) {
+            actions.push({
+                id: `release_cable:${self.id}`,
+                actionType: 'release_cable',
+                label: `Release Cable (${playerLabel})`,
+                icon: '🚫',
+                target: { type: 'entity', id: self.id },
+            });
+        }
+        
+        return actions;
+    }
 };

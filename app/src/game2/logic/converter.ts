@@ -34,6 +34,9 @@ function mapCellType(old: string): CellMapping {
         const group = old.substring('teleporter_out_'.length);
         return { type: 'teleport', customData: { group } };
     }
+    if (old.startsWith('control_switch')) {
+        return { type: 'control_switch' };
+    }
 
     switch (old) {
         case 'empty':            return { type: 'normal' };
@@ -83,7 +86,7 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
 
                     // Özel trambolin adımlarını customData.force'a eşle
                     const trampCfg = stored.trampolineConfig?.find(
-                        cfg => cfg.position.roomId === rDef.id && cfg.position.row === rowIdx && cfg.position.col === colIdx
+                        cfg => (cfg.position.roomId === rDef.id || (!cfg.position.roomId && rDef.id === 'main')) && cfg.position.row === rowIdx && cfg.position.col === colIdx
                     );
                     if (trampCfg) {
                         customData.force = trampCfg.steps;
@@ -102,7 +105,7 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
 
                     // direction_deflector custom data eşleşmesi
                     const defCfg = stored.deflectorConfig?.find(
-                        cfg => cfg.position.roomId === rDef.id && cfg.position.row === rowIdx && cfg.position.col === colIdx
+                        cfg => (cfg.position.roomId === rDef.id || (!cfg.position.roomId && rDef.id === 'main')) && cfg.position.row === rowIdx && cfg.position.col === colIdx
                     );
                     if (type === 'direction_deflector') {
                         customData.mapping = defCfg?.mapping ?? { up: 'right', right: 'down', down: 'left', left: 'up' };

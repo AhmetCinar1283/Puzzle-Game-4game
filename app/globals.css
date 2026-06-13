@@ -89,3 +89,35 @@ input, textarea {
   color: #bf5fff;
   text-shadow: 0 0 8px rgba(191, 95, 255, 0.6), 0 0 16px rgba(191, 95, 255, 0.3);
 }
+
+/* ── Profile Focus/Hover Pulsing ─────────────────────────────────────────── */
+@keyframes profile-pulse-cyan {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(0, 196, 255, 0.15), inset 0 0 4px rgba(0, 196, 255, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(0, 196, 255, 0.8), 0 0 12px rgba(0, 196, 255, 0.35), inset 0 0 8px rgba(0, 196, 255, 0.2);
+  }
+}
+
+@keyframes profile-pulse-emerald {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(0, 255, 136, 0.15), inset 0 0 4px rgba(0, 255, 136, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(0, 255, 136, 0.8), 0 0 12px rgba(0, 255, 136, 0.35), inset 0 0 8px rgba(0, 255, 136, 0.2);
+  }
+}
+
+.profile-focused-cyan {
+  animation: profile-pulse-cyan 1.6s ease-in-out infinite;
+  border-color: #00c4ff !important;
+  color: #fff !important;
+}
+
+.profile-focused-emerald {
+  animation: profile-pulse-emerald 1.6s ease-in-out infinite;
+  border-color: #00ff88 !important;
+  color: #fff !important;
+}
+

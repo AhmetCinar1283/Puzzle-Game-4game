@@ -1,6 +1,7 @@
 import { ActionIntent, Position, RoomState } from "./types";
 import { Entity } from "./entityTypes";
 import { LevelBounds } from "./engine/getNextTopologyPosition";
+import { GameActionButton } from "./actions/types";
 
 export interface CellDef {
     friction: number;
@@ -44,4 +45,10 @@ export interface CellBehavior {
 
     // Zemin, kendisine gelen niyeti onaylar veya reddeder.
     onValidateIntent?: (targetCell: Cell, intent: ActionIntent, self: Entity) => boolean;
+
+    getAvailableActions?: (
+        cell: Cell,
+        entities: Entity[],
+        rooms: Record<string, RoomState>
+    ) => GameActionButton[];
 }

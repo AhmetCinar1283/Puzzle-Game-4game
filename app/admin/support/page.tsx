@@ -290,7 +290,7 @@ export default function AdminSupportDashboard() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.02 }}
-                  onClick={() => router.push(`/admin/support/detail?id=${ticket.id}`)}
+                  onClick={() => router.push(`/admin/support/detail/?id=${ticket.id}`)}
                   style={{
                     background: 'rgba(255, 255, 255, 0.02)',
                     border: ticket.hasUnreadAdmin 

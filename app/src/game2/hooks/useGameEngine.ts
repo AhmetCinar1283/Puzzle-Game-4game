@@ -7,6 +7,7 @@ import { Entity } from '../logic/entityTypes';
 import { Cell } from '../logic/cellTypes';
 import { ActionIntent, TickSnapshot, UIEvent, RoomState } from '../logic/types';
 import { LevelEdges, LevelBounds } from '../logic/engine/getNextTopologyPosition';
+import { gatherAvailableActions } from '../logic/actions/gather';
 
 const MAX_TICKS = 50;
 
@@ -27,6 +28,7 @@ function cloneRooms(rooms: Record<string, RoomState>): Record<string, RoomState>
         clone[rId] = {
             ...room,
             edges: { ...room.edges },
+            customData: room.customData ? { ...room.customData } : undefined,
             grid: room.grid.map(row =>
                 row.map(cell => ({
                     ...cell,
@@ -106,13 +108,18 @@ export function useGameEngine({
     const isGameOverRef = useRef(false);
     const isAnimatingInternalRef = useRef(false);
 
-    const [snapshots, setSnapshots] = useState<TickSnapshot[]>(() => [{
-        tickNumber: 0,
-        rooms: cloneRooms(normalizedInitialRooms),
-        entities: cloneEntities(initialEntities),
-        vfxEvents: [],
-        uiEvents: [],
-    }]);
+    const [snapshots, setSnapshots] = useState<TickSnapshot[]>(() => {
+        const initialClonedRooms = cloneRooms(normalizedInitialRooms);
+        const initialClonedEntities = cloneEntities(initialEntities);
+        return [{
+            tickNumber: 0,
+            rooms: initialClonedRooms,
+            entities: initialClonedEntities,
+            vfxEvents: [],
+            uiEvents: [],
+            availableActions: gatherAvailableActions(initialClonedRooms, initialClonedEntities),
+        }];
+    });
     const [isAnimating, setIsAnimating] = useState(false);
     const [uiEvents, setUiEvents] = useState<UIEvent[]>([]);
     const [isGameOver, setIsGameOver] = useState(false);
@@ -142,12 +149,15 @@ export function useGameEngine({
         const collectedSnapshots: TickSnapshot[] = [];
         const collectedUi: UIEvent[] = [];
 
+        const initialClonedRooms = cloneRooms(roomsRef.current);
+        const initialClonedEntities = cloneEntities(entitiesRef.current);
         collectedSnapshots.push({
             tickNumber: 0,
-            rooms: cloneRooms(roomsRef.current),
-            entities: cloneEntities(entitiesRef.current),
+            rooms: initialClonedRooms,
+            entities: initialClonedEntities,
             vfxEvents: [],
             uiEvents: [],
+            availableActions: gatherAvailableActions(initialClonedRooms, initialClonedEntities),
         });
 
         let pending = [...startingIntents];
@@ -236,12 +246,14 @@ export function useGameEngine({
                 );
             }
 
+            const tickRooms = cloneRooms(roomsRef.current);
             collectedSnapshots.push({
                 tickNumber,
-                rooms: cloneRooms(roomsRef.current),
+                rooms: tickRooms,
                 entities: snapshotEntities,
                 vfxEvents: tickVfxEvents,
                 uiEvents: tickUiEvents,
+                availableActions: gatherAvailableActions(tickRooms, snapshotEntities),
             });
 
             collectedUi.push(...tickUiEvents);
@@ -344,12 +356,15 @@ export function useGameEngine({
 
         isGameOverRef.current = false;
         setIsGameOver(false);
+        const resetRooms = cloneRooms(normalizedRooms);
+        const resetEntities = cloneEntities(newEntities);
         setSnapshots([{
             tickNumber: 0,
-            rooms: cloneRooms(normalizedRooms),
-            entities: cloneEntities(newEntities),
+            rooms: resetRooms,
+            entities: resetEntities,
             vfxEvents: [],
             uiEvents: [],
+            availableActions: gatherAvailableActions(resetRooms, resetEntities),
         }]);
         setUiEvents([]);
         setIsAnimating(false);

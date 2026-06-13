@@ -99,17 +99,35 @@ export function processSingleTick(
                 if (intent.customDataPatch)             entity.customData = { ...entity.customData, ...intent.customDataPatch };
             }
         } else if (intent.type === 'mutate_cell') {
-            if (intent.targetCellPos && intent.newCellType) {
+            if (intent.targetCellPos) {
                 const targetCell = getCellAt(rooms, intent.targetCellPos);
                 if (targetCell) {
-                    targetCell.type = intent.newCellType;
-                    targetCell.def  = CELL_DEFS[intent.newCellType];
+                    if (intent.newCellType) {
+                        targetCell.type = intent.newCellType;
+                        targetCell.def  = CELL_DEFS[intent.newCellType];
+                    }
+                    if (intent.newElectrifiedState !== undefined) {
+                        targetCell.isElectrified = intent.newElectrifiedState;
+                    }
+                }
+            }
+        } else if (intent.type === 'mutate_room') {
+            if (intent.roomId && intent.customDataPatch) {
+                const targetRoom = rooms[intent.roomId];
+                if (targetRoom) {
+                    targetRoom.customData = { ...targetRoom.customData, ...intent.customDataPatch };
+                    if (intent.customDataPatch.fogOfWar !== undefined) {
+                        targetRoom.fogOfWar = !!intent.customDataPatch.fogOfWar;
+                    }
                 }
             }
         } else {
             gameplayStartIntents.push(intent);
         }
     }
+
+    // Electrification propagation pass before collecting behaviors intents
+    propagateElectricity(rooms, entities);
 
     // ======================================================================
     // 1. FAZ: NİYETLERİ TOPLA
@@ -142,6 +160,7 @@ export function processSingleTick(
     const seenMoveIds = new Set<number>();
     intents = intents.filter(intent => {
         if (intent.type !== 'move') return true;
+        if (intent.entityId === undefined) return true;
         if (seenMoveIds.has(intent.entityId)) return false;
         seenMoveIds.add(intent.entityId);
         return true;
@@ -172,13 +191,13 @@ export function processSingleTick(
         if (intent.vfxTriggers?.length) collectedVfx.push(...intent.vfxTriggers);
         if (intent.uiEvent)             collectedUi.push(intent.uiEvent);
 
-        const entity = entities.find(e => e.id === intent.entityId);
-        if (!entity) continue;
+        const entity = intent.entityId !== undefined ? entities.find(e => e.id === intent.entityId) : undefined;
+        if (!entity && intent.type !== 'mutate_room' && intent.type !== 'mutate_cell') continue;
 
         switch (intent.type) {
 
             case 'move': {
-                if (!intent.targetPos) break;
+                if (!entity || !intent.targetPos) break;
                 if (movedEntityIds.has(entity.id)) break; // bu tick'te zaten hareket etti
 
                 const oldCell = getCellAt(rooms, entity.position);
@@ -192,6 +211,53 @@ export function processSingleTick(
                 const prevPos = { ...entity.position };
                 entity.position = intent.targetPos;
                 movedEntityIds.add(entity.id);
+ 
+                // Cable laying electrification:
+                if (entity.type === 'player' && entity.customData.holdingCable) {
+                    if (oldCell) oldCell.isElectrified = true;
+                    const newCell = getCellAt(rooms, intent.targetPos);
+                    if (newCell) newCell.isElectrified = true;
+
+                    if (oldCell && newCell && (oldCell.position.roomId ?? 'main') === (newCell.position.roomId ?? 'main')) {
+                        const r1 = oldCell.position.row;
+                        const c1 = oldCell.position.col;
+                        const r2 = newCell.position.row;
+                        const c2 = newCell.position.col;
+
+                        const oldConns = (oldCell.customData.cableConnections as string[]) ?? [];
+                        const newConns = (newCell.customData.cableConnections as string[]) ?? [];
+
+                        if (r2 === r1 && c2 === c1 + 1) {
+                            if (!oldConns.includes('right')) {
+                                oldCell.customData.cableConnections = [...oldConns, 'right'];
+                            }
+                            if (!newConns.includes('left')) {
+                                newCell.customData.cableConnections = [...newConns, 'left'];
+                            }
+                        } else if (r2 === r1 && c2 === c1 - 1) {
+                            if (!oldConns.includes('left')) {
+                                oldCell.customData.cableConnections = [...oldConns, 'left'];
+                            }
+                            if (!newConns.includes('right')) {
+                                newCell.customData.cableConnections = [...newConns, 'right'];
+                            }
+                        } else if (r2 === r1 + 1 && c2 === c1) {
+                            if (!oldConns.includes('down')) {
+                                oldCell.customData.cableConnections = [...oldConns, 'down'];
+                            }
+                            if (!newConns.includes('up')) {
+                                newCell.customData.cableConnections = [...newConns, 'up'];
+                            }
+                        } else if (r2 === r1 - 1 && c2 === c1) {
+                            if (!oldConns.includes('up')) {
+                                oldCell.customData.cableConnections = [...oldConns, 'up'];
+                            }
+                            if (!newConns.includes('down')) {
+                                newCell.customData.cableConnections = [...newConns, 'down'];
+                            }
+                        }
+                    }
+                }
 
                 // Trail collision logic:
                 if (levelBounds?.trailCollision && entity.type === 'player' && oldCell) {
@@ -213,7 +279,7 @@ export function processSingleTick(
             }
 
             case 'fall': {
-                if (intent.newZ === undefined) break;
+                if (!entity || intent.newZ === undefined) break;
                 entity.physics.z = intent.newZ;
 
                 if (intent.triggerImpact) {
@@ -269,6 +335,7 @@ export function processSingleTick(
             }
 
             case 'mutate_entity': {
+                if (!entity) break;
                 if (intent.newDirection  !== undefined) entity.physics.direction  = intent.newDirection;
                 if (intent.newForce      !== undefined) entity.physics.force      = intent.newForce;
                 if (intent.newElectrifiedState !== undefined) entity.isElectrified = intent.newElectrifiedState;
@@ -278,16 +345,39 @@ export function processSingleTick(
             }
 
             case 'mutate_cell': {
-                if (!intent.targetCellPos || !intent.newCellType) break;
+                if (!intent.targetCellPos) break;
                 const targetCell = getCellAt(rooms, intent.targetCellPos);
                 if (!targetCell) break;
-                targetCell.type = intent.newCellType;
-                targetCell.def  = CELL_DEFS[intent.newCellType];
+                if (intent.newCellType !== undefined) {
+                    targetCell.type = intent.newCellType;
+                    targetCell.def  = CELL_DEFS[intent.newCellType];
+                }
+                if (intent.newElectrifiedState !== undefined) {
+                    targetCell.isElectrified = intent.newElectrifiedState;
+                }
+                if (intent.customDataPatch) {
+                    targetCell.customData = { ...targetCell.customData, ...intent.customDataPatch };
+                }
+                break;
+            }
+
+            case 'mutate_room': {
+                if (intent.roomId && intent.customDataPatch) {
+                    const targetRoom = rooms[intent.roomId];
+                    if (targetRoom) {
+                        targetRoom.customData = { ...targetRoom.customData, ...intent.customDataPatch };
+                        if (intent.customDataPatch.fogOfWar !== undefined) {
+                            targetRoom.fogOfWar = !!intent.customDataPatch.fogOfWar;
+                        }
+                    }
+                }
                 break;
             }
 
             case 'destroy': {
-                entity.customData._destroyed = true;
+                if (entity) {
+                    entity.customData._destroyed = true;
+                }
                 break;
             }
         }
@@ -331,6 +421,9 @@ export function processSingleTick(
     }
 
     updateRoomVisibility(entities, rooms);
+ 
+    // Final electricity propagation pass
+    propagateElectricity(rooms, entities);
 
     return {
         vfxEvents:      collectedVfx,
@@ -456,8 +549,14 @@ function resolveDependencyChains(
         const stillPending: ActionIntent[] = [];
 
         for (const intent of pending) {
-            const me = entities.find(e => e.id === intent.entityId);
-            if (!me) continue;
+            const me = intent.entityId !== undefined ? entities.find(e => e.id === intent.entityId) : undefined;
+            if (!me) {
+                if (intent.type === 'mutate_room' || intent.type === 'mutate_cell') {
+                    approved.push(intent);
+                    changedThisPass = true;
+                }
+                continue;
+            }
 
             let targetPos = intent.targetPos ?? me.position;
             let targetCell = getCellAt(rooms, targetPos);
@@ -763,3 +862,57 @@ function attemptPushing(
 
     return pushedSomeone;
 }
+
+// ============================================================
+// ELECTRICITY PROPAGATION HELPERS
+// ============================================================
+
+function isPositionElectrified(rooms: Record<string, RoomState>, pos: Position): boolean {
+    const roomId = pos.roomId ?? 'main';
+    const room = rooms[roomId];
+    if (!room) return false;
+    
+    // Check 8-neighborhood (including self)
+    for (let dr = -1; dr <= 1; dr++) {
+        const r = pos.row + dr;
+        if (r < 0 || r >= room.height) continue;
+        for (let dc = -1; dc <= 1; dc++) {
+            const c = pos.col + dc;
+            if (c < 0 || c >= room.width) continue;
+            
+            const cell = room.grid[r][c];
+            if (cell.type === 'power' || cell.isElectrified) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function propagateElectricity(rooms: Record<string, RoomState>, entities: Entity[]) {
+    // 1. Electrify cells under players holding cable
+    for (const entity of entities) {
+        if (entity.type === 'player' && entity.customData.holdingCable && !entity.customData._destroyed) {
+            const currentCell = getCellAt(rooms, entity.position);
+            if (currentCell) {
+                currentCell.isElectrified = true;
+            }
+        }
+    }
+
+    // 2. Propagate electrification state to entities based on adjacency
+    for (const entity of entities) {
+        if (entity.customData._destroyed) continue;
+        
+        const isPowered = isPositionElectrified(rooms, entity.position);
+        
+        if (entity.type === 'box') {
+            entity.isElectrified = isPowered;
+        } else if (entity.type === 'player') {
+            const currentCell = getCellAt(rooms, entity.position);
+            const isOnPowerCell = currentCell?.type === 'power';
+            entity.isElectrified = !!entity.customData.holdingCable || isOnPowerCell || isPowered;
+        }
+    }
+}
+

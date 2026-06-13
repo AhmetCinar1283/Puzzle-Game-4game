@@ -529,6 +529,98 @@ const GameBoard = ({ snapshots, controlledRoomIds, levelEdges, onAnimationEnd }:
                 })}
             </div>
 
+            {/* Cable Layer */}
+            <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', width: totalWidth, height: totalHeight }}>
+                {Object.values(snapshot.rooms).map((room: RoomState) => {
+                    const offset = roomPositions[room.id];
+                    if (!offset) return null;
+
+                    return room.grid.map((row: Cell[]) =>
+                        row.map((cell: Cell) => {
+                            const isElectrified = cell.isElectrified || cell.type === 'power';
+                            if (!isElectrified) return null;
+
+                            const playersInThisRoom = snapshot.entities.filter((e: Entity) => e.type === 'player' && (e.position.roomId ?? 'main') === room.id && !e.customData._destroyed);
+                            const isCurrentlyVisible = !room.fogOfWar || playersInThisRoom.some(p => Math.sqrt(Math.pow(cell.position.row - p.position.row, 2) + Math.pow(cell.position.col - p.position.col, 2)) <= (room.fogVisibilityDistance ?? 1.5));
+                            const isExplored = !room.fogOfWar || (room.fogKeepRevealed !== false ? !!cell.customData.explored : isCurrentlyVisible);
+
+                            if (!isExplored) return null;
+
+                            const cableConns = (cell.customData.cableConnections as string[]) ?? [];
+                            const hasRightConnection = cableConns.includes('right');
+                            const hasDownConnection = cableConns.includes('down');
+
+                            const r = cell.position.row;
+                            const c = cell.position.col;
+
+                            // Check right neighbor
+                            const rightCell = room.grid[r]?.[c + 1];
+                            const isRightExplored = rightCell && (!room.fogOfWar || (room.fogKeepRevealed !== false ? !!rightCell.customData.explored : (!room.fogOfWar || playersInThisRoom.some(p => Math.sqrt(Math.pow(rightCell.position.row - p.position.row, 2) + Math.pow(rightCell.position.col - p.position.col, 2)) <= (room.fogVisibilityDistance ?? 1.5)))));
+
+                            // Check down neighbor
+                            const downCell = room.grid[r + 1]?.[c];
+                            const isDownExplored = downCell && (!room.fogOfWar || (room.fogKeepRevealed !== false ? !!downCell.customData.explored : (!room.fogOfWar || playersInThisRoom.some(p => Math.sqrt(Math.pow(downCell.position.row - p.position.row, 2) + Math.pow(downCell.position.col - p.position.col, 2)) <= (room.fogVisibilityDistance ?? 1.5)))));
+
+                            return (
+                                <div 
+                                    key={`cable-${cell.id}`}
+                                    style={{
+                                        position: 'absolute',
+                                        top: offset.top + r * CELL_SIZE,
+                                        left: offset.left + c * CELL_SIZE,
+                                        width: CELL_SIZE,
+                                        height: CELL_SIZE,
+                                        pointerEvents: 'none',
+                                        zIndex: 6,
+                                        opacity: isCurrentlyVisible ? 0.65 : 0.15,
+                                        transition: 'opacity 0.3s ease',
+                                    }}
+                                >
+                                    {/* Connection to the right */}
+                                    {hasRightConnection && isRightExplored && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            left: 32,
+                                            top: 31, // center-aligned for height 2px
+                                            width: 64,
+                                            height: 2,
+                                            backgroundColor: 'rgba(251, 191, 36, 0.85)',
+                                            boxShadow: '0 0 4px rgba(234, 179, 8, 0.6)',
+                                        }} />
+                                    )}
+
+                                    {/* Connection down */}
+                                    {hasDownConnection && isDownExplored && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            left: 31, // center-aligned for width 2px
+                                            top: 32,
+                                            width: 2,
+                                            height: 64,
+                                            backgroundColor: 'rgba(251, 191, 36, 0.85)',
+                                            boxShadow: '0 0 4px rgba(234, 179, 8, 0.6)',
+                                        }} />
+                                    )}
+
+                                    {/* Center Node/Junction */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: 30,
+                                        top: 30,
+                                        width: 4,
+                                        height: 4,
+                                        borderRadius: '50%',
+                                        backgroundColor: '#ffffff',
+                                        boxShadow: '0 0 4px rgba(234, 179, 8, 0.8)',
+                                        zIndex: 7,
+                                    }} />
+                                </div>
+                            );
+                        })
+                    );
+                })}
+            </div>
+
             {/* Entity Layer */}
             <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
                 {snapshot.entities.map((entity: Entity) => {

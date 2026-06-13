@@ -1,6 +1,3 @@
-// cells/powerCell.ts
-// Güç noktası: üzerine basan entity'yi elektrikli yapar.
-
 import { CellBehavior, CellDef } from '../cellTypes';
 
 export const powerDef: CellDef = {
@@ -9,16 +6,22 @@ export const powerDef: CellDef = {
 };
 
 export const powerBehavior: CellBehavior = {
-    onEnter: (_cell, entity) => {
+    onEnter: (cell, entity) => {
         if (entity.physics.z > 0) return []; // Havada — güç aktarılmaz
 
+        const newForce = entity.physics.force - cell.def.friction;
         return [{
             entityId: entity.id,
             type: 'mutate_entity',
             newElectrifiedState: true,
+            newForce: newForce < 0 ? 0 : newForce,
         }];
     },
     onLeave: (_cell, entity) => {
+        // If player is holding cable, they stay electrified when leaving power cell
+        if (entity.type === 'player' && entity.customData.holdingCable) {
+            return [];
+        }
         return [{
             entityId: entity.id,
             type: 'mutate_entity',

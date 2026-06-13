@@ -205,7 +205,7 @@ export default function MyTicketsPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.03 }}
-                  onClick={() => router.push(`/support/my-tickets/detail?id=${ticket.id}`)}
+                  onClick={() => router.push(`/support/my-tickets/detail/?id=${ticket.id}`)}
                   style={{
                     background: 'rgba(10, 15, 26, 0.65)',
                     backdropFilter: 'blur(12px)',

@@ -1,5 +1,6 @@
 import { Cell } from "./cellTypes";
 import { Entity } from "./entityTypes";
+import { GameActionButton } from "./actions/types";
 
 // ============================================================
 // TEMEL TİPLER
@@ -36,6 +37,7 @@ export interface RoomState {
     fogOfWar?: boolean;
     fogVisibilityDistance?: number;
     fogKeepRevealed?: boolean;
+    customData?: Record<string, unknown>;
 }
 
 // Yön → Izgara adımı (hücreler bu sabitten hareket hesaplar)
@@ -87,10 +89,11 @@ export type IntentType =
     | 'fall'          // Z ekseninde hareket (trampolin, kuş bakışı platform)
     | 'destroy'       // Nesneyi yok etme
     | 'mutate_entity' // Nesnenin state'ini değiştirme
-    | 'mutate_cell';  // Zemin tipini değiştirme
+    | 'mutate_cell'   // Zemin tipini değiştirme
+    | 'mutate_room';  // Oda state'ini değiştirme
 
 export interface ActionIntent {
-    entityId: number;
+    entityId?: number;
     type: IntentType;
 
     // 'move' için:
@@ -114,6 +117,9 @@ export interface ActionIntent {
     targetCellPos?: Position;
     newCellType?: Cell['type'];
 
+    // 'mutate_room' için:
+    roomId?: string;
+
     // UI & VFX — tüm intent tiplerinde kullanılabilir,
     // motor tarafından ilgili tick'te hemen toplanır.
     vfxTriggers?: string[];
@@ -132,4 +138,5 @@ export interface TickSnapshot {
     entities: Entity[];
     vfxEvents: VFXEvent[];
     uiEvents: UIEvent[];
+    availableActions?: GameActionButton[];
 }

@@ -100,7 +100,7 @@ export default function SupportPage() {
 
       const data = await response.json();
       if (data.success && data.ticketId) {
-        router.push(`/support/my-tickets/detail?id=${data.ticketId}`);
+        router.push(`/support/my-tickets/detail/?id=${data.ticketId}`);
       } else {
         throw new Error('Response did not contain a ticketId.');
       }

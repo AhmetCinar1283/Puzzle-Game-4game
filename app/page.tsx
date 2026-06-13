@@ -369,13 +369,15 @@ export default function Home() {
       const hasAdmin = options.length > 5;
       switch (dir) {
         case 'up':
-          if (prev === 0) return hasAdmin ? 5 : 4;
+          if (prev === -1) return hasAdmin ? 5 : 4; // Wrap from Profile to bottom
+          if (prev === 0) return -1; // Go up from Play to Profile
           if (prev === 1 || prev === 2) return 0;
           if (prev === 3) return 1;
           if (prev === 4) return 2;
           if (prev === 5) return 3;
           return prev;
         case 'down':
+          if (prev === -1) return 0; // Go down from Profile to Play
           if (prev === 0) return 1;
           if (prev === 1) return 3;
           if (prev === 2) return 4;
@@ -383,10 +385,12 @@ export default function Home() {
           if (prev === 5) return 0;
           return prev;
         case 'left':
+          if (prev === -1) return prev;
           if (prev === 2) return 1;
           if (prev === 4) return 3;
           return prev;
         case 'right':
+          if (prev === -1) return prev;
           if (prev === 1) return 2;
           if (prev === 3) return 4;
           return prev;
@@ -398,7 +402,11 @@ export default function Home() {
   const { isConnected } = useGamepad({
     onMove: (dir) => handleMoveMenu(dir),
     onConfirm: () => {
-      options[activeMenuIndex]?.onClick();
+      if (activeMenuIndex === -1) {
+        document.getElementById('user-profile-badge')?.click();
+      } else {
+        options[activeMenuIndex]?.onClick();
+      }
     },
   });
 
@@ -419,12 +427,33 @@ export default function Home() {
         handleMoveMenu('right');
       } else if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        options[activeMenuIndex]?.onClick();
+        if (activeMenuIndex === -1) {
+          document.getElementById('user-profile-badge')?.click();
+        } else {
+          options[activeMenuIndex]?.onClick();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleMoveMenu, activeMenuIndex, options]);
+
+  // Synchronize profile badge focus state
+  useEffect(() => {
+    const isProfileActive = activeMenuIndex === -1;
+    window.dispatchEvent(
+      new CustomEvent('home-profile-focus', {
+        detail: { focused: isProfileActive },
+      })
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent('home-profile-focus', {
+          detail: { focused: false },
+        })
+      );
+    };
+  }, [activeMenuIndex]);
 
   return (
     <>

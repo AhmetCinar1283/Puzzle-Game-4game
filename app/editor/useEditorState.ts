@@ -196,6 +196,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
         fogOfWar: r.fogOfWar ?? false,
         fogVisibilityDistance: r.fogVisibilityDistance ?? 1.5,
         fogKeepRevealed: r.fogKeepRevealed ?? true,
+        customData: r.customData ?? {},
       }));
       setRooms(parsedRooms);
 
@@ -379,7 +380,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
     setRooms((prevRooms) => {
       const updated = prevRooms.map((r) => {
         if (r.id === activeRoomId) {
-          return { ...r, width, height, edges, grid, fogOfWar, fogVisibilityDistance, fogKeepRevealed };
+          return { ...r, width, height, edges, grid, fogOfWar, fogVisibilityDistance, fogKeepRevealed, customData: r.customData ?? {} };
         }
         return r;
       });
@@ -619,6 +620,7 @@ export function useEditorState(editId: number | null, firestoreIdParam: string |
           fogOfWar: r.fogOfWar ?? false,
           fogVisibilityDistance: r.fogVisibilityDistance ?? 1.5,
           fogKeepRevealed: r.fogKeepRevealed ?? true,
+          customData: r.customData ?? {},
         })),
         controlMode,
         initialControlledRooms,
