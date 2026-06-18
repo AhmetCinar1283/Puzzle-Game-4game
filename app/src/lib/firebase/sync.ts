@@ -216,39 +216,17 @@ export async function fetchAndCacheLevel(
 // ─── Played levels sync ───────────────────────────────────────────────────────
 
 /**
- * Syncs the current user's playedLevels from Firestore → Dexie.
- * Only fetches records whose updatedAt > lastSync (delta query).
- * @param force — if true, skips the 24-hour cooldown.
+ * @deprecated Firestore-based playedLevels sync removed in Dexie v10.
+ *             Use `syncPlayedLevelsFromWorker` from `@/app/src/lib/sync/playedLevels`
+ *             which reads from Cloudflare D1 instead.
+ *
+ * This function is intentionally left as a no-op to avoid import errors during
+ * the migration period. It will be fully removed in a future cleanup.
  */
-export async function syncPlayedLevels(uid: string, force = false): Promise<void> {
-  const metaKey = 'playedLevels';
-  const lastSyncMs = force ? 0 : await readLastSync(metaKey);
-
-  if (!force && Date.now() - lastSyncMs < PLAYED_SYNC_COOLDOWN_MS) return;
-
-  const dexie = getDB();
-
-  const colRef = collection(db, 'users', uid, 'playedLevels');
-  const q = lastSyncMs > 0
-    ? query(colRef, where('updatedAt', '>', Timestamp.fromMillis(lastSyncMs)))
-    : colRef;
-
-  const snap = await getDocs(q);
-
-  for (const d of snap.docs) {
-    const raw = d.data();
-    const rawStars = raw.stars;
-    const record: StoredPlayedLevel = {
-      levelId: d.id,
-      score: raw.score ?? 0,
-      timeSpent: raw.timeSpent ?? 0,
-      completedAt: toMs(raw.completedAt),
-      updatedAt: toMs(raw.updatedAt),
-      stars: (rawStars === 1 || rawStars === 2 || rawStars === 3) ? rawStars : undefined,
-      moveCount: typeof raw.moveCount === 'number' ? raw.moveCount : undefined,
-    };
-    await dexie.playedLevels.put(record);
-  }
-
-  await writeLastSync(metaKey, Date.now());
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function syncPlayedLevels(_uid: string, _force = false): Promise<void> {
+  console.warn(
+    '[Deprecated] syncPlayedLevels (Firestore) is no longer used. ' +
+    'playedLevels are now synced from Cloudflare D1 via syncPlayedLevelsFromWorker.',
+  );
 }

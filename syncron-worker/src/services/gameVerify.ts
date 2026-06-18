@@ -6,12 +6,13 @@ import { processSingleTick } from '../../../app/src/game2/logic/engine/intentLoo
 import { checkWinCondition } from '../../../app/src/game2/logic/winCondition';
 import { convertToGame2State } from '../../../app/src/game2/logic/converter';
 
-// We map both short-hand and long-form directions to Direction
-const MOVES_MAP: Record<string, Direction> = {
+// We map both short-hand and long-form directions to Direction, plus 's' to switch_room
+const MOVES_MAP: Record<string, Direction | 'switch_room'> = {
   u: 'up',
   d: 'down',
   l: 'left',
   r: 'right',
+  s: 'switch_room',
   up: 'up',
   down: 'down',
   left: 'left',
@@ -30,35 +31,68 @@ const OPPOSITE_DIRECTION: Record<Direction, Direction> = {
  * Returns false for invalid moves or if the game is lost/not won after all moves.
  */
 export function verifyMoves(level: any, moves: string[]): boolean {
-  // 1. Validate all directions are supported before starting
+  // 1. Validate all directions/actions are supported before starting
   for (const m of moves) {
     if (!MOVES_MAP[m]) return false;
   }
 
   // 2. Convert raw level record to game2 state representation using the shared converter
-  const { entities: initialEntities, grid } = convertToGame2State(level);
+  const { entities: initialEntities, rooms, controlMode, initialControlledRooms } = convertToGame2State(level);
   let entities = initialEntities;
+  let currentControlledRoomIds = [...initialControlledRooms];
+
+  const mainRoom = rooms['main'];
 
   // 3. Compute level topology boundaries (default edges to walls if undefined, matching frontend)
   const levelBounds: LevelBounds = {
-    rows: grid.length,
-    cols: grid[0]?.length ?? 0,
-    edges: level.edges ?? { top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' },
+    rooms: Object.entries(rooms).reduce((acc, [rId, room]) => {
+      acc[rId] = { rows: room.height, cols: room.width, edges: room.edges };
+      return acc;
+    }, {} as Record<string, { rows: number; cols: number; edges: any }>),
+    rows: mainRoom?.height ?? level.height ?? 0,
+    cols: mainRoom?.width ?? level.width ?? 0,
+    edges: mainRoom?.edges ?? level.edges ?? { top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' },
     trailCollision: !!level.trailCollision,
   };
 
   // 4. Replay player moves step by step
   for (const moveChar of moves) {
-    const rawDirection = MOVES_MAP[moveChar];
+    const action = MOVES_MAP[moveChar];
+
+    // Handle manual room switching
+    if (action === 'switch_room') {
+      const roomKeys = Object.keys(rooms);
+      if (roomKeys.length > 1) {
+        const currentIdx = roomKeys.indexOf(currentControlledRoomIds[0] ?? '');
+        const nextIdx = (currentIdx + 1) % roomKeys.length;
+        currentControlledRoomIds = [roomKeys[nextIdx]];
+      }
+      continue;
+    }
+
+    const rawDirection = action;
 
     // Generate initial intents for active player entities
     const intents: ActionIntent[] = entities
       .filter(ent => ent.type === 'player' && !ent.customData.isLocked)
+      .filter(ent => {
+        const entRoomId = ent.position.roomId ?? 'main';
+        if (controlMode === 'selected_room') {
+          return currentControlledRoomIds.includes(entRoomId);
+        }
+        return true;
+      })
       .map(ent => {
         const mode = (ent.customData.mode as string) ?? 'normal';
-        const direction = mode === 'reversed'
+        let direction = mode === 'reversed'
           ? OPPOSITE_DIRECTION[rawDirection]
           : rawDirection;
+
+        if (ent.customData.controlMapping) {
+          const mapping = ent.customData.controlMapping as Record<Direction, Direction>;
+          direction = mapping[direction] ?? direction;
+        }
+
         return {
           entityId: ent.id,
           type: 'mutate_entity' as const,
@@ -86,12 +120,43 @@ export function verifyMoves(level: any, moves: string[]): boolean {
 
       const result = processSingleTick(
         entities,
-        grid,
+        rooms,
         pending,
         levelBounds,
       );
 
       tickNumber++;
+
+      // Process change_control UI events exactly like useGameEngine
+      for (const uiEv of result.uiEvents) {
+        if (uiEv.kind === 'change_control') {
+          const { action: uiAction, targetRooms } = uiEv;
+          let nextIds = [...currentControlledRoomIds];
+          if (uiAction === 'set') {
+            nextIds = targetRooms;
+          } else if (uiAction === 'add') {
+            nextIds = Array.from(new Set([...nextIds, ...targetRooms]));
+          } else if (uiAction === 'remove') {
+            nextIds = nextIds.filter((id) => !targetRooms.includes(id));
+          } else if (uiAction === 'toggle') {
+            for (const tr of targetRooms) {
+              if (nextIds.includes(tr)) {
+                nextIds = nextIds.filter((id) => id !== tr);
+              } else {
+                nextIds.push(tr);
+              }
+            }
+          } else if (uiAction === 'cycle') {
+            const roomKeys = Object.keys(rooms);
+            if (roomKeys.length > 0) {
+              const currentIdx = roomKeys.indexOf(nextIds[0] ?? '');
+              const nextIdx = (currentIdx + 1) % roomKeys.length;
+              nextIds = [roomKeys[nextIdx]];
+            }
+          }
+          currentControlledRoomIds = nextIds;
+        }
+      }
 
       // Filter out destroyed entities from the active entity pool
       entities = entities.filter(e => !e.customData._destroyed);
@@ -99,7 +164,7 @@ export function verifyMoves(level: any, moves: string[]): boolean {
       const playerCountAfter = entities.filter(e => e.type === 'player').length;
       const playerDestroyed = playerCountAfter < playerCountBefore;
 
-      const isWin = checkWinCondition(entities, grid);
+      const isWin = checkWinCondition(entities, rooms);
 
       if (isWin) {
         turnWon = true;
@@ -119,5 +184,5 @@ export function verifyMoves(level: any, moves: string[]): boolean {
   }
 
   // After executing all moves, check if the level is in a winning state
-  return checkWinCondition(entities, grid);
+  return checkWinCondition(entities, rooms);
 }

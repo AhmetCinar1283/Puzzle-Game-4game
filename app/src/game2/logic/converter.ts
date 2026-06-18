@@ -125,8 +125,8 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
             rooms[rDef.id] = {
                 id: rDef.id,
                 name: rDef.name,
-                width: rDef.width,
-                height: rDef.height,
+                width: rDef.width ?? grid[0]?.length ?? 0,
+                height: rDef.height ?? grid.length ?? 0,
                 x: rDef.x ?? 0,
                 y: rDef.y ?? 0,
                 edges: rDef.edges,
@@ -183,8 +183,8 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
         rooms[roomId] = {
             id: roomId,
             name: stored.name,
-            width: stored.width,
-            height: stored.height,
+            width: stored.width ?? grid[0]?.length ?? 0,
+            height: stored.height ?? grid.length ?? 0,
             x: 0,
             y: 0,
             edges,
@@ -233,8 +233,9 @@ export function convertToGame2State(stored: StoredLevel & { id: number }): Game2
     const entities: Entity[] = [];
 
     // Oyuncular
-    for (let i = 0; i < stored.initialObjects.length; i++) {
-        const obj = stored.initialObjects[i];
+    const initialObjects = stored.initialObjects ?? [];
+    for (let i = 0; i < initialObjects.length; i++) {
+        const obj = initialObjects[i];
         const rId = obj.position.roomId ?? 'main';
         const isLocked = !!obj.lockOnTarget &&
             rooms[rId]?.grid[obj.position.row]?.[obj.position.col]?.type === 'target' &&

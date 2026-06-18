@@ -90,8 +90,12 @@ export default function AuthModal({ onClose }: Props) {
     try {
       await fn();
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error('[AuthModal] Error during auth operation:', err);
+      if (err && typeof err === 'object') {
+        console.error('[AuthModal] Error Code:', err.code);
+        console.error('[AuthModal] Error Message:', err.message);
+      }
       const key = toMessageKey(err);
       if (key) setError(t(key));
     } finally {

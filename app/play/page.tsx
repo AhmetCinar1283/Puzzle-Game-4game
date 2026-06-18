@@ -158,9 +158,13 @@ function PlayContent() {
     }, [levelId, isPreset, router, restartKey]);
 
     // ── Move tracking ─────────────────────────────────────────
-    const handleMoveExecuted = useCallback((direction: Direction) => {
-        const map: Record<Direction, string> = { up: 'u', down: 'd', left: 'l', right: 'r' };
-        moveHistoryRef.current.push(map[direction]);
+    const handleMoveExecuted = useCallback((direction: Direction | 'switch_room') => {
+        if (direction === 'switch_room') {
+            moveHistoryRef.current.push('s');
+        } else {
+            const map: Record<Direction, string> = { up: 'u', down: 'd', left: 'l', right: 'r' };
+            moveHistoryRef.current.push(map[direction]);
+        }
     }, []);
 
     // ── Worker çağrısı (kazanma) ──────────────────────────────
@@ -220,28 +224,25 @@ function PlayContent() {
                 if (data.success && data.stars) {
                     try {
                         const { getDB } = await import('@/app/src/lib/db');
-                        const { savePlayedLevel } = await import('@/app/src/lib/firebase/firestore');
-                        const { getCurrentUser } = await import('@/app/src/lib/firebase/config')
-                            .then(m => ({ getCurrentUser: () => m.auth.currentUser }));
-                        const user = getCurrentUser();
-                        if (user) {
-                            await savePlayedLevel(user.uid, String(levelId!), {
-                                score: data.stars,
-                                timeSpent: Math.round((Date.now() - startTimeRef.current) / 1000),
-                            });
-                        }
-                        // Dexie anlık kayıt
                         const db = getDB();
-                        const existing = isPreset
-                            ? await db.presetLevels.get(levelId!)
-                            : null;
-                        void existing; // Şimdilik kullanılmıyor — sync zaten halleder
+                        const levelKey = String(levelId!);
+                        const existing = await db.playedLevels.get(levelKey);
+                        await db.playedLevels.put({
+                            levelId: levelKey,
+                            score: data.stars,
+                            timeSpent: Math.round((Date.now() - startTimeRef.current) / 1000),
+                            completedAt: existing?.completedAt ?? Date.now(),
+                            updatedAt: Date.now(),
+                            stars: data.stars,
+                            moveCount: moveHistoryRef.current.length,
+                        });
                     } catch (e) {
                         console.warn('[Play] Dexie local save failed:', e);
                     }
                 }
             } else {
-                console.warn('[Play] Worker verification failed with status:', res.status);
+                const errText = await res.text();
+                console.warn('[Play] Worker verification failed with status:', res.status, errText);
                 setWorkerResult({ success: false });
             }
         } catch (err) {

@@ -102,6 +102,25 @@ export default function GameShell({ level, onNextLevel, source }: GameShellProps
         void (async () => {
           try {
             if (moves.length === 0 || moves.length > MOVES_LIMIT) return;
+
+            // ── Optimistic write: record in Dexie immediately ─────────────────
+            // This gives instant feedback in the levels list while we wait for
+            // the Worker to verify the solution. If the Worker fails, the
+            // provisional record stays and D1 will correct it on next sync.
+            const { getDB } = await import('@/app/src/lib/db');
+            const db = getDB();
+            const existing = await db.playedLevels.get(firestoreId);
+            const provisionalStars = (existing?.stars ?? 0) === 3 ? 3 : 1; // conservative estimate
+            await db.playedLevels.put({
+              levelId: firestoreId,
+              score: provisionalStars,
+              timeSpent,
+              completedAt: existing?.completedAt ?? Date.now(),
+              updatedAt: Date.now(),
+              stars: provisionalStars as 1 | 2 | 3,
+              moveCount: moves.length,
+            });
+
             const token = await userRef.current!.getIdToken();
             const res = await fetch(`${WORKER_URL}/complete-level`, {
               method: 'POST',
@@ -110,6 +129,7 @@ export default function GameShell({ level, onNextLevel, source }: GameShellProps
             });
             if (!res.ok) {
               console.error('[Worker] HTTP error:', res.status, await res.text());
+              // Provisional Dexie record stays — D1 sync will correct on next open
               return;
             }
 
@@ -117,10 +137,7 @@ export default function GameShell({ level, onNextLevel, source }: GameShellProps
             console.log('[Worker] Response:', data);
             if (!data.success) return;
 
-            // Update Dexie immediately so levels page shows correct stars
-            const { getDB } = await import('@/app/src/lib/db');
-            const db = getDB();
-            const existing = await db.playedLevels.get(firestoreId);
+            // ── Overwrite with server-verified result ─────────────────────────
             await db.playedLevels.put({
               levelId: firestoreId,
               score: data.stars,
@@ -141,6 +158,7 @@ export default function GameShell({ level, onNextLevel, source }: GameShellProps
             });
           } catch (e) {
             console.error('[Worker] Fetch error:', e);
+            // Provisional Dexie record stays if written — D1 sync will reconcile
           }
         })();
       }

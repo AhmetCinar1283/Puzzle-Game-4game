@@ -40,11 +40,9 @@ export type { UserRole };
 
 /** True when running inside a Capacitor native app (Android/iOS). */
 function isNativePlatform(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    !!(window as { Capacitor?: { isNativePlatform?: () => boolean } })
-      .Capacitor
-  );
+  if (typeof window === 'undefined') return false;
+  const cap = (window as any).Capacitor;
+  return !!(cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform());
 }
 
 function resolveAuthProvider(user: User): AuthProviderType {
@@ -119,6 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const { getDB } = await import('@/app/src/lib/db');
             const db = getDB();
             await db.playedLevels.clear();
+            // Clear D1 sync cursors so the new user gets a full resync
+            await db.syncMeta.delete('playedLevels_d1');
+            await db.syncMeta.delete('playedLevels_d1_cursor');
             await db.syncMeta.clear();
           }
           localStorage.setItem('activeUserId', firebaseUser.uid);

@@ -9,6 +9,7 @@ import { getSolutionStats, computeStars, updateSolutions } from '../services/sol
 import { writeAuditLog } from '../services/auditLog';
 import { updateLeaderboardData } from '../services/leaderboard';
 import { checkActiveBan } from '../services/banService';
+import { upsertPlayedLevel, getPlayedLevel } from '../services/playedLevels';
 import type { CompleteLevelResponse } from '../types';
 
 export const gameRouter = new Hono<AppContext>();
@@ -30,9 +31,12 @@ gameRouter.post('/complete-level', firebaseAuth, async (c) => {
     return c.json({ success: false, error: 'Invalid JSON' }, 400);
   }
 
+  console.log('[CompleteLevel] Request body:', JSON.stringify(body));
+
   // 2. Validate with Zod
   const validation = completeLevelSchema.safeParse(body);
   if (!validation.success) {
+    console.log('[CompleteLevel] Zod validation failed:', JSON.stringify(validation.error.format()));
     const error = validation.error.errors[0]?.message || 'Invalid request';
     return c.json({ success: false, error }, 400);
   }
@@ -67,13 +71,13 @@ gameRouter.post('/complete-level', firebaseAuth, async (c) => {
   // 5. Replay moves & verify win
   const isValid = verifyMoves(levelData, moves);
   if (!isValid) {
+    console.log('[CompleteLevel] verifyMoves failed for level:', levelId, 'moves:', JSON.stringify(moves));
     return c.json({ success: false, error: 'Invalid solution' }, 400);
   }
 
-  // 6. Parallel reads
-  const playedPath = `users/${uid}/playedLevels/${levelId}`;
-  const [existingPlayed, solutionStats, userDoc] = await Promise.all([
-    fsGet(projectId, playedPath, adminToken),
+  // 6. Parallel reads — played_levels now in D1 (not Firestore)
+  const [existingPlayedRow, solutionStats, userDoc] = await Promise.all([
+    getPlayedLevel(c.env.AUDIT_DB, uid, levelId),
     getSolutionStats(projectId, levelId, adminToken),
     fsGet(projectId, `users/${uid}`, adminToken),
   ]);
@@ -95,18 +99,37 @@ gameRouter.post('/complete-level', firebaseAuth, async (c) => {
   const createdBy = typeof levelRaw.createdBy === 'string' ? levelRaw.createdBy : null;
 
   // 7. Compute stars and score delta
-  const isFirstCompletion = existingPlayed === null;
-  const existingData = existingPlayed !== null ? fromDoc(existingPlayed) : null;
-  const existingStars = existingData !== null ? Number(existingData.stars ?? 0) : 0;
+  const isFirstCompletion = existingPlayedRow === null;
+  const existingStars = existingPlayedRow?.stars ?? 0;
   const newStars = computeStars(moves.length, bestMoveCount);
   const scoreDelta = Math.max(0, newStars - existingStars);
 
   const bestStars = Math.max(newStars, existingStars);
   const existingMoveCount = isFirstCompletion
     ? moves.length
-    : Math.min(moves.length, Number(existingData?.moveCount ?? moves.length));
+    : Math.min(moves.length, existingPlayedRow?.move_count ?? moves.length);
 
-  // 8. Batch write: score update + playedLevel upsert
+  // 8a. Write played_levels to D1 (canonical store — replaces Firestore subcollection)
+  // The returned `wasFirstCompletion` is the authoritative first-completion flag:
+  // D1's UPSERT is atomic, so only one of two concurrent requests can get `true`.
+  let d1IsFirstCompletion = isFirstCompletion; // fallback if D1 write fails
+  try {
+    const d1Result = await upsertPlayedLevel(c.env.AUDIT_DB, {
+      uid,
+      levelId,
+      stars: bestStars as 1 | 2 | 3,
+      score: bestStars,
+      moveCount: existingMoveCount,
+      timeSpent: Math.trunc(timeSpent),
+    });
+    d1IsFirstCompletion = d1Result.wasFirstCompletion;
+  } catch (e) {
+    console.error('[D1] played_levels upsert error:', e);
+    return c.json({ success: false, error: 'Failed to save progress' }, 500);
+  }
+
+  // 8b. Update Firestore users/{uid} aggregate counters (totalScore, completedCount).
+  //     The users/{uid} document still lives in Firestore for auth/profile purposes.
   const now = nowTimestamp();
   const writes: unknown[] = [];
 
@@ -129,7 +152,7 @@ gameRouter.post('/complete-level', firebaseAuth, async (c) => {
     });
   }
 
-  if (scoreDelta > 0 || isFirstCompletion) {
+  if (scoreDelta > 0 || d1IsFirstCompletion) {
     const fieldTransforms: unknown[] = [];
     if (scoreDelta > 0) {
       fieldTransforms.push({
@@ -137,7 +160,7 @@ gameRouter.post('/complete-level', firebaseAuth, async (c) => {
         increment: { integerValue: String(scoreDelta) },
       });
     }
-    if (isFirstCompletion) {
+    if (d1IsFirstCompletion) {
       fieldTransforms.push({
         fieldPath: 'completedCount',
         increment: { integerValue: '1' },
@@ -153,27 +176,13 @@ gameRouter.post('/complete-level', firebaseAuth, async (c) => {
     }
   }
 
-  writes.push({
-    update: {
-      name: docPath(projectId, playedPath),
-      fields: {
-        stars:      { integerValue: String(bestStars) },
-        score:      { integerValue: String(bestStars) },
-        moveCount:  { integerValue: String(existingMoveCount) },
-        timeSpent:  { integerValue: String(Math.trunc(timeSpent)) },
-        completedAt: isFirstCompletion
-          ? { timestampValue: now }
-          : existingPlayed!.fields.completedAt ?? { timestampValue: now },
-        updatedAt: { timestampValue: now },
-      },
-    },
-  });
-
-  try {
-    await fsCommit(projectId, writes, adminToken);
-  } catch (e) {
-    console.error('Commit error:', e);
-    return c.json({ success: false, error: 'Failed to save progress' }, 500);
+  if (writes.length > 0) {
+    try {
+      await fsCommit(projectId, writes, adminToken);
+    } catch (e) {
+      console.error('Firestore commit error:', e);
+      // Non-fatal: D1 write already succeeded. Score counters will self-correct via admin tools.
+    }
   }
 
   // 9. Update solutions
@@ -205,7 +214,7 @@ gameRouter.post('/complete-level', firebaseAuth, async (c) => {
   c.executionCtx.waitUntil(
     updateLeaderboardData(c.env.AUDIT_DB, uid, {
       scoreDelta,
-      isFirstCompletion,
+      isFirstCompletion: d1IsFirstCompletion, // use D1-authoritative value
       displayName,
       tag,
       isNewBestSolution,

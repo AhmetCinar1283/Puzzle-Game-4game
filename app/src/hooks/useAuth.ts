@@ -5,16 +5,6 @@
  *
  * Returns { user, loading, isAnonymous, linkWithGoogle }.
  *
- * Example — saving a completed level:
- *
- *   const { user } = useAuth();
- *
- *   async function handleWin() {
- *     if (user) {
- *       await savePlayedLevel(user.uid, level.id, { score, timeSpent });
- *     }
- *   }
- *
  * Example — Google linking button:
  *
  *   const { isAnonymous, linkWithGoogle } = useAuth();

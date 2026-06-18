@@ -58,7 +58,7 @@ interface PlayScreenProps {
     initialControlledRooms?: string[];
     levelEdges?: LevelEdges;
     trailCollision?: boolean;
-    onMoveExecuted?: (direction: Direction) => void;
+    onMoveExecuted?: (direction: Direction | 'switch_room') => void;
     onButtonPressed?: (buttonType: UIButtonType) => void;
     isTestMode?: boolean;
 }
@@ -234,6 +234,7 @@ export function PlayScreen({
                     const nextIdx = (currentIdx + 1) % roomKeys.length;
                     setControlledRoomIds([roomKeys[nextIdx]]);
                     play('toggle');
+                    onMoveExecuted?.('switch_room');
                 }
             }
             return;
@@ -388,6 +389,17 @@ export function PlayScreen({
                                     <button
                                         key={rId}
                                         onClick={() => {
+                                            if (controlMode === 'selected_room') {
+                                                const roomKeys = Object.keys(rooms);
+                                                const currentIdx = roomKeys.indexOf(controlledRoomIds[0] ?? '');
+                                                const targetIdx = roomKeys.indexOf(rId);
+                                                if (currentIdx !== -1 && targetIdx !== -1 && currentIdx !== targetIdx) {
+                                                    const steps = (targetIdx - currentIdx + roomKeys.length) % roomKeys.length;
+                                                    for (let i = 0; i < steps; i++) {
+                                                        onMoveExecuted?.('switch_room');
+                                                    }
+                                                }
+                                            }
                                             setControlledRoomIds([rId]);
                                             play('toggle');
                                         }}

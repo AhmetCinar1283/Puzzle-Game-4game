@@ -135,6 +135,7 @@ adminApiRouter.get('/admin/users/:uid/stats', async (c) => {
 });
 
 // ─── GET /admin/users/:uid/played-levels ──────────────────────────────────────
+// Reads from D1 played_levels table (canonical store — no longer Firestore).
 
 adminApiRouter.get('/admin/users/:uid/played-levels', async (c) => {
   const uid = c.req.param('uid');
@@ -142,35 +143,34 @@ adminApiRouter.get('/admin/users/:uid/played-levels', async (c) => {
   const limit = Math.min(Math.max(1, limitParam), 100);
 
   try {
-    const adminToken = await getAdminAccessToken(c.env.GOOGLE_SERVICE_ACCOUNT);
+    const result = await c.env.AUDIT_DB
+      .prepare(
+        `SELECT level_id, stars, score, move_count, time_spent, completed_at, updated_at
+         FROM played_levels
+         WHERE uid = ?1
+         ORDER BY updated_at DESC
+         LIMIT ?2`,
+      )
+      .bind(uid, limit)
+      .all<{
+        level_id: string;
+        stars: number;
+        score: number;
+        move_count: number;
+        time_spent: number;
+        completed_at: string;
+        updated_at: string;
+      }>();
 
-    // Firestore REST — list subcollection with a page size
-    const projectId = c.env.FIREBASE_PROJECT_ID;
-    const basePath = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
-    const res = await fetch(
-      `${basePath}/users/${uid}/playedLevels?pageSize=${limit}`,
-      { headers: { Authorization: `Bearer ${adminToken}` } },
-    );
-
-    if (!res.ok) {
-      throw new Error(`Firestore list failed: ${res.status}`);
-    }
-
-    const json = await res.json() as { documents?: Array<{ name: string; fields: Record<string, unknown> }> };
-    const docs = json.documents ?? [];
-
-    const playedLevels = docs.map((doc) => {
-      const levelId = doc.name.split('/').pop() ?? '';
-      const fields = fromDoc(doc as Parameters<typeof fromDoc>[0]);
-      return {
-        levelId,
-        stars:       fields.stars ?? 0,
-        moveCount:   fields.moveCount ?? null,
-        timeSpent:   fields.timeSpent ?? null,
-        completedAt: fields.completedAt ?? null,
-        updatedAt:   fields.updatedAt ?? null,
-      };
-    });
+    const playedLevels = result.results.map((r) => ({
+      levelId:     r.level_id,
+      stars:       r.stars,
+      score:       r.score,
+      moveCount:   r.move_count,
+      timeSpent:   r.time_spent,
+      completedAt: r.completed_at,
+      updatedAt:   r.updated_at,
+    }));
 
     return c.json({ success: true, playedLevels });
   } catch (err) {

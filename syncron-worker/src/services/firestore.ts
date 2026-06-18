@@ -177,21 +177,12 @@ export function docPath(projectId: string, path: string): string {
 // ─── Level data parser ────────────────────────────────────────────────────────
 
 /** Convert a Firestore levels/{id} document to LevelData for game engine replay. */
-export function parseLevelDoc(doc: FsDocument, firestoreId: string): LevelData {
+export function parseLevelDoc(doc: FsDocument, firestoreId: string): any {
   const d = fromDoc(doc) as Record<string, unknown>;
   return {
+    ...d,
     id: 0, // Dexie ID not needed for verification
     firestoreId,
-    name: d.name as string,
-    width: d.width as number,
-    height: d.height as number,
-    edges: d.edges as LevelEdges,
-    grid: (typeof d.grid === 'string' ? JSON.parse(d.grid) : d.grid) as CellType[][],
-    initialObjects: d.initialObjects as LevelObjectDef[],
-    targets: d.targets as LevelTargetDef[],
-    trailCollision: d.trailCollision as boolean | undefined,
-    initialBoxes: d.initialBoxes as BoxDef[] | undefined,
-    conveyorPowerRequired: d.conveyorPowerRequired as Position[] | undefined,
   };
 }
 

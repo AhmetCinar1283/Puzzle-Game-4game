@@ -8,6 +8,7 @@ import { adminApiRouter } from './routes/adminApi';
 import { leaderboardRouter } from './routes/leaderboard';
 import { badgesRouter } from './routes/badges';
 import { friendsRouter } from './routes/friends';
+import { playedLevelsRouter } from './routes/playedLevels';
 import { runLogRetention } from './scheduled/logRetention';
 import { runBadgeDistribution } from './scheduled/badgeDistribution';
 import { runAnonymousCleanup } from './scheduled/anonymousCleanup';
@@ -34,6 +35,7 @@ app.route('/', adminApiRouter);     // GET  /admin/users/:uid/logs, etc.
 app.route('/', leaderboardRouter);
 app.route('/', badgesRouter);
 app.route('/', friendsRouter);
+app.route('/', playedLevelsRouter); // GET /played-levels, DELETE /admin/levels/:id
 
 // ─── Error handlers ───────────────────────────────────────────────────────────
 app.onError((err, c) => {

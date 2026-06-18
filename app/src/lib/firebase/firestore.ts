@@ -61,12 +61,6 @@ export interface UserDoc {
   tag?: string;
   acceptedTermsAt?: FieldValue;
 }
-
-export interface PlayedLevelData {
-  score: number;
-  timeSpent: number; // seconds
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function resolveAuthProvider(user: User): 'anonymous' | 'google' | 'email' {
@@ -114,39 +108,6 @@ export async function createOrUpdateUserDoc(user: User, acceptedTerms?: boolean)
   }
 }
 
-/**
- * Records a completed level under users/{uid}/playedLevels/{levelId}.
- *
- * On first completion: also increments users/{uid}.completedCount.
- * This counter is used for part unlock requirements.
- *
- * Usage:
- *   await savePlayedLevel(user.uid, level.firestoreId ?? String(level.id), { score: 100, timeSpent: 42 });
- */
-export async function savePlayedLevel(
-  uid: string,
-  levelId: string,
-  data: PlayedLevelData,
-): Promise<void> {
-  const ref = doc(db, 'users', uid, 'playedLevels', levelId);
-  const snap = await getDoc(ref);
-  const isFirstCompletion = !snap.exists();
-
-  await setDoc(
-    ref,
-    {
-      score: data.score,
-      timeSpent: data.timeSpent,
-      completedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
-
-  if (isFirstCompletion) {
-    await updateDoc(doc(db, 'users', uid), { completedCount: increment(1) });
-  }
-}
 
 /**
  * Submits a community level request. Only callable by non-anonymous users.

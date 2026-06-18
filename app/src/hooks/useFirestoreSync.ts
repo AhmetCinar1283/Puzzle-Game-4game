@@ -1,15 +1,16 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { syncPlayedLevels } from '@/app/src/lib/firebase/sync';
+import { syncPlayedLevelsFromWorker } from '@/app/src/lib/sync/playedLevels';
 import { useAuthContext } from '@/app/src/contexts/AuthContext';
 
 /**
- * Triggers Firestore → Dexie sync for played levels on:
+ * Triggers Cloudflare D1 → Dexie sync for played levels on:
  * 1. First mount (app open)
  * 2. Page visibility change: hidden → visible (tab switch / screen reopen)
  *
  * Level metadata sync is handled by the /levels page itself (syncLevelsMeta).
+ * The 5-minute cooldown inside syncPlayedLevelsFromWorker prevents redundant calls.
  */
 export function useFirestoreSync() {
   const { user } = useAuthContext();
@@ -20,8 +21,8 @@ export function useFirestoreSync() {
     hasSyncedOnMount.current = true;
 
     const runSync = () => {
-      if (user?.uid) {
-        syncPlayedLevels(user.uid).catch((err) =>
+      if (user) {
+        syncPlayedLevelsFromWorker(user).catch((err) =>
           console.warn('[Sync] PlayedLevels sync failed:', err),
         );
       }

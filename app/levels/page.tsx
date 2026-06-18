@@ -203,12 +203,15 @@ function LevelsPageContent() {
   }, []);
 
   const handleRefresh = useCallback(async () => {
-    if (!user?.uid) return null;
+    if (!user) return null;
     setSyncing(true);
     try {
-      const { syncLevelsMeta, syncPlayedLevels } = await import('@/app/src/lib/firebase/sync');
+      const [{ syncLevelsMeta }, { syncPlayedLevelsFromWorker }] = await Promise.all([
+        import('@/app/src/lib/firebase/sync'),
+        import('@/app/src/lib/sync/playedLevels'),
+      ]);
       await syncLevelsMeta(true);
-      await syncPlayedLevels(user.uid, true);
+      await syncPlayedLevelsFromWorker(user, true);
     } catch (err) {
       console.warn('[Sync] Refresh failed:', err);
     }

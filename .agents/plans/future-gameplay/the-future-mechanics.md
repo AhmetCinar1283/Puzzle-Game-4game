@@ -63,7 +63,7 @@ Basit grid mantığına derinlik ve karar verme mekanizmaları katan eklentiler:
 ### 3. Harita Varyasyonları ve Atmosfer
 Seviye tasarımını (Level Design) görsel ve mantıksal olarak değiştiren konseptler:
 
-- [ ] **🟢 Karanlık / Savaş Sisi (Fog of War):** 
+- [x] **🟢 Karanlık / Savaş Sisi (Fog of War):** 
   - Kozmik korku ve gerilim hissiyatına uygun, tüm haritanın görünmediği bölümler. 
   - Sadece nesnelerin etrafındaki dar bir alan aydınlıktır; doğru yol, engeller ve hedefler ancak keşfedilerek bulunur.
 - [x] **🔴 Ayrık Dünyalar (Dual Maps):** 

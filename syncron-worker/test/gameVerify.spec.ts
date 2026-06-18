@@ -78,4 +78,51 @@ describe("gameVerify logic", () => {
     // Incorrect path: only 3 moves (l, l, l) -> player at (0,0) -> no win
     expect(verifyMoves(mockLevel, ['l', 'l', 'l'])).toBe(false);
   });
+
+  it("verifies multiple rooms and selective room switching", () => {
+    const mockLevel = {
+      controlMode: 'selected_room',
+      initialControlledRooms: ['room1'],
+      rooms: [
+        {
+          id: 'room1',
+          name: 'Room 1',
+          width: 3,
+          height: 3,
+          edges: { top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' },
+          grid: [
+            ['empty', 'empty', 'empty'],
+            ['empty', 'empty', 'target_1'],
+            ['empty', 'empty', 'empty'],
+          ],
+        },
+        {
+          id: 'room2',
+          name: 'Room 2',
+          width: 3,
+          height: 3,
+          edges: { top: 'wall', bottom: 'wall', left: 'wall', right: 'wall' },
+          grid: [
+            ['empty', 'empty', 'empty'],
+            ['empty', 'empty', 'target_2'],
+            ['empty', 'empty', 'empty'],
+          ],
+        }
+      ],
+      initialObjects: [
+        { position: { roomId: 'room1', row: 1, col: 0 }, mode: 'normal' },
+        { position: { roomId: 'room2', row: 1, col: 0 }, mode: 'normal' }
+      ],
+      initialBoxes: []
+    };
+
+    // If we only move 'r', 'r', room2 is never controlled, so player 2 doesn't move. No win.
+    expect(verifyMoves(mockLevel, ['r', 'r'])).toBe(false);
+
+    // With switching:
+    // 'r', 'r': player 1 reaches target_1.
+    // 's': switch room control to room2.
+    // 'r', 'r': player 2 reaches target_2.
+    expect(verifyMoves(mockLevel, ['r', 'r', 's', 'r', 'r'])).toBe(true);
+  });
 });

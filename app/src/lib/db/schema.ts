@@ -120,6 +120,19 @@ export class KnowAndConquerDB extends Dexie {
       syncMeta: 'collection',
       playedLevels: 'levelId, updatedAt',
     });
+    // Version 10: playedLevels canonical source moved from Firestore → Cloudflare D1.
+    // The old syncMeta key 'playedLevels' (Firestore cursor) is deleted so the
+    // new D1 sync (keyed 'playedLevels_d1') triggers a full re-fetch on first open.
+    this.version(10).stores({
+      levels: '++id',
+      levelOrder: 'id',
+      presetLevels: '++id, firestoreId',
+      syncMeta: 'collection',
+      playedLevels: 'levelId, updatedAt',
+    }).upgrade((tx) => {
+      // Remove the stale Firestore sync cursor so the user gets a clean D1 full-sync.
+      return tx.table('syncMeta').delete('playedLevels');
+    });
   }
 }
 
